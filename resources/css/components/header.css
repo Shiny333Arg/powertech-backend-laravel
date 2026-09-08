@@ -1,0 +1,19 @@
+.navbar .nav-link,
+.navbar .dropdown-item {
+    transition: all 0.2s ease;
+}
+
+.navbar .nav-link:hover,
+.navbar .dropdown-item:hover {
+    background-color: white;
+    color: black !important;
+    border-radius: 0.375rem;
+}
+
+.dropdown-item i {
+    color: white;
+}
+
+.dropdown-item:hover i {
+    color: black;
+}

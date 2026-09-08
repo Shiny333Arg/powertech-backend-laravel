@@ -123,7 +123,7 @@
                     <td>{'{ sale.estado }}</td>
                     <td>
                         <a [routerLink]="['/sales/view', sale.id]" class="btn btn-sm btn-outline-primary me-1">
-                            <!-- <img src="assets/icons/eye.svg" alt="Editar" width="16" height="16" class="icon-primary"> -->
+                            <!-- <img src="{{ asset('icons/eye.svg') }}" alt="Editar" width="16" height="16" class="icon-primary"> -->
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor"
                                 viewBox="0 0 16 16">
                                 <path

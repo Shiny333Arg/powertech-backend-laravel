@@ -24,6 +24,10 @@
           <li class="nav-item px-2" *ngIf="isAdmin() || isOperator()">
             <a class="nav-link rounded fw-bold text-white" href="/category">Categorías</a>
           </li>
+
+          <li class="nav-item px-2" *ngIf="isAdmin() || isOperator()">
+            <a class="nav-link rounded fw-bold text-white" href="/category">Proveedores</a>
+          </li>
           
           <li class="nav-item px-2" *ngIf="isAdmin() || isSeller()">
             <a class="nav-link rounded fw-bold text-white" href="/sale">Ventas</a>
