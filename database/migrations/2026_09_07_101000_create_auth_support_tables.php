@@ -4,25 +4,20 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
+/**
+ * Infraestructura de autenticacion de Laravel, fuera de las 30 tablas del DER.
+ * Venia dentro de 0001_01_01_000000_create_users_table.php, que se reemplaza.
+ *
+ * password_reset_tokens es SOLO para clientes: los empleados no tienen
+ * autogestion de contrasena (ver `users.forzar_cambio_password`).
+ * sessions solo hace falta si se usa autenticacion por sesion en el panel web.
+ */
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
-        Schema::create('users', function (Blueprint $table) {
-            $table->id();
-            $table->string('name');
-            $table->string('email')->unique();
-            $table->timestamp('email_verified_at')->nullable();
-            $table->string('password');
-            $table->rememberToken();
-            $table->timestamps();
-        });
-
         Schema::create('password_reset_tokens', function (Blueprint $table) {
-            $table->string('email')->primary();
+            $table->string('email', 150)->primary();
             $table->string('token');
             $table->timestamp('created_at')->nullable();
         });
@@ -37,13 +32,9 @@ return new class extends Migration
         });
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
-        Schema::dropIfExists('users');
-        Schema::dropIfExists('password_reset_tokens');
         Schema::dropIfExists('sessions');
+        Schema::dropIfExists('password_reset_tokens');
     }
 };
