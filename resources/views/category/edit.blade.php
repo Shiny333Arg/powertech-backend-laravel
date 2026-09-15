@@ -6,62 +6,137 @@
 
 <div class="container py-4">
 
-
   <!-- Título -->
   <section class="mb-4">
-    <h1 class="h3 fw-bold text-primary mb-2">Editar Categoría</h1>
-    <p class="text-muted">Los campos están bloqueados por defecto.</p>
+    <h1 class="h3 fw-bold text-dark mb-2">Editar Categoría</h1>
+    <p class="text-muted">Modifique los datos de la categoría seleccionada.</p>
   </section>
 
-  
   <!-- Formulario -->
   <section class="mb-4">
-    <form id="editarCategoryForm" (ngSubmit)="update()" autocomplete="off" class="p-4 rounded-4 bg-light shadow-sm border">
+    <form
+      action="{{ route('categorias.update', $categoria) }}"
+      method="POST"
+      autocomplete="off"
+      class="p-4 rounded-4 bg-light shadow-sm border"
+      id="editarCategoriaForm">
+
+      @csrf
+      @method('PUT')
+
+      {{-- Errores de validación --}}
+      @if ($errors->any())
+      <div class="alert alert-danger">
+        <strong>Revisá estos campos:</strong>
+
+        <ul class="mb-0 mt-2">
+          @foreach ($errors->all() as $error)
+          <li>{{ $error }}</li>
+          @endforeach
+        </ul>
+      </div>
+      @endif
 
       <div class="row g-4">
+
+        <!-- Nombre -->
         <div class="col-12">
-          <label for="datoNombre" class="form-label fw-semibold">Nombre</label>
-          <input type="text" class="form-control rounded-3" [(ngModel)]="category.nombre" id="datoNombre" name="datoNombre" [disabled]="!isEditing" required
-            maxlength="25">
+          <label for="nombre" class="form-label fw-semibold">
+            Nombre
+          </label>
+
+          <input
+            type="text"
+            class="form-control rounded-3 @error('nombre') is-invalid @enderror"
+            id="nombre"
+            name="nombre"
+            value="{{ old('nombre', $categoria->nombre) }}"
+            maxlength="100"
+            required
+            autofocus>
+
+          @error('nombre')
+          <div class="invalid-feedback">
+            {{ $message }}
+          </div>
+          @enderror
         </div>
+
+        <div class="col-12">
+          <div class="form-check">
+
+            <input
+              type="hidden"
+              name="activo"
+              value="0">
+
+            <input
+              type="checkbox"
+              class="form-check-input"
+              id="activo"
+              name="activo"
+              value="1"
+              {{ old('activo', $categoria->activo) ? 'checked' : '' }}>
+
+            <label for="activo" class="form-check-label fw-semibold">
+              En operación
+            </label>
+
+          </div>
+
+          <div class="form-text">
+            Si la categoría está fuera de operación, no estará disponible para nuevos productos.
+          </div>
+
+          @error('activo')
+          <div class="text-danger small mt-1">
+            {{ $message }}
+          </div>
+          @enderror
+        </div>
+
       </div>
 
 
-      <!-- Botones -->
-      <div class="mt-5 d-flex flex-wrap gap-3">
-        <button type="button" class="btn btn-warning px-4 fw-semibold shadow-sm" id="btnEditar" [disabled]="isEditing" (click)="enableEdit()">
-          Editar
-        </button>
-        <button type="submit" class="btn btn-success px-4 fw-semibold shadow-sm" id="btnActualizar" [disabled]="!isEditing" (click)="update()">
-          Actualizar
-        </button>
-        <button type="button" class="btn btn-secondary px-4 fw-semibold shadow-sm" id="btnCancelar" [disabled]="!isEditing" (click)="cancelEdit()">
-          Cancelar
-        </button>
-        <a routerLink="/categories" class="btn btn-outline-secondary px-4 fw-semibold shadow-sm">
-          Volver al listado
-        </a>
-        <button type="button" class="btn btn-danger px-4 fw-semibold shadow-sm" id="btnEliminar" (click)="delete()">
+
+    </form>
+
+    <div class="mt-5 d-flex flex-wrap gap-3">
+
+      <button
+        type="submit"
+        form="editarCategoriaForm"
+        class="btn btn-success px-4 fw-semibold shadow-sm">
+        Actualizar
+      </button>
+
+      <a
+        href="{{ route('categorias.index') }}"
+        class="btn btn-outline-secondary px-4 fw-semibold shadow-sm">
+        Volver al listado
+      </a>
+
+      <form
+        action="{{ route('categorias.destroy', $categoria) }}"
+        method="POST"
+        class="d-inline">
+
+        @csrf
+        @method('DELETE')
+
+        <button
+          type="submit"
+          class="btn btn-danger px-4 fw-semibold shadow-sm"
+          onclick="return confirm('¿Está seguro de eliminar permanentemente esta categoría? Esta acción no se puede deshacer.');">
           Eliminar
         </button>
-        <button type="button" class="btn btn-outline-primary px-4 fw-semibold shadow-sm" id="btnExportar" (click)="exportPDF()">
-          Exportar PDF
-        </button>
-      </div>
 
+      </form>
 
-      <!-- Mensajes -->
-      <div class="mt-4 d-none alert alert-success" id="mensajeActualizado">
-        ¡Categoría actualizada correctamente!
-      </div>
-      <div class="mt-4 d-none alert alert-danger" id="mensajeEliminado">
-        La categoría fue eliminada del sistema.
-      </div>
-    </form>
+    </div>
+
   </section>
 
 </div>
-
-
 
 @endsection

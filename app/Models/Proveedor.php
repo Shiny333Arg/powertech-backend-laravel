@@ -3,21 +3,19 @@
 namespace App\Models;
 
 use App\Enums\CanalPedido;
+use App\Models\Concerns\ProtegeContraBorrado;
+use App\Models\Concerns\TieneBajaLogica;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
-use Illuminate\Database\Eloquent\SoftDeletes;
 
-/**
- * E.1 proveedores. Sin ellos no hay a quien emitir la orden de compra del
- * restock automatico. No son usuarios: no tienen login.
- */
+/** Los proveedores no son usuarios: no tienen login ni interactuan con el sistema. */
 class Proveedor extends Model
 {
-    use SoftDeletes;
+    use ProtegeContraBorrado;
+    use TieneBajaLogica;
 
-    // Sin esto Laravel buscaria la tabla `proveedors`.
     protected $table = 'proveedores';
 
     protected $fillable = [
@@ -25,14 +23,11 @@ class Proveedor extends Model
         'contacto', 'canal_pedido', 'portal_url', 'plazo_entrega_dias', 'activo',
     ];
 
-    protected function casts(): array
-    {
-        return [
-            'canal_pedido'       => CanalPedido::class,
-            'plazo_entrega_dias' => 'integer',
-            'activo'             => 'boolean',
-        ];
-    }
+    protected $casts = [
+        'canal_pedido'       => CanalPedido::class,
+        'plazo_entrega_dias' => 'integer',
+        'activo'             => 'boolean',
+    ];
 
     public function condicionIva(): BelongsTo
     {

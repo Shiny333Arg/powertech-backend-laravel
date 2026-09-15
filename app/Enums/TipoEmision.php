@@ -2,8 +2,20 @@
 
 namespace App\Enums;
 
+use App\Enums\Concerns\ConEtiqueta;
+
 enum TipoEmision: string
 {
-    case WSFE = 'wsfe';
-    case MANUAL = 'manual';
+    use ConEtiqueta;
+
+    case Wsfe   = 'wsfe';
+    case Manual = 'manual';
+
+    public function etiqueta(): string
+    {
+        return match ($this) {
+            self::Wsfe   => 'Web service (WSFE)',
+            self::Manual => 'Manual',
+        };
+    }
 }

@@ -2,70 +2,38 @@
 
 namespace App\Models;
 
-use App\Exceptions\BorradoNoPermitidoException;
+use App\Models\Concerns\TieneBajaLogica;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\SoftDeletes;
-use Illuminate\Database\QueryException;
 
 /**
- * C.1 categorias. Planas por requerimiento: sin parent_id.
+ * La UNICA entidad del catalogo que admite borrado fisico, y por eso la unica
+ * SIN guard de deleting (L.3).
  *
- * UNICA ENTIDAD DEL CATALOGO QUE ADMITE BORRADO FISICO, y solo si ningun
- * producto la referencia. La regla no esta programada: la hace cumplir la FK
- * productos.categoria_id con ON DELETE RESTRICT.
+ * La regla la hace cumplir la FK productos.categoria_id ON DELETE RESTRICT, no
+ * una validacion en PHP: el controlador intenta el DELETE y traduce el
+ * QueryException 1451 a un mensaje entendible. No se antepone un count() de
+ * productos, porque reimplementar en PHP una comprobacion que el motor ya hace
+ * abre una ventana contra un alta concurrente.
  *
- * Su alcance real conviene tenerlo presente: como los productos nunca se
- * borran fisicamente, la restriccion tambien ve a los dados de baja, asi que
- * una categoria que alguna vez tuvo un producto ya no se puede eliminar. En
- * la practica el borrado fisico sirve para deshacer un alta equivocada.
+ * Tampoco puede usar SoftDeletes: con el trait, delete() escribiria una marca
+ * y el RESTRICT nunca llegaria al motor.
  */
 class Categoria extends Model
 {
-    use SoftDeletes;
+    use TieneBajaLogica;
 
     protected $table = 'categorias';
 
     protected $fillable = ['nombre', 'slug', 'orden', 'activo'];
 
-    protected function casts(): array
-    {
-        return [
-            'orden'  => 'integer',
-            'activo' => 'boolean',
-        ];
-    }
+    protected $casts = [
+        'orden'  => 'integer',
+        'activo' => 'boolean',
+    ];
 
     public function productos(): HasMany
     {
         return $this->hasMany(Producto::class, 'categoria_id');
-    }
-
-    /**
-     * Cuenta tambien los productos dados de baja, que es lo que hace la FK.
-     * Sirve para que la pantalla habilite o no el boton, no para autorizar
-     * el borrado: la autoridad es el motor.
-     */
-    public function puedeEliminarseFisicamente(): bool
-    {
-        return ! $this->productos()->withTrashed()->exists();
-    }
-
-    /**
-     * Traduce el rechazo del motor a un mensaje del dominio. No reimplementa
-     * la comprobacion: la intenta y deja que la FK decida, que es lo unico
-     * libre de condiciones de carrera.
-     */
-    public function eliminarDefinitivamente(): void
-    {
-        try {
-            $this->forceDelete();
-        } catch (QueryException $e) {
-            throw BorradoNoPermitidoException::para(
-                "la categoria '{$this->nombre}'",
-                'tiene productos asociados, incluidos los dados de baja. '
-                . 'Se puede dar de baja en su lugar.'
-            );
-        }
     }
 }

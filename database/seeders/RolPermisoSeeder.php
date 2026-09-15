@@ -4,144 +4,153 @@ namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
+use RuntimeException;
 
 /**
- * Matriz de asignación rol → permisos.
+ * Matriz rol-permiso. Se resuelve por clave natural (roles.nombre y
+ * permisos.clave) y se inserta con insertOrIgnore: agrega lo que falta y
+ * no borra lo que un administrador haya asignado a mano despues.
  *
- * La matriz declarada acá es la autoridad para los cinco roles de sistema: cada
- * corrida agrega lo que falta y quita lo que sobra, de modo que el estado de la
- * base converge a lo que está versionado en el repositorio. Los roles creados
- * después desde la aplicación no se tocan.
+ * ADVERTENCIA: por eso mismo, quitar una clave de esta matriz NO revoca el
+ * permiso en una base ya sembrada. Hay que revocarlo desde la pantalla de
+ * roles, o cambiar insertOrIgnore por un sync() si se prefiere que el seeder
+ * sea la unica fuente de verdad.
  *
- * El rol administrador se resuelve por comprensión: recibe todo el catálogo, así
- * que un permiso nuevo queda asignado sin editar esta clase.
+ * Lo que NO esta en los documentos aparece marcado abajo.
  */
 class RolPermisoSeeder extends Seeder
 {
     /**
-     * @var array<string, list<string>>
+     * El administrador recibe todos los permisos de ambito gestion. Se excluye
+     * el modulo 'tienda' porque son acciones del comprador, no de la gestion.
      */
-    public const MATRIZ = [
-        RolSeeder::ADMINISTRATIVO => [
-            // Empleados y sus cuentas
-            'usuario.ver', 'usuario.crear', 'usuario.editar', 'usuario.baja',
-            'usuario.forzar_cambio_password',
-            'empleado.ver', 'empleado.crear', 'empleado.editar', 'empleado.baja',
-            'rol.ver',
+    private const MODULOS_EXCLUIDOS_ADMINISTRADOR = ['tienda'];
 
-            // Clientes
-            'cliente.ver', 'cliente.crear', 'cliente.editar', 'cliente.baja',
+    /**
+     * @return array<string, list<string>>  nombre de rol => claves de permiso
+     */
+    public static function matriz(): array
+    {
+        return [
+            // Requerimientos 3.2
+            'administrativo' => [
+                'producto.ver', 'producto.crear', 'producto.editar', 'producto.baja', 'producto.publicar',
+                'categoria.ver', 'categoria.crear', 'categoria.editar', 'categoria.baja', 'categoria.eliminar',
+                'proveedor.ver', 'proveedor.crear', 'proveedor.editar', 'proveedor.baja',
+                'promocion.ver', 'promocion.crear', 'promocion.editar', 'promocion.baja',
+                'empleado.ver', 'empleado.crear', 'empleado.editar', 'empleado.baja', 'empleado.forzar_password',
+                'cliente.ver', 'cliente.crear', 'cliente.editar', 'cliente.baja',
+                'compra.ver', 'compra.crear', 'compra.aprobar', 'compra.enviar', 'compra.recibir', 'compra.cancelar',
+                'stock.ver', 'stock.ajustar',
+                'venta.ver',
+                'comprobante.ver',
+                'dashboard.administrativo',
+            ],
 
-            // Catálogo
-            'producto.ver', 'producto.crear', 'producto.editar', 'producto.baja', 'producto.publicar',
-            'categoria.ver', 'categoria.crear', 'categoria.editar', 'categoria.baja', 'categoria.eliminar',
+            // Requerimientos 3.3, mas el circuito de venta completo (R 4).
+            'vendedor' => [
+                'producto.ver',          // ve el stock disponible al cargar la linea (R 5.1)
+                'categoria.ver',
+                'promocion.ver',
+                'cliente.ver',           // NUEVO: no enunciado, pero R 4.1 admite cliente registrado
+                'cliente.crear',         // NUEVO: alguien tiene que registrar al cliente de mostrador
 
-            // Stock
-            'stock.ver', 'stock.movimiento_ver', 'stock.ajustar', 'stock.carga_inicial',
+                // Modulo 'ventas' completo: el circuito de la venta es del vendedor,
+                // de punta a punta, incluida la entrega de la mercaderia.
+                'venta.ver',
+                'venta.ver_propias',
+                'venta.crear',
+                'presupuesto.validar',
+                'venta.cancelar',
+                'venta.preparar',
+                'venta.entregar',
+                'venta.devolver',
 
-            // Proveedores y compras
-            'proveedor.ver', 'proveedor.crear', 'proveedor.editar', 'proveedor.baja',
-            'compra.ver', 'compra.crear', 'compra.editar', 'compra.aprobar',
-            'compra.enviar', 'compra.recibir', 'compra.cancelar',
+                'dashboard.vendedor',
+            ],
 
-            // Promociones: única fuente de descuento del sistema
-            'promocion.ver', 'promocion.crear', 'promocion.editar', 'promocion.baja',
+            // Requerimientos 3.4
+            'cajero' => [
+                'venta.ver',             // NUEVO: necesita encontrar la venta a cobrar
+                'cobro.registrar',
+                'cobro.ver_propios',
+                'comprobante.ver',       // NUEVO: la factura se emite al acreditarse el pago
+                'dashboard.cajero',
+            ],
 
-            // Ventas: consulta y excepciones
-            'venta.ver', 'venta.cancelar', 'venta.devolver',
-
-            // Facturación
-            'comprobante.ver', 'comprobante.nota_credito', 'comprobante.reintentar',
-            'afip.solicitud_ver',
-
-            // Logística
-            'venta.preparar', 'venta.entregar',
-            'envio.ver', 'envio.despachar', 'envio.actualizar',
-
-            'dashboard.administrativo',
-        ],
-
-        RolSeeder::VENDEDOR => [
-            'producto.ver', 'categoria.ver',
-            'stock.ver',                       // ve el disponible y la advertencia de preventa
-            'cliente.ver', 'cliente.crear', 'cliente.editar',
-            'presupuesto.crear', 'presupuesto.validar',
-            'venta.crear', 'venta.ver_propias',
-            'promocion.ver',
-            'dashboard.vendedor',
-        ],
-
-        RolSeeder::CAJERO => [
-            'venta.ver',                       // necesita encontrar la venta a cobrar
-            'cliente.ver',
-            'pago.registrar', 'pago.ver_propios',
-            'caja.arqueo',
-            'comprobante.emitir', 'comprobante.ver',
-            'dashboard.cajero',
-        ],
-
-        RolSeeder::CLIENTE => [
-            'tienda.catalogo_ver',
-            'tienda.carrito_gestionar',
-            'tienda.comprar',
-            'tienda.pedido_ver',
-            'tienda.perfil_editar',
-        ],
-    ];
+            // Requerimientos 3.5
+            'cliente' => [
+                'tienda.catalogo.ver',
+                'tienda.carrito',
+                'tienda.comprar',
+                'tienda.envio.ver',
+                'tienda.perfil.editar',
+            ],
+        ];
+    }
 
     public function run(): void
     {
-        $rolesPorNombre = DB::table('roles')->pluck('id', 'nombre');
-        $permisosPorClave = DB::table('permisos')->pluck('id', 'clave');
+        $roles = DB::table('roles')->pluck('id', 'nombre');
+        $permisos = DB::table('permisos')->pluck('id', 'clave');
 
-        $matriz = self::MATRIZ;
-        $matriz[RolSeeder::ADMINISTRADOR] = PermisoSeeder::todasLasClaves();
+        if ($roles->isEmpty() || $permisos->isEmpty()) {
+            throw new RuntimeException('RolPermisoSeeder: corre despues de RolSeeder y PermisoSeeder.');
+        }
+
+        $matriz = static::matriz();
+
+        // El administrador: todo lo que no sea del ambito tienda (R 3.1).
+        $matriz['administrador'] = DB::table('permisos')
+            ->whereNotIn('modulo', self::MODULOS_EXCLUIDOS_ADMINISTRADOR)
+            ->pluck('clave')
+            ->all();
+
+        $filas = [];
 
         foreach ($matriz as $nombreRol => $claves) {
-            $rolId = $rolesPorNombre[$nombreRol] ?? null;
-
-            if ($rolId === null) {
-                throw new \RuntimeException("Falta el rol '{$nombreRol}'. Corré RolSeeder primero.");
+            if (! isset($roles[$nombreRol])) {
+                throw new RuntimeException("RolPermisoSeeder: no existe el rol '{$nombreRol}'.");
             }
 
-            $faltantes = array_diff($claves, $permisosPorClave->keys()->all());
-            if ($faltantes !== []) {
-                throw new \RuntimeException(
-                    "Permisos inexistentes asignados a '{$nombreRol}': ".implode(', ', $faltantes)
-                );
+            foreach ($claves as $clave) {
+                if (! isset($permisos[$clave])) {
+                    throw new RuntimeException("RolPermisoSeeder: no existe el permiso '{$clave}'.");
+                }
+
+                $filas[] = [
+                    'rol_id'     => $roles[$nombreRol],
+                    'permiso_id' => $permisos[$clave],
+                ];
             }
+        }
 
-            $deseados = array_values(array_unique(
-                array_map(fn (string $clave) => (int) $permisosPorClave[$clave], $claves)
-            ));
+        // PK compuesta: insertOrIgnore descarta lo ya asignado sin fallar.
+        DB::table('rol_permiso')->insertOrIgnore($filas);
 
-            $actuales = DB::table('rol_permiso')
-                ->where('rol_id', $rolId)
-                ->pluck('permiso_id')
-                ->map(fn ($id) => (int) $id)
-                ->all();
+        $this->avisarPermisosSinRol($permisos);
+    }
 
-            $agregar = array_diff($deseados, $actuales);
-            $quitar = array_diff($actuales, $deseados);
+    /**
+     * Lista los permisos que quedaron solo en manos del administrador porque
+     * los requerimientos no dicen que rol los ejerce. Es informativo.
+     */
+    private function avisarPermisosSinRol($permisos): void
+    {
+        $asignados = collect(static::matriz())->flatten()->unique();
+        $huerfanos = $permisos->keys()
+            ->reject(fn ($clave) => $asignados->contains($clave))
+            ->reject(fn ($clave) => str_starts_with($clave, 'tienda.'))
+            ->values();
 
-            if ($agregar !== []) {
-                DB::table('rol_permiso')->insert(array_map(
-                    fn (int $permisoId) => ['rol_id' => $rolId, 'permiso_id' => $permisoId],
-                    array_values($agregar)
-                ));
-            }
+        if ($huerfanos->isEmpty()) {
+            return;
+        }
 
-            if ($quitar !== []) {
-                DB::table('rol_permiso')
-                    ->where('rol_id', $rolId)
-                    ->whereIn('permiso_id', array_values($quitar))
-                    ->delete();
-            }
+        $this->command?->warn('  Permisos asignados solo al administrador (sin rol definido en los requerimientos):');
 
-            $this->command?->info(sprintf(
-                'rol_permiso: %-15s %d permisos (+%d / -%d).',
-                $nombreRol, count($deseados), count($agregar), count($quitar)
-            ));
+        foreach ($huerfanos as $clave) {
+            $this->command?->line("    - {$clave}");
         }
     }
 }

@@ -2,9 +2,22 @@
 
 namespace App\Enums;
 
+use App\Enums\Concerns\ConEtiqueta;
+
 enum MetodoPago: string
 {
-    case EFECTIVO = 'efectivo';
-    case TARJETA = 'tarjeta';
-    case TRANSFERENCIA = 'transferencia';
+    use ConEtiqueta;
+
+    case Efectivo      = 'efectivo';
+    case Tarjeta       = 'tarjeta';
+    case Transferencia = 'transferencia';
+
+    public function etiqueta(): string
+    {
+        return match ($this) {
+            self::Efectivo      => 'Efectivo',
+            self::Tarjeta       => 'Tarjeta',
+            self::Transferencia => 'Transferencia',
+        };
+    }
 }

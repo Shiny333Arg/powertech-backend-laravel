@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\CategoriaController;
 
 
 //authentication
@@ -24,17 +25,30 @@ Route::get('/', function () {
 
 
 //category
-Route::get('/category', function () {
-    return view('category.index');
-});
+Route::get('/category', [CategoriaController::class, 'index'])
+->name('categorias.index');
 
-Route::get('/category/create', function () {
-    return view('category.create');
-});
+Route::get('/category/create', [CategoriaController::class, 'create'])
+->name('categorias.create');
 
-Route::get('/category/edit', function () {
-    return view('category.edit');
-});
+Route::post('/category', [CategoriaController::class, 'store'])
+->name('categorias.store');
+
+Route::get('/category/{categoria}/edit', [CategoriaController::class, 'edit'])
+->name('categorias.edit');
+
+Route::put('/category/{categoria}', [CategoriaController::class, 'update'])
+->name('categorias.update');
+
+Route::patch('/category/{categoria}/baja', [CategoriaController::class, 'darDeBaja'])
+->name('categorias.baja');
+
+Route::patch('/category/{categoria}/reactivar', [CategoriaController::class, 'reactivar'])
+->name('categorias.reactivar');
+
+Route::delete('/category/{categoria}', [CategoriaController::class, 'destroy'])
+->name('categorias.destroy');
+
 
 
 //item

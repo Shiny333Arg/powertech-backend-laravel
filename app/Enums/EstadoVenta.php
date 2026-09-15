@@ -2,134 +2,119 @@
 
 namespace App\Enums;
 
+use App\Enums\Concerns\ConEtiqueta;
+
 /**
- * Circuito de estados de la venta (H.1 del modelo de datos).
+ * Circuito de la venta (Modelo de datos H.1):
  *
- *   presupuesto -> confirmada -> pagada --+-> en_preparacion -> despachada   -> entregada
- *        |             ^                  |                  \ lista_retiro  -> entregada
- *     vencida    (validacion              +-> pendiente_stock ----+
- *                 del vendedor)               (preventa: espera reposicion)
+ *   presupuesto -> confirmada -> pagada -+-> en_preparacion -> despachada   -> entregada
+ *        |             ^                 |                  \ lista_retiro -> entregada
+ *     vencida     (validacion)           +-> pendiente_stock --+
  *
- * La venta online nace directamente en `confirmada`, esperando el pago.
- * En mostrador con retiro inmediato, `pagada -> entregada` es valida y directa.
- *
- * ESTE ENUM NO TIENE UN ESTADO "ELIMINADA". Una venta no se elimina de
- * ninguna forma: su fin de vida es `cancelada`, `vencida`, `devuelta_parcial`
- * o `devuelta`. Ver Venta::booted().
+ * La venta NO se da de baja ni se elimina: su fin de vida es un estado.
  */
 enum EstadoVenta: string
 {
-    case PRESUPUESTO      = 'presupuesto';
-    case CONFIRMADA       = 'confirmada';
-    case PAGADA           = 'pagada';
-    case PENDIENTE_STOCK  = 'pendiente_stock';
-    case EN_PREPARACION   = 'en_preparacion';
-    case DESPACHADA       = 'despachada';
-    case LISTA_RETIRO     = 'lista_retiro';
-    case ENTREGADA        = 'entregada';
-    case DEVUELTA_PARCIAL = 'devuelta_parcial';
-    case DEVUELTA         = 'devuelta';
-    case VENCIDA          = 'vencida';
-    case CANCELADA        = 'cancelada';
+    use ConEtiqueta;
 
-    /**
-     * Transiciones permitidas desde este estado.
-     *
-     * `cancelada` solo se admite antes de la facturacion. Una vez emitido el
-     * comprobante la reversion es `devuelta` / `devuelta_parcial`, porque
-     * requiere nota de credito: cancelar una venta facturada dejaria un CAE
-     * autorizado sin contrapartida.
-     */
-    public function transicionesValidas(): array
+    case Presupuesto     = 'presupuesto';
+    case Confirmada      = 'confirmada';
+    case Pagada          = 'pagada';
+    case PendienteStock  = 'pendiente_stock';
+    case EnPreparacion   = 'en_preparacion';
+    case Despachada      = 'despachada';
+    case ListaRetiro     = 'lista_retiro';
+    case Entregada       = 'entregada';
+    case DevueltaParcial = 'devuelta_parcial';
+    case Devuelta        = 'devuelta';
+    case Vencida         = 'vencida';
+    case Cancelada       = 'cancelada';
+
+    public function etiqueta(): string
     {
         return match ($this) {
-            self::PRESUPUESTO     => [self::CONFIRMADA, self::VENCIDA, self::CANCELADA],
-            self::CONFIRMADA      => [self::PAGADA, self::CANCELADA],
-            self::PAGADA          => [self::EN_PREPARACION, self::PENDIENTE_STOCK, self::ENTREGADA],
-            self::PENDIENTE_STOCK => [self::EN_PREPARACION],
-            self::EN_PREPARACION  => [self::DESPACHADA, self::LISTA_RETIRO],
-            self::DESPACHADA      => [self::ENTREGADA],
-            self::LISTA_RETIRO    => [self::ENTREGADA],
-            self::ENTREGADA       => [self::DEVUELTA_PARCIAL, self::DEVUELTA],
-            self::DEVUELTA_PARCIAL => [self::DEVUELTA],
-            self::DEVUELTA, self::VENCIDA, self::CANCELADA => [],
+            self::Presupuesto     => 'Presupuesto',
+            self::Confirmada      => 'Confirmada',
+            self::Pagada          => 'Pagada',
+            self::PendienteStock  => 'Pendiente de stock',
+            self::EnPreparacion   => 'En preparación',
+            self::Despachada      => 'Despachada',
+            self::ListaRetiro     => 'Lista para retirar',
+            self::Entregada       => 'Entregada',
+            self::DevueltaParcial => 'Devuelta parcialmente',
+            self::Devuelta        => 'Devuelta',
+            self::Vencida         => 'Vencida',
+            self::Cancelada       => 'Cancelada',
+        };
+    }
+
+    /**
+     * Transiciones admitidas. pagada -> entregada existe a proposito: en el
+     * mostrador con retiro inmediato el cliente se lleva el producto en el
+     * acto, y los estados intermedios son del circuito logistico, no un
+     * tramite obligatorio.
+     *
+     * @return list<self>
+     */
+    public function transicionesPosibles(): array
+    {
+        return match ($this) {
+            self::Presupuesto     => [self::Confirmada, self::Vencida, self::Cancelada],
+            self::Confirmada      => [self::Pagada, self::Cancelada],
+            self::Pagada          => [self::EnPreparacion, self::PendienteStock, self::Entregada, self::Cancelada],
+            self::PendienteStock  => [self::EnPreparacion, self::Cancelada],
+            self::EnPreparacion   => [self::Despachada, self::ListaRetiro, self::Cancelada],
+            self::Despachada      => [self::Entregada],
+            self::ListaRetiro     => [self::Entregada, self::Cancelada],
+            self::Entregada       => [self::DevueltaParcial, self::Devuelta],
+            self::DevueltaParcial => [self::DevueltaParcial, self::Devuelta],
+            self::Devuelta, self::Vencida, self::Cancelada => [],
         };
     }
 
     public function puedeTransicionarA(self $destino): bool
     {
-        return in_array($destino, $this->transicionesValidas(), true);
-    }
-
-    /** Estados de los que ya no se sale. */
-    public function esFinal(): bool
-    {
-        return $this->transicionesValidas() === [];
-    }
-
-    /** El presupuesto no compromete stock ni emite comprobante. */
-    public function esPresupuesto(): bool
-    {
-        return $this === self::PRESUPUESTO;
+        return in_array($destino, $this->transicionesPosibles(), true);
     }
 
     /**
-     * Estados en los que las unidades estan comprometidas y todavia no
-     * salieron del deposito. Es lo que hay que liberar al cancelar.
+     * Hay unidades comprometidas que todavia no salieron del deposito.
+     * Despachada ya no: el movimiento de entrega corrio al despachar.
      */
-    public function tieneUnidadesComprometidas(): bool
+    public function comprometeStock(): bool
     {
-        return in_array($this, [
-            self::CONFIRMADA, self::PAGADA, self::PENDIENTE_STOCK,
-            self::EN_PREPARACION, self::LISTA_RETIRO,
-        ], true);
+        return $this->es(
+            self::Confirmada,
+            self::Pagada,
+            self::PendienteStock,
+            self::EnPreparacion,
+            self::ListaRetiro,
+        );
+    }
+
+    /** Sin transiciones salientes. */
+    public function esTerminal(): bool
+    {
+        return $this->transicionesPosibles() === [];
     }
 
     /**
-     * Movimiento de stock que genera la transicion $desde -> $hasta, o null
-     * si no mueve stock.
-     *
-     * No alcanza con mirar el estado de destino, por dos razones:
-     *
-     *  - La ENTREGA se dispara cuando la mercaderia sale del deposito, y eso
-     *    depende del modo: en un envio es el despacho, en un retiro es el
-     *    momento en que el cliente se lleva el producto. Un `despachada ->
-     *    entregada` es la confirmacion de que llego, y no vuelve a descontar.
-     *  - La LIBERACION solo corresponde si habia unidades comprometidas.
-     *    Cancelar un presupuesto no libera nada, porque nunca comprometio.
-     *
-     * `pagada` devuelve null a proposito: el cobro emite la factura y no toca
-     * ningun saldo.
+     * Fin de vida de la venta. No es una baja: cada uno de estos estados tiene
+     * un efecto distinto sobre el stock, cosa que un flag activo no expresaria.
      */
-    public static function movimientoDeTransicion(
-        self $desde,
-        self $hasta,
-        ModoEntrega $modo
-    ): ?TipoMovimientoStock {
-        return match (true) {
-            $hasta === self::CONFIRMADA => TipoMovimientoStock::RESERVA,
-
-            // Salida real del deposito, una sola vez por venta.
-            $hasta === self::DESPACHADA && $modo === ModoEntrega::ENVIO
-                => TipoMovimientoStock::ENTREGA,
-            $hasta === self::ENTREGADA && $modo === ModoEntrega::RETIRO
-                => TipoMovimientoStock::ENTREGA,
-
-            // Reversion antes de la entrega.
-            in_array($hasta, [self::CANCELADA, self::VENCIDA], true)
-                => $desde->tieneUnidadesComprometidas() ? TipoMovimientoStock::LIBERACION : null,
-
-            // Reingreso por nota de credito.
-            in_array($hasta, [self::DEVUELTA, self::DEVUELTA_PARCIAL], true)
-                => TipoMovimientoStock::DEVOLUCION,
-
-            default => null,
-        };
+    public function esFinDeVida(): bool
+    {
+        return $this->es(self::Cancelada, self::Vencida, self::DevueltaParcial, self::Devuelta);
     }
 
-    /** Cola que alimenta el dashboard del administrativo. */
-    public static function pendientesDeEntrega(): array
+    public function permiteCancelar(): bool
     {
-        return [self::PENDIENTE_STOCK, self::EN_PREPARACION, self::LISTA_RETIRO, self::DESPACHADA];
+        return $this->puedeTransicionarA(self::Cancelada);
+    }
+
+    /** Estado siguiente al acreditarse el pago, segun haya o no stock fisico. */
+    public static function trasElPago(bool $hayStockFisico): self
+    {
+        return $hayStockFisico ? self::EnPreparacion : self::PendienteStock;
     }
 }

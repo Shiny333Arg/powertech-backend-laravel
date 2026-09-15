@@ -4,30 +4,28 @@ namespace App\Models;
 
 use App\Enums\LetraComprobante;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
-/**
- * B.4 tipos_comprobante. Factura A y B, notas de credito y debito.
- * `signo` (+1 / -1) permite calcular saldos sumando todos los comprobantes,
- * sin condicionales dispersos por el codigo.
- */
+/** signo (+1 / -1) permite sumar saldos sin condicionales dispersos. */
 class TipoComprobante extends Model
 {
     protected $table = 'tipos_comprobante';
 
-    public $timestamps = false;
-
     protected $fillable = ['codigo_afip', 'nombre', 'letra', 'signo'];
 
-    protected function casts(): array
+    protected $casts = [
+        'codigo_afip' => 'integer',
+        'letra'       => LetraComprobante::class,
+        'signo'       => 'integer',
+    ];
+
+    public function comprobantes(): HasMany
     {
-        return [
-            'letra' => LetraComprobante::class,
-            'signo' => 'integer',
-        ];
+        return $this->hasMany(Comprobante::class, 'tipo_comprobante_id');
     }
 
-    public function esNotaDeCredito(): bool
+    public function esNotaCredito(): bool
     {
-        return $this->signo < 0;
+        return $this->signo === -1;
     }
 }

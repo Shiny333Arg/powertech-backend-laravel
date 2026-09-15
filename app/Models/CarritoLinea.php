@@ -6,25 +6,17 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
- * G.2 carrito_lineas. El indice unico (carrito_id, producto_id) evita la
- * linea duplicada: agregar dos veces suma cantidad en lugar de crear otra
- * fila.
- *
- * NO guarda precio a proposito: el carrito debe mostrar siempre el precio
- * vigente, incluidas las promociones activas al momento de mirarlo.
+ * No guarda precio: el carrito muestra siempre el precio vigente, con las
+ * promociones activas al momento de mirarlo. El precio se congela recien
+ * al convertirse en venta.
  */
 class CarritoLinea extends Model
 {
     protected $table = 'carrito_lineas';
 
-    public $timestamps = false;
-
     protected $fillable = ['carrito_id', 'producto_id', 'cantidad'];
 
-    protected function casts(): array
-    {
-        return ['cantidad' => 'integer'];
-    }
+    protected $casts = ['cantidad' => 'integer'];
 
     public function carrito(): BelongsTo
     {

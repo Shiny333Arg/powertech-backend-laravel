@@ -3,27 +3,26 @@
 namespace App\Models;
 
 use App\Enums\EstadoComprobante;
+use App\Models\Concerns\ProtegeContraBorrado;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
-use LogicException;
 
 /**
- * I.1 comprobantes. Venta y comprobante NO son la misma cosa: un presupuesto
- * es una venta sin comprobante, y una venta puede generar una factura y
- * despues una nota de credito.
+ * Venta y comprobante no son la misma cosa: un presupuesto es una venta sin
+ * comprobante, y una venta devuelta tiene factura y nota de credito.
  *
- * `numero` es el correlativo FISCAL, por (tipo, punto de venta), y lo
- * autoriza ARCA. No tiene ninguna relacion con ventas.numero, que es el
- * correlativo interno. Son dos numeraciones que corren en paralelo y jamas
- * se cruzan.
- *
- * INMUTABLE UNA VEZ CON CAE. Nada se borra: una anulacion se resuelve
+ * Inmutable una vez que tiene CAE. Nada se borra: una anulacion se resuelve
  * emitiendo una nota de credito asociada.
+ *
+ * numero es el correlativo FISCAL, unico por (tipo, punto de venta).
  */
 class Comprobante extends Model
 {
+    use ProtegeContraBorrado;
+
     protected $table = 'comprobantes';
 
     protected $fillable = [
@@ -33,36 +32,15 @@ class Comprobante extends Model
         'cae', 'cae_vencimiento', 'estado', 'motivo',
     ];
 
-    protected function casts(): array
-    {
-        return [
-            'estado'          => EstadoComprobante::class,
-            'numero'          => 'integer',
-            'fecha_emision'   => 'datetime',
-            'cae_vencimiento' => 'date',
-            'neto'            => 'decimal:2',
-            'iva'             => 'decimal:2',
-            'total'           => 'decimal:2',
-        ];
-    }
-
-    protected static function booted(): void
-    {
-        static::updating(function (self $c) {
-            // Se permite escribir el CAE una vez, que es como pasa de
-            // pendiente a autorizado. Despues queda congelado.
-            if ($c->getOriginal('cae') !== null) {
-                throw new LogicException(
-                    'Un comprobante con CAE es inmutable. Para corregirlo, '
-                    . 'emiti una nota de credito asociada.'
-                );
-            }
-        });
-
-        static::deleting(fn () => throw new LogicException(
-            'Los comprobantes no se eliminan. Una anulacion es una nota de credito.'
-        ));
-    }
+    protected $casts = [
+        'numero'          => 'integer',
+        'estado'          => EstadoComprobante::class,
+        'fecha_emision'   => 'datetime',
+        'neto'            => 'decimal:2',
+        'iva'             => 'decimal:2',
+        'total'           => 'decimal:2',
+        'cae_vencimiento' => 'date',
+    ];
 
     public function venta(): BelongsTo
     {
@@ -79,20 +57,32 @@ class Comprobante extends Model
         return $this->belongsTo(PuntoVenta::class, 'punto_venta_id');
     }
 
-    public function cliente(): BelongsTo
-    {
-        return $this->belongsTo(Cliente::class, 'cliente_id');
-    }
-
-    /** Encadena la nota de credito con su factura de origen. */
+    /** La factura de origen, si este comprobante es una nota. */
     public function comprobanteAsociado(): BelongsTo
     {
         return $this->belongsTo(self::class, 'comprobante_asociado_id');
     }
 
+    /** Las notas emitidas contra esta factura. */
     public function notasAsociadas(): HasMany
     {
         return $this->hasMany(self::class, 'comprobante_asociado_id');
+    }
+
+    public function cliente(): BelongsTo
+    {
+        return $this->belongsTo(Cliente::class, 'cliente_id');
+    }
+
+    /** Datos fiscales copiados al emitir, no leidos de la ficha del cliente. */
+    public function tipoDocumento(): BelongsTo
+    {
+        return $this->belongsTo(TipoDocumento::class, 'tipo_documento_id');
+    }
+
+    public function condicionIva(): BelongsTo
+    {
+        return $this->belongsTo(CondicionIva::class, 'condicion_iva_id');
     }
 
     public function lineas(): HasMany
@@ -105,20 +95,24 @@ class Comprobante extends Model
         return $this->hasMany(AfipSolicitud::class, 'comprobante_id');
     }
 
-    /** La nota de credito es el origen del movimiento de devolucion. */
+    /** Una nota de credito es el origen del movimiento de devolucion. */
     public function movimientosStock(): MorphMany
     {
         return $this->morphMany(MovimientoStock::class, 'origen');
     }
 
-    public function estaAutorizado(): bool
+    public function scopeAutorizados(Builder $query): Builder
     {
-        return $this->estado === EstadoComprobante::AUTORIZADO && $this->cae !== null;
+        return $query->where('estado', EstadoComprobante::Autorizado->value);
     }
 
-    /** Numero fiscal completo: 0001-00000123. */
-    public function numeroFormateado(): string
+    public function estaAutorizado(): bool
     {
-        return sprintf('%04d-%08d', $this->puntoVenta->numero, $this->numero);
+        return $this->estado === EstadoComprobante::Autorizado && $this->cae !== null;
+    }
+
+    protected function mensajeNoEliminable(): string
+    {
+        return 'Un comprobante no se borra. Emitir una nota de crédito asociada.';
     }
 }

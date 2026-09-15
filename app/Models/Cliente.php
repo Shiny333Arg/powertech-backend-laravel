@@ -2,29 +2,34 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\ProtegeContraBorrado;
+use App\Models\Concerns\TieneBajaLogica;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
-use Illuminate\Database\Eloquent\SoftDeletes;
 
 /**
- * A.6 clientes. Entidad y no texto libre dentro de la venta: ARCA exige tipo
- * y numero de documento y condicion frente al IVA para determinar si
- * corresponde factura A o B.
+ * user_id es nullable: el cliente de mostrador existe sin tener cuenta.
  *
- * `user_id` es nullable a proposito: el cliente de mostrador existe como
- * cliente sin tener cuenta.
+ * activo es independiente del activo de su user: dar de baja el user le corta
+ * el acceso a la tienda, dar de baja el cliente lo saca de la operacion del
+ * mostrador. Son dos decisiones distintas.
  */
 class Cliente extends Model
 {
-    use SoftDeletes;
+    use ProtegeContraBorrado;
+    use TieneBajaLogica;
 
     protected $table = 'clientes';
 
     protected $fillable = [
         'user_id', 'razon_social', 'tipo_documento_id', 'nro_doc',
-        'condicion_iva_id', 'telefono',
+        'condicion_iva_id', 'telefono', 'activo',
+    ];
+
+    protected $casts = [
+        'activo' => 'boolean',
     ];
 
     public function user(): BelongsTo
@@ -47,11 +52,6 @@ class Cliente extends Model
         return $this->morphMany(Direccion::class, 'direccionable');
     }
 
-    public function direccionFiscal(): ?Direccion
-    {
-        return $this->direcciones()->where('tipo', 'fiscal')->first();
-    }
-
     public function ventas(): HasMany
     {
         return $this->hasMany(Venta::class, 'cliente_id');
@@ -60,11 +60,5 @@ class Cliente extends Model
     public function comprobantes(): HasMany
     {
         return $this->hasMany(Comprobante::class, 'cliente_id');
-    }
-
-    /** Tiene cuenta en la tienda, o es solo un cliente de mostrador. */
-    public function tieneCuenta(): bool
-    {
-        return $this->user_id !== null;
     }
 }

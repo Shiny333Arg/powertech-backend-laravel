@@ -6,29 +6,21 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
- * F.3 promociones_aplicadas. Deja registrado POR QUE una linea salio mas
- * barata. Sirve para dos cosas concretas: reconstruir el precio ante un
- * reclamo, y medir el rendimiento real de cada promocion. Sin esta tabla el
- * descuento es un numero anonimo dentro del total.
+ * Deja registrado POR QUE una linea salio mas barata: reconstruye el precio
+ * ante un reclamo y mide el rendimiento real de cada promocion.
  */
 class PromocionAplicada extends Model
 {
-    // Sin esto Laravel buscaria `promocion_aplicadas`.
-    protected $table = 'promociones_aplicadas';
-
     public const UPDATED_AT = null;
 
-    protected $fillable = [
-        'venta_id', 'venta_linea_id', 'promocion_id', 'importe_descuento',
-    ];
+    protected $table = 'promociones_aplicadas';
 
-    protected function casts(): array
-    {
-        return [
-            'importe_descuento' => 'decimal:2',
-            'created_at'        => 'datetime',
-        ];
-    }
+    protected $fillable = ['venta_id', 'venta_linea_id', 'promocion_id', 'importe_descuento'];
+
+    protected $casts = [
+        'importe_descuento' => 'decimal:2',
+        'created_at'        => 'datetime',
+    ];
 
     public function venta(): BelongsTo
     {

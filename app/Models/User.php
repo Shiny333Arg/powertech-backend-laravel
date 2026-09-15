@@ -2,55 +2,57 @@
 
 namespace App\Models;
 
+use App\Enums\AmbitoRol;
 use App\Enums\ProveedorAuth;
-use App\Models\Concerns\NoSeBorraFisicamente;
+use App\Models\Concerns\ProtegeContraBorrado;
+use App\Models\Concerns\TieneBajaLogica;
+use Illuminate\Foundation\Auth\User as Authenticatable;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
-use Illuminate\Database\Eloquent\SoftDeletes;
-use Illuminate\Foundation\Auth\User as Authenticatable;
-use Illuminate\Notifications\Notifiable;
-use Laravel\Sanctum\HasApiTokens;
 
 /**
- * A.1 users. Empleados y clientes inician sesion con la misma mecanica, asi
- * que las credenciales viven en una sola tabla. Los datos propios de cada
- * poblacion estan en `empleados` y `clientes`.
+ * Credenciales unificadas de empleados y clientes.
  *
- * UN USUARIO NO SE ELIMINA NUNCA. Solo baja logica: toda la trazabilidad del
- * sistema cuelga de esta tabla.
+ * Nunca se elimina: toda la trazabilidad del sistema cuelga de esta tabla
+ * (ventas, cobros, movimientos de stock, aprobaciones de compra).
  */
 class User extends Authenticatable
 {
-    use HasApiTokens, Notifiable, SoftDeletes, NoSeBorraFisicamente;
+    use ProtegeContraBorrado;
+    use TieneBajaLogica;
 
     protected $table = 'users';
 
     protected $fillable = [
         'rol_id', 'usuario', 'email', 'password', 'nombres', 'apellido',
         'proveedor_auth', 'google_id', 'forzar_cambio_password', 'activo',
+        'email_verified_at', 'ultimo_acceso_at',
     ];
 
-    protected $hidden = ['password', 'remember_token', 'google_id'];
+    protected $hidden = ['password'];
 
-    protected function casts(): array
+    protected $casts = [
+        'password'               => 'hashed',
+        'proveedor_auth'         => ProveedorAuth::class,
+        'forzar_cambio_password' => 'boolean',
+        'activo'                 => 'boolean',
+        'email_verified_at'      => 'datetime',
+        'ultimo_acceso_at'       => 'datetime',
+    ];
+
+    /**
+     * La tabla no tiene remember_token: devolver null desactiva el
+     * "recordarme" de Laravel sin romper el guard de sesion.
+     */
+    public function getRememberTokenName(): ?string
     {
-        return [
-            'password'               => 'hashed',
-            'proveedor_auth'         => ProveedorAuth::class,
-            'forzar_cambio_password' => 'boolean',
-            'activo'                 => 'boolean',
-            'email_verified_at'      => 'datetime',
-            'ultimo_acceso_at'       => 'datetime',
-        ];
+        return null;
     }
 
-    // ---------------------------------------------------------------
-    // Relaciones
-    // ---------------------------------------------------------------
-
-    public function rol(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    public function rol(): BelongsTo
     {
-        return $this->belongsTo(Role::class, 'rol_id');
+        return $this->belongsTo(Rol::class, 'rol_id');
     }
 
     public function empleado(): HasOne
@@ -63,19 +65,16 @@ class User extends Authenticatable
         return $this->hasOne(Cliente::class, 'user_id');
     }
 
-    /** Ventas registradas como vendedor. */
     public function ventas(): HasMany
     {
         return $this->hasMany(Venta::class, 'usuario_id');
     }
 
-    /** Presupuestos que habilito para cobro. */
     public function ventasValidadas(): HasMany
     {
         return $this->hasMany(Venta::class, 'usuario_valido_id');
     }
 
-    /** Cobros tomados como cajero. */
     public function pagos(): HasMany
     {
         return $this->hasMany(Pago::class, 'usuario_id');
@@ -86,12 +85,12 @@ class User extends Authenticatable
         return $this->hasMany(MovimientoStock::class, 'usuario_id');
     }
 
-    public function ordenesCreadas(): HasMany
+    public function ordenesCompraCreadas(): HasMany
     {
         return $this->hasMany(OrdenCompra::class, 'usuario_creo_id');
     }
 
-    public function ordenesAprobadas(): HasMany
+    public function ordenesCompraAprobadas(): HasMany
     {
         return $this->hasMany(OrdenCompra::class, 'usuario_aprobo_id');
     }
@@ -106,29 +105,14 @@ class User extends Authenticatable
         return $this->hasMany(Carrito::class, 'user_id');
     }
 
-    // ---------------------------------------------------------------
-    // Autorizacion
-    // ---------------------------------------------------------------
-
-    /**
-     * `activo` y `deleted_at` son cosas distintas y conviven: se puede
-     * suspender el acceso de un empleado sin darlo de baja.
-     */
-    public function puedeIngresar(): bool
-    {
-        return $this->activo && $this->deleted_at === null;
-    }
-
+    /** Lo que no se asigna explicitamente, no se puede hacer. */
     public function tienePermiso(string $clave): bool
     {
-        return $this->rol
-            ->permisos()
-            ->where('clave', $clave)
-            ->exists();
+        return $this->rol?->permisos->contains('clave', $clave) ?? false;
     }
 
-    public function esEmpleado(): bool
+    public function esCliente(): bool
     {
-        return $this->rol->esDeGestion();
+        return $this->rol?->ambito === AmbitoRol::Tienda;
     }
 }

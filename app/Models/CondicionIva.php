@@ -2,28 +2,33 @@
 
 namespace App\Models;
 
-use App\Enums\LetraComprobante;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
- * B.2 condiciones_iva. Determina la letra del comprobante: responsable
- * inscripto recibe factura A, el resto B.
+ * Catalogo ARCA. Determina la letra del comprobante:
+ * responsable inscripto recibe A, el resto B.
  */
 class CondicionIva extends Model
 {
     protected $table = 'condiciones_iva';
 
-    public $timestamps = false;
-
     protected $fillable = ['codigo_afip', 'nombre'];
 
-    /** Codigo ARCA de responsable inscripto. */
-    public const RESPONSABLE_INSCRIPTO = 1;
+    protected $casts = ['codigo_afip' => 'integer'];
 
-    public function letraQueCorresponde(): LetraComprobante
+    public function clientes(): HasMany
     {
-        return $this->codigo_afip === self::RESPONSABLE_INSCRIPTO
-            ? LetraComprobante::A
-            : LetraComprobante::B;
+        return $this->hasMany(Cliente::class, 'condicion_iva_id');
+    }
+
+    public function proveedores(): HasMany
+    {
+        return $this->hasMany(Proveedor::class, 'condicion_iva_id');
+    }
+
+    public function comprobantes(): HasMany
+    {
+        return $this->hasMany(Comprobante::class, 'condicion_iva_id');
     }
 }

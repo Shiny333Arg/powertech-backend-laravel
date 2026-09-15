@@ -4,65 +4,46 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
-use LogicException;
+use RuntimeException;
 
 /**
- * K.1 numeradores. Contador de los correlativos INTERNOS del sistema: la
- * venta y la orden de compra. Nada que ver con la numeracion fiscal, que la
- * autoriza ARCA y vive en `comprobantes`.
+ * Contador de las series internas: 'venta' y 'orden_compra'.
  *
- * Una fila por serie. No tiene FK ni la referencia nadie: es un contador,
- * no una entidad del dominio.
+ * No lo referencia nadie: es un contador, no una entidad del dominio. Es la
+ * unica tabla del modelo disenada para escribirse bajo bloqueo explicito.
  */
 class Numerador extends Model
 {
-    protected $table = 'numeradores';
-
     public const CREATED_AT = null;
 
-    public const SERIE_VENTA        = 'venta';
-    public const SERIE_ORDEN_COMPRA = 'orden_compra';
+    protected $table = 'numeradores';
 
     protected $fillable = ['serie', 'prefijo', 'ultimo_numero'];
 
-    protected function casts(): array
-    {
-        return ['ultimo_numero' => 'integer'];
-    }
+    protected $casts = ['ultimo_numero' => 'integer'];
 
     /**
-     * Entrega el siguiente numero de la serie.
+     * Toma el proximo numero de la serie bloqueando la fila del contador.
      *
-     * Tiene que llamarse DENTRO de la transaccion que crea el documento. El
-     * FOR UPDATE bloquea la fila del contador hasta el COMMIT, que es lo que
-     * serializa la asignacion: sin huecos, sin duplicados y sin reintentos.
-     * Si la operacion falla, el ROLLBACK devuelve tambien el numero.
+     * El bloqueo serializa la asignacion: serie estrictamente correlativa, sin
+     * huecos y sin reintentos. Un ROLLBACK devuelve tambien el numero.
      *
-     * Las dos alternativas se descartaron a proposito:
-     *  - MAX(numero)+1 hace que dos cajas simultaneas calculen el mismo
-     *    numero; el indice unico evita el duplicado pero a costa de una
-     *    operacion fallida que hay que reintentar, y el reintento compite
-     *    otra vez.
-     *  - Derivar del id ata un dato que el negocio dice por telefono e
-     *    imprime en un presupuesto a una clave tecnica que salta ante
-     *    cualquier INSERT fallido.
+     * DEBE llamarse dentro de la transaccion que crea el documento: fuera de
+     * ella el lock se libera al instante y el numero puede quedar tomado por
+     * una operacion que despues falla.
      */
-    public static function siguiente(string $serie): int
+    public static function proximoNumero(string $serie): int
     {
         if (DB::transactionLevel() === 0) {
-            throw new LogicException(
-                "Numerador::siguiente('{$serie}') debe llamarse dentro de la "
-                . 'transaccion que crea el documento. Fuera de ella, el bloqueo '
-                . 'se libera antes del INSERT y la serie deja de ser confiable.'
+            throw new RuntimeException(
+                "Numerador::proximoNumero('{$serie}') tiene que correr dentro de una transacción."
             );
         }
 
         $numerador = static::where('serie', $serie)->lockForUpdate()->first();
 
-        if ($numerador === null) {
-            throw new LogicException(
-                "No existe la serie '{$serie}' en numeradores. Se carga por seeder."
-            );
+        if (! $numerador) {
+            throw new RuntimeException("No existe la serie '{$serie}' en numeradores.");
         }
 
         $numerador->increment('ultimo_numero');
@@ -70,15 +51,11 @@ class Numerador extends Model
         return $numerador->ultimo_numero;
     }
 
-    /**
-     * Presentacion: la columna del documento guarda el entero (1204) y la
-     * pantalla arma V-0001204. Guardar el numero ya formateado rompe el
-     * orden, la comparacion y el indice.
-     */
+    /** Presentacion: la columna guarda el entero, la pantalla arma V-0001204. */
     public function formatear(int $numero, int $digitos = 7): string
     {
-        return $this->prefijo
-            ? sprintf('%s-%0' . $digitos . 'd', $this->prefijo, $numero)
-            : (string) $numero;
+        $relleno = str_pad((string) $numero, $digitos, '0', STR_PAD_LEFT);
+
+        return $this->prefijo ? "{$this->prefijo}-{$relleno}" : $relleno;
     }
 }

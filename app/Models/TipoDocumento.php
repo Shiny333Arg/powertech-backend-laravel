@@ -3,22 +3,29 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
-/**
- * B.1 tipos_documento. CUIT, CUIL, DNI, consumidor final.
- * Tabla y no ENUM: los valores los define ARCA y el web service recibe
- * codigos numericos, no etiquetas de texto. Se carga por seeder.
- */
+/** Catalogo ARCA. Se carga por seeder; no se administra desde la app. */
 class TipoDocumento extends Model
 {
     protected $table = 'tipos_documento';
 
-    public $timestamps = false;
-
     protected $fillable = ['codigo_afip', 'nombre'];
 
-    protected function casts(): array
+    protected $casts = ['codigo_afip' => 'integer'];
+
+    public function clientes(): HasMany
     {
-        return ['codigo_afip' => 'integer'];
+        return $this->hasMany(Cliente::class, 'tipo_documento_id');
+    }
+
+    public function empleados(): HasMany
+    {
+        return $this->hasMany(Empleado::class, 'tipo_documento_id');
+    }
+
+    public function comprobantes(): HasMany
+    {
+        return $this->hasMany(Comprobante::class, 'tipo_documento_id');
     }
 }
