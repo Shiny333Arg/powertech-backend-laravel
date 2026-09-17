@@ -1,7 +1,13 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+
 use App\Http\Controllers\CategoriaController;
+use App\Http\Controllers\ProductoController;
+use App\Http\Controllers\ProveedorController;
+use App\Http\Controllers\HelpController;
+use App\Http\Controllers\EmpleadoController;
+use App\Http\Controllers\PromocionController;
 
 
 //authentication
@@ -52,17 +58,38 @@ Route::delete('/category/{categoria}', [CategoriaController::class, 'destroy'])
 
 
 //item
-Route::get('/item', function () {
-    return view('item.index');
-});
+Route::get('/item', [ProductoController::class, 'index'])
+->name('items.index');
 
-Route::get('/item/create', function () {
-    return view('item.create');
-});
+Route::get('/item/create', [ProductoController::class, 'create'])
+->name('items.create');
 
-Route::get('/item/edit', function () {
-    return view('item.edit');
-});
+Route::post('/item', [ProductoController::class, 'store'])
+->name('items.store');
+
+Route::get('/item/{producto}/edit', [ProductoController::class, 'edit'])
+->name('items.edit');
+
+Route::put('/item/{producto}', [ProductoController::class, 'update'])
+->name('items.update');
+
+Route::patch('/item/{producto}/baja', [ProductoController::class, 'darDeBaja'])
+->name('items.darDeBaja');
+
+Route::patch('/item/{producto}/reactivar', [ProductoController::class, 'reactivar'])
+->name('items.reactivar');
+
+Route::patch('/item/{producto}/publicar', [ProductoController::class, 'publicar'])
+->name('items.publicar');
+
+Route::patch('/item/{producto}/despublicar', [ProductoController::class, 'despublicar'])
+->name('items.despublicar');
+
+Route::patch('/item/{producto}/stock', [ProductoController::class, 'ajustarStock'])
+->name('items.ajustarStock');
+
+Route::get('/item/{producto}/movimientos', [ProductoController::class, 'movimientos'])
+->name('items.movimientos');
 
 
 //sale
@@ -80,18 +107,79 @@ Route::get('/sale/view', function () {
 
 
 //user
-Route::get('/user', function () {
-    return view('user.index');
-});
+Route::get('/empleado', [EmpleadoController::class, 'index'])
+    ->name('user.index');
 
-Route::get('/user/create', function () {
-    return view('user.create');
-});
+Route::get('/empleado/create', [EmpleadoController::class, 'create'])
+    ->name('user.create');
 
-Route::get('/user/edit', function () {
-    return view('user.edit');
-});
+Route::post('/empleado', [EmpleadoController::class, 'store'])
+    ->name('user.store');
 
-Route::get('/user/my-account', function () {
-    return view('user.my-account');
-});
+Route::get('/empleado/{empleado}/edit', [EmpleadoController::class, 'edit'])
+    ->name('user.edit');
+
+Route::put('/empleado/{empleado}', [EmpleadoController::class, 'update'])
+    ->name('user.update');
+
+Route::patch('/empleado/{empleado}/baja', [EmpleadoController::class, 'darDeBaja'])
+    ->name('user.darDeBaja');
+
+Route::patch('/empleado/{empleado}/reactivar', [EmpleadoController::class, 'reactivar'])
+    ->name('user.reactivar');
+
+Route::patch('/empleado/{empleado}/resetear-password', [EmpleadoController::class, 'resetearPassword'])
+    ->name('user.resetearPassword');
+
+
+//proveedor
+Route::get('/proveedor', [ProveedorController::class, 'index'])
+->name('proveedors.index');
+
+Route::get('/proveedor/create', [ProveedorController::class, 'create'])
+->name('proveedors.create');
+
+Route::post('/proveedor', [ProveedorController::class, 'store'])
+->name('proveedors.store');
+
+Route::get('/proveedor/{proveedor}/edit', [ProveedorController::class, 'edit'])
+->name('proveedors.edit');
+
+Route::put('/proveedor/{proveedor}', [ProveedorController::class, 'update'])
+->name('proveedors.update');
+
+Route::patch('/proveedor/{proveedor}/baja', [ProveedorController::class, 'darDeBaja'])
+->name('proveedors.darDeBaja');
+
+Route::patch('/proveedor/{proveedor}/reactivar', [ProveedorController::class, 'reactivar'])
+->name('proveedors.reactivar');
+
+
+
+//help
+Route::get('/help', [HelpController::class, 'index'])
+->name('help.index');
+
+
+//promotions
+
+Route::get('/promotion', [PromocionController::class, 'index'])
+    ->name('promociones.index');
+
+Route::get('/promotion/create', [PromocionController::class, 'create'])
+    ->name('promociones.create');
+
+Route::post('/promotion', [PromocionController::class, 'store'])
+    ->name('promociones.store');
+
+Route::get('/promotion/{promocion}/edit', [PromocionController::class, 'edit'])
+    ->name('promociones.edit');
+
+Route::put('/promotion/{promocion}', [PromocionController::class, 'update'])
+    ->name('promociones.update');
+
+Route::patch('/promotion/{promocion}/baja', [PromocionController::class, 'darDeBaja'])
+    ->name('promociones.darDeBaja');
+
+Route::patch('/promotion/{promocion}/reactivar', [PromocionController::class, 'reactivar'])
+    ->name('promociones.reactivar');

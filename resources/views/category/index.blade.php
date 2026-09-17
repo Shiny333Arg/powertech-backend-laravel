@@ -230,7 +230,15 @@
                                 title="Dar de baja"
                                 onclick="return confirm('¿Está seguro de dar de baja esta categoría?');">
 
-                                Desactivar
+                                <svg xmlns="http://www.w3.org/2000/svg"
+                                    width="16"
+                                    height="16"
+                                    fill="currentColor"
+                                    viewBox="0 0 16 16">
+
+                                    <path d="M8 15A7 7 0 1 0 8 1a7 7 0 0 0 0 14zM4.5 7.5h7a.5.5 0 0 1 0 1h-7a.5.5 0 0 1 0-1z" />
+
+                                </svg>
                             </button>
                         </form>
 
@@ -252,7 +260,16 @@
                                 title="Reactivar"
                                 onclick="return confirm('¿Está seguro de reactivar esta categoría?');">
 
-                                Reactivar
+                                <svg xmlns="http://www.w3.org/2000/svg"
+                                    width="16"
+                                    height="16"
+                                    fill="currentColor"
+                                    viewBox="0 0 16 16">
+
+                                    <path d="M8 3a5 5 0 1 1-4.546 2.917.5.5 0 0 1 .91-.414A4 4 0 1 0 8 4z" />
+
+                                    <path d="M8 1v4H4" />
+                                </svg>
                             </button>
                         </form>
 

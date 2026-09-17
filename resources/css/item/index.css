@@ -1,0 +1,37 @@
+#columnaCodigo{
+    width: 10%;
+}
+
+#columnaNombre{
+    width: 20%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+#columnaMarca{
+    width: 12%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+#columnaCategoria{
+    width: 15%;
+}
+
+#columnaPrecio{
+    width: 12%;
+}
+
+#columnaStockDisponible{
+    width: 8%;
+}
+
+#columnaEstado{
+    width: 8%;
+}
+
+#columnaOpciones{
+    width: 15%;
+}

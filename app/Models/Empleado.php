@@ -35,4 +35,19 @@ class Empleado extends Model
     {
         return $this->morphMany(Direccion::class, 'direccionable');
     }
+
+    /**
+     * El CUIL se guarda en 11 digitos, sin guiones. El formato es de
+     * presentacion, igual que en Proveedor::cuitFormateado().
+     */
+    public function cuilFormateado(): string
+    {
+        return preg_replace('/^(\d{2})(\d{8})(\d)$/', '$1-$2-$3', (string) $this->cuil) ?: (string) $this->cuil;
+    }
+
+    /** Baja del empleado = users.activo false + fecha_baja asentada. */
+    public function estaEnActividad(): bool
+    {
+        return (bool) $this->user?->activo;
+    }
 }

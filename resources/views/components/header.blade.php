@@ -18,6 +18,10 @@
           </li>
 
           <li class="nav-item px-2" *ngIf="isAdmin() || isOperator()">
+            <a class="nav-link rounded fw-bold text-white" href="/promotion">Promociones</a>
+          </li>
+
+          <li class="nav-item px-2" *ngIf="isAdmin() || isOperator()">
             <a class="nav-link rounded fw-bold text-white" href="/item">Productos</a>
           </li>
 
@@ -26,7 +30,7 @@
           </li>
 
           <li class="nav-item px-2" *ngIf="isAdmin() || isOperator()">
-            <a class="nav-link rounded fw-bold text-white" href="/category">Proveedores</a>
+            <a class="nav-link rounded fw-bold text-white" href="/proveedor">Proveedores</a>
           </li>
           
           <li class="nav-item px-2" *ngIf="isAdmin() || isSeller()">
@@ -34,7 +38,15 @@
           </li>
 
           <li class="nav-item px-2" *ngIf="isAdmin()">
-            <a class="nav-link rounded fw-bold text-white" href="/user" id="onlyAdmin">Usuarios</a>
+            <a class="nav-link rounded fw-bold text-white" href="/empleado" id="onlyAdmin">Empleados</a>
+          </li>
+
+          <li class="nav-item px-2" *ngIf="isAdmin()">
+            <a class="nav-link rounded fw-bold text-white" href="/" id="onlyAdmin">Clientes</a>
+          </li>
+
+          <li class="nav-item px-2" *ngIf="isAdmin()">
+            <a class="nav-link rounded fw-bold text-white" href="/help">Ayuda</a>
           </li>
 
           <li class="nav-item dropdown px-2">
