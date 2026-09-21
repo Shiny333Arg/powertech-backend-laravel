@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Controllers;
+namespace App\Http\Controllers\gestion;
 
 use App\Enums\AmbitoRol;
 use App\Enums\ProveedorAuth;
@@ -63,7 +63,7 @@ class EmpleadoController extends Controller
             ->paginate(20)
             ->withQueryString();
 
-        return view('user.index', [
+        return view('gestion.user.index', [
             'empleados' => $empleados,
             'roles'     => $this->rolesDeGestion(),
             'filtros'   => $request->only('q', 'rol_id', 'estado'),
@@ -72,7 +72,7 @@ class EmpleadoController extends Controller
 
     public function create(): View
     {
-        return view('user.create', [
+        return view('gestion.user.create', [
             'empleado'  => new Empleado(['fecha_ingreso' => now()->toDateString()]),
             'usuario'   => new User(['activo' => true]),
             'direccion' => null,
@@ -109,7 +109,7 @@ class EmpleadoController extends Controller
         });
 
         return redirect()
-            ->route('user.index')
+            ->route('gestion.user.index')
             ->with('exito', "Se dio de alta a {$empleado->user->apellido}, {$empleado->user->nombres}.")
             // Se muestra una sola vez: en la base queda hasheada y no hay forma
             // de recuperarla despues.
@@ -118,7 +118,7 @@ class EmpleadoController extends Controller
 
     public function edit(Empleado $empleado): View
     {
-        return view('user.edit', [
+        return view('gestion.user.edit', [
             'empleado'  => $empleado,
             'usuario'   => $empleado->user,
             'direccion' => $empleado->direcciones()->where('tipo', TipoDireccion::Particular->value)->first(),
@@ -136,7 +136,7 @@ class EmpleadoController extends Controller
         });
 
         return redirect()
-            ->route('user.index')
+            ->route('gestion.user.index')
             ->with('exito', 'Se guardaron los cambios del empleado.');
     }
 

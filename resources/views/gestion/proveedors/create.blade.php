@@ -20,7 +20,7 @@
 <!-- Formulario -->
 <section class="mb-4">
     <form
-        action="{{ route('proveedors.store') }}"
+        action="{{ route('gestion.proveedores.store') }}"
         method="POST"
         autocomplete="off"
         class="p-4 rounded-4 bg-light shadow-sm border">
@@ -456,7 +456,7 @@
             </button>
 
             <a
-                href="{{ route('proveedors.index') }}"
+                href="{{ route('gestion.proveedores.index') }}"
                 class="btn btn-outline-secondary px-4 fw-semibold shadow-sm">
                 Volver al listado
             </a>

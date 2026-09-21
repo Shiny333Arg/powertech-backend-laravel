@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Controllers;
+namespace App\Http\Controllers\gestion;
 
 use App\Enums\CanalPedido;
 use App\Enums\TipoDireccion;
@@ -62,7 +62,7 @@ class ProveedorController extends Controller
             ->paginate(20)
             ->withQueryString();
 
-        return view('proveedors.index', [
+        return view('gestion.proveedors.index', [
             'proveedores' => $proveedores,
             'canales'     => CanalPedido::opciones(),
             'filtros'     => $request->only('q', 'canal_pedido', 'estado'),
@@ -71,7 +71,7 @@ class ProveedorController extends Controller
 
     public function create(): View
     {
-        return view('proveedors.create', [
+        return view('gestion.proveedors.create', [
             'proveedor' => new Proveedor([
                 'activo'       => true,
                 'canal_pedido' => CanalPedido::Email->value,
@@ -97,13 +97,13 @@ class ProveedorController extends Controller
         });
 
         return redirect()
-            ->route('proveedors.index')
+            ->route('gestion.proveedors.index')
             ->with('exito', "Se creó el proveedor «{$proveedor->razon_social}».");
     }
 
     public function edit(Proveedor $proveedor): View
     {
-        return view('proveedors.edit', [
+        return view('gestion.proveedors.edit', [
             'proveedor' => $proveedor,
             'direccion' => $proveedor->direcciones()->where('tipo', TipoDireccion::Fiscal->value)->first(),
         ] + $this->opcionesDeFormulario());
@@ -118,7 +118,7 @@ class ProveedorController extends Controller
         });
 
         return redirect()
-            ->route('proveedors.index')
+            ->route('gestion.proveedors.index')
             ->with('exito', "Se guardaron los cambios en «{$proveedor->razon_social}».");
     }
 

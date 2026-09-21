@@ -20,7 +20,7 @@
 
     <form
         id="editarProductoForm"
-        action="{{ route('items.update', $producto) }}"
+        action="{{ route('gestion.items.update', $producto) }}"
         method="POST"
         enctype="multipart/form-data"
         autocomplete="off"
@@ -450,14 +450,14 @@
 
         {{-- Volver --}}
         <a
-            href="{{ route('items.index') }}"
+            href="{{ route('gestion.items.index') }}"
             class="btn btn-outline-secondary px-4 fw-semibold shadow-sm">
             Volver al listado
         </a>
 
         {{-- Historial --}}
         <a
-            href="{{ route('items.movimientos', $producto) }}"
+            href="{{ route('gestion.items.movimientos', $producto) }}"
             class="btn btn-outline-primary px-4 fw-semibold shadow-sm">
             Historial de stock
         </a>
@@ -484,7 +484,7 @@
         @else
 
             <form
-                action="{{ route('items.reactivar', ['producto' => $producto->id]) }}"
+                action="{{ route('gestion.items.reactivar', ['producto' => $producto->id]) }}"
                 method="POST"
                 class="d-inline">
 

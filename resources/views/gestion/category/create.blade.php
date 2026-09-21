@@ -16,7 +16,7 @@
     <!-- Formulario -->
     <section class="mb-4">
         <form
-            action="{{ route('categorias.store') }}"
+            action="{{ route('gestion.categorias.store') }}"
             method="POST"
             autocomplete="off"
             class="p-4 rounded-4 bg-light shadow-sm border">
@@ -109,7 +109,7 @@
                 </button>
 
                 <a
-                    href="{{ route('categorias.index') }}"
+                    href="{{ route('gestion.categorias.index') }}"
                     class="btn btn-outline-secondary px-4 fw-semibold shadow-sm">
                     Volver al listado
                 </a>

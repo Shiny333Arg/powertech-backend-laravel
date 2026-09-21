@@ -21,7 +21,7 @@
 <section class="mb-4">
     <form
         id="editarEmpleadoForm"
-        action="{{ route('user.update', $empleado) }}"
+        action="{{ route('gestion.empleados.update', $empleado) }}"
         method="POST"
         autocomplete="off"
         class="p-4 rounded-4 bg-light shadow-sm border">
@@ -565,7 +565,7 @@
             </button>
 
             <a
-                href="{{ route('user.index') }}"
+                href="{{ route('gestion.empleados.index') }}"
                 class="btn btn-outline-secondary px-4 fw-semibold shadow-sm">
                 Volver al listado
             </a>

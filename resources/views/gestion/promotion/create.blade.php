@@ -19,7 +19,7 @@
     <section class="mb-4">
 
         <form
-            action="{{ route('promociones.store') }}"
+            action="{{ route('gestion.promociones.store') }}"
             method="POST"
             enctype="multipart/form-data"
             autocomplete="off"
@@ -452,7 +452,7 @@
                 </button>
 
                 <a
-                    href="{{ route('promociones.index') }}"
+                    href="{{ route('gestion.promociones.index') }}"
                     class="btn btn-outline-secondary px-4 fw-semibold shadow-sm">
                     Volver al listado
                 </a>

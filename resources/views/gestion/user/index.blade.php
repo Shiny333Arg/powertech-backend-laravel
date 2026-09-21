@@ -81,7 +81,7 @@
 <section class="mb-4 d-flex flex-column flex-md-row justify-content-between align-items-stretch gap-3">
 
     <a
-        href="{{ route('user.create') }}"
+        href="{{ route('gestion.empleados.create') }}"
         class="btn btn-success d-flex align-items-center justify-content-center gap-2 flex-fill flex-md-grow-0">
 
         <svg
@@ -128,7 +128,7 @@
     <form
         class="row g-3 align-items-end shadow-sm p-3 rounded bg-light"
         method="GET"
-        action="{{ route('user.index') }}"
+        action="{{ route('gestion.empleados.index') }}"
         autocomplete="off"
         id="formFiltros">
 
@@ -310,7 +310,7 @@
 
                         <!-- Editar -->
                         <a
-                            href="{{ route('user.edit', $empleado) }}"
+                            href="{{ route('gestion.empleados.edit', $empleado) }}"
                             class="btn btn-sm btn-warning me-1"
                             title="Editar">
 
@@ -331,7 +331,7 @@
                         @if ($empleado->user->activo)
 
                         <form
-                            action="{{ route('user.darDeBaja', $empleado) }}"
+                            action="{{ route('gestion.empleados.darDeBaja', $empleado) }}"
                             method="POST"
                             class="d-inline">
 
@@ -392,7 +392,7 @@
 
                         <!-- Restablecer contraseña -->
                         <form
-                            action="{{ route('user.resetearPassword', $empleado) }}"
+                            action="{{ route('gestion.empleados.resetearPassword', $empleado) }}"
                             method="POST"
                             class="d-inline">
 

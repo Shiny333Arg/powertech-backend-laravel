@@ -19,7 +19,7 @@
     <section class="mb-4">
 
         <form
-            action="{{ route('items.store') }}"
+            action="{{ route('gestion.items.store') }}"
             method="POST"
             enctype="multipart/form-data"
             autocomplete="off"
@@ -461,7 +461,7 @@
                 </button>
 
                 <a
-                    href="{{ route('items.index') }}"
+                    href="{{ route('gestion.items.index') }}"
                     class="btn btn-outline-secondary px-4 fw-semibold shadow-sm">
                     Volver al listado
                 </a>

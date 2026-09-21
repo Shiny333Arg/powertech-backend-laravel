@@ -39,7 +39,7 @@
 <section class="mb-4 d-flex flex-column flex-md-row justify-content-between align-items-stretch gap-3">
 
     
-    <a href="{{ route('categorias.create') }}"
+    <a href="{{ route('gestion.categorias.create') }}"
         class="btn btn-success d-flex align-items-center justify-content-center gap-2 flex-fill flex-md-grow-0">
 
         <svg xmlns="http://www.w3.org/2000/svg"
@@ -86,7 +86,7 @@
     <form
         class="row g-3 align-items-end shadow-sm p-3 rounded bg-light"
         method="GET"
-        action="{{ route('categorias.index') }}"
+        action="{{ route('gestion.categorias.index') }}"
         autocomplete="off"
         id="formFiltros">
 
@@ -197,7 +197,7 @@
 
                         <!-- Editar -->
                         <a
-                            href="{{ route('categorias.edit', $categoria) }}"
+                            href="{{ route('gestion.categorias.edit', $categoria) }}"
                             class="btn btn-sm btn-warning me-1"
                             title="Editar">
 
@@ -216,7 +216,7 @@
                         @if ($categoria->activo)
 
                         <form
-                            action="{{ route('categorias.baja', $categoria) }}"
+                            action="{{ route('gestion.categorias.baja', $categoria) }}"
                             method="POST"
                             class="d-inline">
 
@@ -246,7 +246,7 @@
 
                         <!-- Reactivar -->
                         <form
-                            action="{{ route('categorias.reactivar', $categoria) }}"
+                            action="{{ route('gestion.categorias.reactivar', $categoria) }}"
                             method="POST"
                             class="d-inline">
 
@@ -277,7 +277,7 @@
 
                         <!-- Eliminar físicamente -->
                         <form
-                            action="{{ route('categorias.destroy', $categoria) }}"
+                            action="{{ route('gestion.categorias.destroy', $categoria) }}"
                             method="POST"
                             class="d-inline">
 

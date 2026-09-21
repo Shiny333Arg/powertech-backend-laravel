@@ -73,7 +73,7 @@
     <!-- Nuevo proveedor -->
 
     <a
-        href="{{ route('proveedors.create') }}"
+        href="{{ route('gestion.proveedores.create') }}"
         class="btn btn-success d-flex align-items-center justify-content-center gap-2 flex-fill flex-md-grow-0">
 
         <svg
@@ -126,7 +126,7 @@
     <form
         class="row g-3 align-items-end shadow-sm p-3 rounded bg-light"
         method="GET"
-        action="{{ route('proveedors.index') }}"
+        action="{{ route('gestion.proveedores.index') }}"
         autocomplete="off"
         id="formFiltros">
 
@@ -456,7 +456,7 @@
                         <!-- Editar -->
 
                         <a
-                            href="{{ route('proveedors.edit', $proveedor) }}"
+                            href="{{ route('gestion.proveedores.edit', $proveedor) }}"
                             class="btn btn-sm btn-warning me-1"
                             title="Editar">
 
@@ -480,7 +480,7 @@
                         @if ($proveedor->activo)
 
                         <form
-                            action="{{ route('proveedors.darDeBaja', $proveedor) }}"
+                            action="{{ route('gestion.proveedores.darDeBaja', $proveedor) }}"
                             method="POST"
                             class="d-inline">
 

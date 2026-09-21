@@ -2,184 +2,282 @@
 
 use Illuminate\Support\Facades\Route;
 
-use App\Http\Controllers\CategoriaController;
-use App\Http\Controllers\ProductoController;
-use App\Http\Controllers\ProveedorController;
+// ============================================================
+// CONTROLLERS - GENERALES
+// ============================================================
+
 use App\Http\Controllers\HelpController;
-use App\Http\Controllers\EmpleadoController;
-use App\Http\Controllers\PromocionController;
 
 
-//authentication
-Route::get('/authentication', function () {
-    return view('authentication.index');
-});
+// ============================================================
+// CONTROLLERS - GESTIÓN
+// ============================================================
 
-Route::get('/authentication/logout', function () {
-    return view('authentication.logout');
-});
-
-Route::get('/authentication/reset-password', function () {
-    return view('authentication.reset-password');
-});
+use App\Http\Controllers\gestion\CategoriaController;
+use App\Http\Controllers\gestion\EmpleadoController;
+use App\Http\Controllers\gestion\ProductoController;
+use App\Http\Controllers\gestion\PromocionController;
+use App\Http\Controllers\gestion\ProveedorController;
 
 
-//home
+// ============================================================
+// AUTENTICACIÓN
+// ============================================================
+
+Route::prefix('authentication')
+    ->name('authentication.')
+    ->group(function () {
+
+        Route::get('/', function () {
+            return view('authentication.index');
+        })->name('index');
+
+        Route::get('/logout', function () {
+            return view('authentication.logout');
+        })->name('logout');
+
+        Route::get('/reset-password', function () {
+            return view('authentication.reset-password');
+        })->name('reset-password');
+    });
+
+
+// ============================================================
+// CLIENTE
+// ============================================================
+
+// ========================================================
+// HOME
+// ========================================================
+
 Route::get('/', function () {
     return view('home.index');
-});
+})->name('cliente.home');
 
 
-//category
-Route::get('/category', [CategoriaController::class, 'index'])
-->name('categorias.index');
+// ========================================================
+// AYUDA
+// ========================================================
 
-Route::get('/category/create', [CategoriaController::class, 'create'])
-->name('categorias.create');
+Route::prefix('help')
+    ->name('cliente.help.')
+    ->group(function () {
 
-Route::post('/category', [CategoriaController::class, 'store'])
-->name('categorias.store');
-
-Route::get('/category/{categoria}/edit', [CategoriaController::class, 'edit'])
-->name('categorias.edit');
-
-Route::put('/category/{categoria}', [CategoriaController::class, 'update'])
-->name('categorias.update');
-
-Route::patch('/category/{categoria}/baja', [CategoriaController::class, 'darDeBaja'])
-->name('categorias.baja');
-
-Route::patch('/category/{categoria}/reactivar', [CategoriaController::class, 'reactivar'])
-->name('categorias.reactivar');
-
-Route::delete('/category/{categoria}', [CategoriaController::class, 'destroy'])
-->name('categorias.destroy');
+        Route::get('/', [HelpController::class, 'index'])
+            ->name('index');
+    });
 
 
+// ============================================================
+// GESTIÓN
+// ============================================================
 
-//item
-Route::get('/item', [ProductoController::class, 'index'])
-->name('items.index');
-
-Route::get('/item/create', [ProductoController::class, 'create'])
-->name('items.create');
-
-Route::post('/item', [ProductoController::class, 'store'])
-->name('items.store');
-
-Route::get('/item/{producto}/edit', [ProductoController::class, 'edit'])
-->name('items.edit');
-
-Route::put('/item/{producto}', [ProductoController::class, 'update'])
-->name('items.update');
-
-Route::patch('/item/{producto}/baja', [ProductoController::class, 'darDeBaja'])
-->name('items.darDeBaja');
-
-Route::patch('/item/{producto}/reactivar', [ProductoController::class, 'reactivar'])
-->name('items.reactivar');
-
-Route::patch('/item/{producto}/publicar', [ProductoController::class, 'publicar'])
-->name('items.publicar');
-
-Route::patch('/item/{producto}/despublicar', [ProductoController::class, 'despublicar'])
-->name('items.despublicar');
-
-Route::patch('/item/{producto}/stock', [ProductoController::class, 'ajustarStock'])
-->name('items.ajustarStock');
-
-Route::get('/item/{producto}/movimientos', [ProductoController::class, 'movimientos'])
-->name('items.movimientos');
+Route::prefix('gestion')
+    ->name('gestion.')
+    ->group(function () {
 
 
-//sale
-Route::get('/sale', function () {
-    return view('sale.index');
-});
+        // ========================================================
+        // HOME
+        // ========================================================
 
-Route::get('/sale/create', function () {
-    return view('sale.create');
-});
-
-Route::get('/sale/view', function () {
-    return view('sale.view');
-});
+        Route::get('/', function () {
+            return view('gestion.home.index');
+        })->name('home');
 
 
-//user
-Route::get('/empleado', [EmpleadoController::class, 'index'])
-    ->name('user.index');
+        // ========================================================
+        // CATEGORÍAS
+        // ========================================================
 
-Route::get('/empleado/create', [EmpleadoController::class, 'create'])
-    ->name('user.create');
+        Route::prefix('category')
+            ->name('categorias.')
+            ->group(function () {
 
-Route::post('/empleado', [EmpleadoController::class, 'store'])
-    ->name('user.store');
+                Route::get('/', [CategoriaController::class, 'index'])
+                    ->name('index');
 
-Route::get('/empleado/{empleado}/edit', [EmpleadoController::class, 'edit'])
-    ->name('user.edit');
+                Route::get('/create', [CategoriaController::class, 'create'])
+                    ->name('create');
 
-Route::put('/empleado/{empleado}', [EmpleadoController::class, 'update'])
-    ->name('user.update');
+                Route::post('/', [CategoriaController::class, 'store'])
+                    ->name('store');
 
-Route::patch('/empleado/{empleado}/baja', [EmpleadoController::class, 'darDeBaja'])
-    ->name('user.darDeBaja');
+                Route::get('/{categoria}/edit', [CategoriaController::class, 'edit'])
+                    ->name('edit');
 
-Route::patch('/empleado/{empleado}/reactivar', [EmpleadoController::class, 'reactivar'])
-    ->name('user.reactivar');
+                Route::put('/{categoria}', [CategoriaController::class, 'update'])
+                    ->name('update');
 
-Route::patch('/empleado/{empleado}/resetear-password', [EmpleadoController::class, 'resetearPassword'])
-    ->name('user.resetearPassword');
+                Route::patch('/{categoria}/baja', [CategoriaController::class, 'darDeBaja'])
+                    ->name('baja');
 
+                Route::patch('/{categoria}/reactivar', [CategoriaController::class, 'reactivar'])
+                    ->name('reactivar');
 
-//proveedor
-Route::get('/proveedor', [ProveedorController::class, 'index'])
-->name('proveedors.index');
-
-Route::get('/proveedor/create', [ProveedorController::class, 'create'])
-->name('proveedors.create');
-
-Route::post('/proveedor', [ProveedorController::class, 'store'])
-->name('proveedors.store');
-
-Route::get('/proveedor/{proveedor}/edit', [ProveedorController::class, 'edit'])
-->name('proveedors.edit');
-
-Route::put('/proveedor/{proveedor}', [ProveedorController::class, 'update'])
-->name('proveedors.update');
-
-Route::patch('/proveedor/{proveedor}/baja', [ProveedorController::class, 'darDeBaja'])
-->name('proveedors.darDeBaja');
-
-Route::patch('/proveedor/{proveedor}/reactivar', [ProveedorController::class, 'reactivar'])
-->name('proveedors.reactivar');
+                Route::delete('/{categoria}', [CategoriaController::class, 'destroy'])
+                    ->name('destroy');
+            });
 
 
+        // ========================================================
+        // PRODUCTOS
+        // ========================================================
 
-//help
-Route::get('/help', [HelpController::class, 'index'])
-->name('help.index');
+        Route::prefix('item')
+            ->name('items.')
+            ->group(function () {
+
+                Route::get('/', [ProductoController::class, 'index'])
+                    ->name('index');
+
+                Route::get('/create', [ProductoController::class, 'create'])
+                    ->name('create');
+
+                Route::post('/', [ProductoController::class, 'store'])
+                    ->name('store');
+
+                Route::get('/{producto}/edit', [ProductoController::class, 'edit'])
+                    ->name('edit');
+
+                Route::put('/{producto}', [ProductoController::class, 'update'])
+                    ->name('update');
+
+                Route::patch('/{producto}/baja', [ProductoController::class, 'darDeBaja'])
+                    ->name('darDeBaja');
+
+                Route::patch('/{producto}/reactivar', [ProductoController::class, 'reactivar'])
+                    ->name('reactivar');
+
+                Route::patch('/{producto}/publicar', [ProductoController::class, 'publicar'])
+                    ->name('publicar');
+
+                Route::patch('/{producto}/despublicar', [ProductoController::class, 'despublicar'])
+                    ->name('despublicar');
+
+                Route::patch('/{producto}/stock', [ProductoController::class, 'ajustarStock'])
+                    ->name('ajustarStock');
+
+                Route::get('/{producto}/movimientos', [ProductoController::class, 'movimientos'])
+                    ->name('movimientos');
+            });
 
 
-//promotions
+        // ========================================================
+        // VENTAS
+        // ========================================================
 
-Route::get('/promotion', [PromocionController::class, 'index'])
-    ->name('promociones.index');
+        Route::prefix('sale')
+            ->name('ventas.')
+            ->group(function () {
 
-Route::get('/promotion/create', [PromocionController::class, 'create'])
-    ->name('promociones.create');
+                Route::get('/', function () {
+                    return view('gestion.sale.index');
+                })->name('index');
 
-Route::post('/promotion', [PromocionController::class, 'store'])
-    ->name('promociones.store');
+                Route::get('/create', function () {
+                    return view('gestion.sale.create');
+                })->name('create');
 
-Route::get('/promotion/{promocion}/edit', [PromocionController::class, 'edit'])
-    ->name('promociones.edit');
+                Route::get('/view', function () {
+                    return view('gestion.sale.view');
+                })->name('view');
+            });
 
-Route::put('/promotion/{promocion}', [PromocionController::class, 'update'])
-    ->name('promociones.update');
 
-Route::patch('/promotion/{promocion}/baja', [PromocionController::class, 'darDeBaja'])
-    ->name('promociones.darDeBaja');
+        // ========================================================
+        // EMPLEADOS
+        // ========================================================
 
-Route::patch('/promotion/{promocion}/reactivar', [PromocionController::class, 'reactivar'])
-    ->name('promociones.reactivar');
+        Route::prefix('empleado')
+            ->name('empleados.')
+            ->group(function () {
+
+                Route::get('/', [EmpleadoController::class, 'index'])
+                    ->name('index');
+
+                Route::get('/create', [EmpleadoController::class, 'create'])
+                    ->name('create');
+
+                Route::post('/', [EmpleadoController::class, 'store'])
+                    ->name('store');
+
+                Route::get('/{empleado}/edit', [EmpleadoController::class, 'edit'])
+                    ->name('edit');
+
+                Route::put('/{empleado}', [EmpleadoController::class, 'update'])
+                    ->name('update');
+
+                Route::patch('/{empleado}/baja', [EmpleadoController::class, 'darDeBaja'])
+                    ->name('darDeBaja');
+
+                Route::patch('/{empleado}/reactivar', [EmpleadoController::class, 'reactivar'])
+                    ->name('reactivar');
+
+                Route::patch('/{empleado}/resetear-password', [EmpleadoController::class, 'resetearPassword'])
+                    ->name('resetearPassword');
+            });
+
+
+        // ========================================================
+        // PROVEEDORES
+        // ========================================================
+
+        Route::prefix('proveedor')
+            ->name('proveedores.')
+            ->group(function () {
+
+                Route::get('/', [ProveedorController::class, 'index'])
+                    ->name('index');
+
+                Route::get('/create', [ProveedorController::class, 'create'])
+                    ->name('create');
+
+                Route::post('/', [ProveedorController::class, 'store'])
+                    ->name('store');
+
+                Route::get('/{proveedor}/edit', [ProveedorController::class, 'edit'])
+                    ->name('edit');
+
+                Route::put('/{proveedor}', [ProveedorController::class, 'update'])
+                    ->name('update');
+
+                Route::patch('/{proveedor}/baja', [ProveedorController::class, 'darDeBaja'])
+                    ->name('darDeBaja');
+
+                Route::patch('/{proveedor}/reactivar', [ProveedorController::class, 'reactivar'])
+                    ->name('reactivar');
+            });
+
+
+        // ========================================================
+        // PROMOCIONES
+        // ========================================================
+
+        Route::prefix('promotion')
+            ->name('promociones.')
+            ->group(function () {
+
+                Route::get('/', [PromocionController::class, 'index'])
+                    ->name('index');
+
+                Route::get('/create', [PromocionController::class, 'create'])
+                    ->name('create');
+
+                Route::post('/', [PromocionController::class, 'store'])
+                    ->name('store');
+
+                Route::get('/{promocion}/edit', [PromocionController::class, 'edit'])
+                    ->name('edit');
+
+                Route::put('/{promocion}', [PromocionController::class, 'update'])
+                    ->name('update');
+
+                Route::patch('/{promocion}/baja', [PromocionController::class, 'darDeBaja'])
+                    ->name('darDeBaja');
+
+                Route::patch('/{promocion}/reactivar', [PromocionController::class, 'reactivar'])
+                    ->name('reactivar');
+            });
+    });
+

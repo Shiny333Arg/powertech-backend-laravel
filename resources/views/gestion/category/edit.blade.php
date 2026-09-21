@@ -15,7 +15,7 @@
   <!-- Formulario -->
   <section class="mb-4">
     <form
-      action="{{ route('categorias.update', $categoria) }}"
+      action="{{ route('gestion.categorias.update', $categoria) }}"
       method="POST"
       autocomplete="off"
       class="p-4 rounded-4 bg-light shadow-sm border"
@@ -111,13 +111,13 @@
       </button>
 
       <a
-        href="{{ route('categorias.index') }}"
+        href="{{ route('gestion.categorias.index') }}"
         class="btn btn-outline-secondary px-4 fw-semibold shadow-sm">
         Volver al listado
       </a>
 
       <form
-        action="{{ route('categorias.destroy', $categoria) }}"
+        action="{{ route('gestion.categorias.destroy', $categoria) }}"
         method="POST"
         class="d-inline">
 

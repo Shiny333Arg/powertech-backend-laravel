@@ -14,39 +14,35 @@
       <div class="collapse navbar-collapse" id="navbarNavDropdown">
         <ul class="navbar-nav ms-auto gap-2" id="mainNavbar">
           <li class="nav-item px-2">
-            <a class="nav-link rounded fw-bold text-white" href="/">Inicio</a>
+            <a class="nav-link rounded fw-bold text-white" href="/gestion">Inicio</a>
           </li>
 
           <li class="nav-item px-2" *ngIf="isAdmin() || isOperator()">
-            <a class="nav-link rounded fw-bold text-white" href="/promotion">Promociones</a>
+            <a class="nav-link rounded fw-bold text-white" href="/gestion/promotion">Promociones</a>
           </li>
 
           <li class="nav-item px-2" *ngIf="isAdmin() || isOperator()">
-            <a class="nav-link rounded fw-bold text-white" href="/item">Productos</a>
+            <a class="nav-link rounded fw-bold text-white" href="/gestion/item">Productos</a>
           </li>
 
           <li class="nav-item px-2" *ngIf="isAdmin() || isOperator()">
-            <a class="nav-link rounded fw-bold text-white" href="/category">Categorías</a>
+            <a class="nav-link rounded fw-bold text-white" href="/gestion/category">Categorías</a>
           </li>
 
           <li class="nav-item px-2" *ngIf="isAdmin() || isOperator()">
-            <a class="nav-link rounded fw-bold text-white" href="/proveedor">Proveedores</a>
-          </li>
-          
-          <li class="nav-item px-2" *ngIf="isAdmin() || isSeller()">
-            <a class="nav-link rounded fw-bold text-white" href="/sale">Ventas</a>
+            <a class="nav-link rounded fw-bold text-white" href="/gestion/proveedor">Proveedores</a>
           </li>
 
           <li class="nav-item px-2" *ngIf="isAdmin()">
-            <a class="nav-link rounded fw-bold text-white" href="/empleado" id="onlyAdmin">Empleados</a>
+            <a class="nav-link rounded fw-bold text-white" href="/gestion/empleado" id="onlyAdmin">Empleados</a>
           </li>
 
           <li class="nav-item px-2" *ngIf="isAdmin()">
             <a class="nav-link rounded fw-bold text-white" href="/" id="onlyAdmin">Clientes</a>
           </li>
 
-          <li class="nav-item px-2" *ngIf="isAdmin()">
-            <a class="nav-link rounded fw-bold text-white" href="/help">Ayuda</a>
+          <li class="nav-item px-2" *ngIf="isAdmin() || isSeller()">
+            <a class="nav-link rounded fw-bold text-white" href="/gestion/sale">Ventas</a>
           </li>
 
           <li class="nav-item dropdown px-2">
@@ -56,7 +52,7 @@
             <ul class="dropdown-menu dropdown-menu-end bg-primary" aria-labelledby="miCuentaDropdown">
               <li>
                 <a class="dropdown-item fw-bold d-flex align-items-center gap-2 text-white"
-                  href="/user/my-account">
+                  href="/gestion/user/my-account">
                   <svg width="16" height="16" fill="currentColor" class="bi bi-person" viewBox="0 0 16 16">
                     <path
                       d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6m2-3a2 2 0 1 1-4 0 2 2 0 0 1 4 0m4 8c0 1-1 1-1 1H3s-1 0-1-1 1-4 6-4 6 3 6 4m-1-.004c-.001-.246-.154-.986-.832-1.664C11.516 10.68 10.289 10 8 10s-3.516.68-4.168 1.332c-.678.678-.83 1.418-.832 1.664z" />

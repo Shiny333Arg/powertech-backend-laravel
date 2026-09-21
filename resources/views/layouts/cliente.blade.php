@@ -13,7 +13,7 @@
 
 <body class="d-flex flex-column min-vh-100">
 
-    @include('components.header')
+    @include('components.headerCliente')
 
     <main class="container flex-grow-1 mt-5 mb-5">
         @yield('content')

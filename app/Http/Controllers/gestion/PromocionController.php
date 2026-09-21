@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Controllers;
+namespace App\Http\Controllers\gestion;
 
 use App\Enums\CanalPromocion;
 use App\Enums\TipoPromocion;
@@ -61,7 +61,7 @@ class PromocionController extends Controller
             ->paginate(20)
             ->withQueryString();
 
-        return view('promotion.index', [
+        return view('gestion.promotion.index', [
             'promociones' => $promociones,
             'canales'     => CanalPromocion::opciones(),
             'filtros'     => $request->only('q', 'canal', 'estado', 'vigencia'),
@@ -70,7 +70,7 @@ class PromocionController extends Controller
 
     public function create(): View
     {
-        return view('promotion.create', [
+        return view('gestion.promotion.create', [
             'promocion' => new Promocion([
                 'tipo'           => TipoPromocion::Porcentaje->value,
                 'canal'          => CanalPromocion::Ambos->value,
@@ -110,14 +110,14 @@ class PromocionController extends Controller
         });
 
         return redirect()
-            ->route('promociones.index')
+            ->route('gestion.promotion.index')
             ->with('exito', "Se creó la promoción «{$promocion->nombre}».")
             ->with('advertencia', $this->avisoDeConflictos($promocion));
     }
 
     public function edit(Promocion $promocion): View
     {
-        return view('promociones.edit', [
+        return view('gestion.promotion.edit', [
             'promocion'     => $promocion,
             'seleccionados' => $promocion->productos()->pluck('productos.id')->all(),
         ] + $this->opcionesDeFormulario());
@@ -150,7 +150,7 @@ class PromocionController extends Controller
         });
 
         return redirect()
-            ->route('promociones.index')
+            ->route('gestion.promociones.index')
             ->with('exito', "Se guardaron los cambios en «{$promocion->nombre}».")
             ->with('advertencia', $this->avisoDeConflictos($promocion->refresh()));
     }

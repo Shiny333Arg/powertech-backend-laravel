@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Controllers;
+namespace App\Http\Controllers\gestion;
 
 use App\Http\Requests\CategoriaRequest;
 use App\Models\Categoria;
@@ -49,7 +49,7 @@ class CategoriaController extends Controller
             ->orderBy('nombre')
             ->get();
 
-        return view('category.index', compact('categorias', 'estado', 'nombre'));
+        return view('gestion.category.index', compact('categorias', 'estado', 'nombre'));
     }
 
     public function create(): View
@@ -57,7 +57,7 @@ class CategoriaController extends Controller
         // Sugiere la posicion siguiente para no obligar a pensar un numero.
         $categoria = new Categoria(['orden' => (int) Categoria::max('orden') + 1, 'activo' => true]);
 
-        return view('category.create', compact('categoria'));
+        return view('gestion.category.create', compact('categoria'));
     }
 
     public function store(CategoriaRequest $request): RedirectResponse
@@ -65,13 +65,13 @@ class CategoriaController extends Controller
         $categoria = Categoria::create($request->validated());
 
         return redirect()
-            ->route('categorias.index')
+            ->route('gestion.categorias.index')
             ->with('exito', "Se creó la categoría «{$categoria->nombre}».");
     }
 
     public function edit(Categoria $categoria): View
     {
-        return view('category.edit', compact('categoria'));
+        return view('gestion.category.edit', compact('categoria'));
     }
 
     public function update(CategoriaRequest $request, Categoria $categoria): RedirectResponse
@@ -79,7 +79,7 @@ class CategoriaController extends Controller
         $categoria->update($request->validated());
 
         return redirect()
-            ->route('categorias.index')
+            ->route('gestion.categorias.index')
             ->with('exito', "Se guardaron los cambios en «{$categoria->nombre}».");
     }
 
@@ -131,7 +131,7 @@ class CategoriaController extends Controller
         }
 
         return redirect()
-            ->route('categorias.index')
+            ->route('gestion.categorias.index')
             ->with('exito', "Se eliminó la categoría «{$nombre}».");
     }
 

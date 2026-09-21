@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Controllers;
+namespace App\Http\Controllers\gestion;
 
 use App\Http\Requests\AjusteStockRequest;
 use App\Http\Requests\ProductoRequest;
@@ -68,7 +68,7 @@ class ProductoController extends Controller
             ->paginate(20)
             ->withQueryString();
 
-        return view('item.index', [
+        return view('gestion.item.index', [
             'productos'  => $productos,
             'categorias' => Categoria::activos()->orderBy('nombre')->get(['id', 'nombre']),
             'filtros'    => $request->only('q', 'categoria_id', 'estado', 'stock'),
@@ -77,7 +77,7 @@ class ProductoController extends Controller
 
     public function create(): View
     {
-        return view('item.create', [
+        return view('gestion.item.create', [
             'producto' => new Producto([
                 'activo'                => true,
                 'publicado_app'         => false,
@@ -117,13 +117,13 @@ class ProductoController extends Controller
         });
 
         return redirect()
-            ->route('items.index')
+            ->route('gestion.items.index')
             ->with('exito', "Se creó «{$producto->nombre}».");
     }
 
     public function edit(Producto $producto): View
     {
-        return view('item.edit', ['producto' => $producto] + $this->opcionesDeFormulario());
+        return view('gestion.item.edit', ['producto' => $producto] + $this->opcionesDeFormulario());
     }
 
     /**
@@ -151,7 +151,7 @@ class ProductoController extends Controller
         $producto->update($datos);
 
         return redirect()
-            ->route('productos.index')
+            ->route('gestion.productos.index')
             ->with('exito', "Se guardaron los cambios en «{$producto->nombre}».");
     }
 
@@ -229,7 +229,7 @@ class ProductoController extends Controller
     /** Historial de movimientos del producto: explica cada cambio de saldo. */
     public function movimientos(Producto $producto): View
     {
-        return view('item.movimientos', [
+        return view('gestion.item.movimientos', [
             'producto'    => $producto,
             'movimientos' => $producto->movimientosStock()
                 ->with('usuario:id,nombres,apellido')
