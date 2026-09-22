@@ -6,16 +6,16 @@ use App\Enums\AmbitoRol;
 use App\Enums\ProveedorAuth;
 use App\Enums\TipoDireccion;
 use App\Http\Requests\EmpleadoRequest;
-use App\Http\Requests\ResetearPasswordRequest;
 use App\Models\Empleado;
 use App\Models\Rol;
 use App\Models\TipoDocumento;
 use App\Models\User;
+use App\Notifications\InvitacionEmpleado;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
 use Illuminate\View\View;
+use Throwable;
 
 /**
  * CRUD de empleados. Escribe sobre TRES tablas: users (credenciales),
@@ -27,6 +27,10 @@ use Illuminate\View\View;
  * su propio modulo.
  *
  * SIN destroy: un usuario no se elimina nunca.
+ *
+ * La contraseña no pasa nunca por este controlador. El empleado nace sin
+ * ella y recibe por correo un enlace para elegirla (InvitacionEmpleado). Si
+ * despues la olvida, usa "¿Olvidaste tu contraseña?" como cualquier usuario.
  */
 class EmpleadoController extends Controller
 {
@@ -39,7 +43,14 @@ class EmpleadoController extends Controller
     public function index(Request $request): View
     {
         $empleados = Empleado::query()
-            ->with(['user:id,usuario,email,nombres,apellido,rol_id,activo,forzar_cambio_password,ultimo_acceso_at', 'user.rol:id,nombre'])
+            ->with([
+                // password no se trae al listado; la base calcula si la
+                // invitacion sigue pendiente (ver User::invitacionPendiente).
+                'user' => fn ($query) => $query
+                    ->select(['id', 'email', 'nombres', 'apellido', 'rol_id', 'activo', 'ultimo_acceso_at'])
+                    ->selectRaw('password IS NULL AS invitacion_pendiente'),
+                'user.rol:id,nombre',
+            ])
             ->when($request->filled('q'), function ($query) use ($request) {
                 $busqueda = $request->string('q')->trim()->value();
 
@@ -49,7 +60,7 @@ class EmpleadoController extends Controller
                         ->orWhereHas('user', fn($u) => $u
                             ->where('nombres', 'like', "%{$busqueda}%")
                             ->orWhere('apellido', 'like', "%{$busqueda}%")
-                            ->orWhere('usuario', 'like', "%{$busqueda}%"));
+                            ->orWhere('email', 'like', "%{$busqueda}%"));
                 });
             })
             ->when($request->filled('rol_id'), fn($query) => $query
@@ -85,20 +96,20 @@ class EmpleadoController extends Controller
      * Las tres filas en una transaccion: un user sin su empleado es una cuenta
      * que puede entrar al sistema sin que nadie sepa de quien es.
      *
-     * Nace SIEMPRE con forzar_cambio_password: la contrasena que carga el
-     * administrativo es provisoria por definicion, porque la conoce alguien
-     * distinto del dueno de la cuenta.
+     * Nace SIN contraseña: no puede ingresar hasta que abra el enlace de la
+     * invitacion y elija la suya. Asi nadie mas que el la conoce, y completar
+     * el enlace demuestra que el correo que cargo el administrativo es real.
+     *
+     * El mail se manda DESPUES de la transaccion: si el envio falla, el alta
+     * queda hecha y la invitacion se puede reenviar desde la ficha.
      */
     public function store(EmpleadoRequest $request): RedirectResponse
     {
-        $passwordProvisoria = $request->validated('password') ?: Str::random(12);
-
-        $empleado = DB::transaction(function () use ($request, $passwordProvisoria) {
+        $empleado = DB::transaction(function () use ($request) {
             $usuario = User::create($request->datosDelUsuario() + [
-                'password'               => $passwordProvisoria, // el cast 'hashed' la hashea
-                'proveedor_auth'         => ProveedorAuth::Local->value,
-                'forzar_cambio_password' => true,
-                'activo'                 => true,
+                'password'       => null,
+                'proveedor_auth' => ProveedorAuth::Local->value,
+                'activo'         => true,
             ]);
 
             $empleado = $usuario->empleado()->create($request->datosDelEmpleado());
@@ -108,12 +119,15 @@ class EmpleadoController extends Controller
             return $empleado;
         });
 
-        return redirect()
-            ->route('gestion.user.index')
-            ->with('exito', "Se dio de alta a {$empleado->user->apellido}, {$empleado->user->nombres}.")
-            // Se muestra una sola vez: en la base queda hasheada y no hay forma
-            // de recuperarla despues.
-            ->with('password_provisoria', $passwordProvisoria);
+        $usuario   = $empleado->user;
+        $respuesta = redirect()
+            ->route('gestion.empleados.index')
+            ->with('exito', "Se dio de alta a {$usuario->apellido}, {$usuario->nombres}.");
+
+        return $this->enviarInvitacion($usuario)
+            ? $respuesta->with('info', "Le enviamos a {$usuario->email} el enlace para elegir su contraseña.")
+            : $respuesta->with('error', 'El empleado quedó creado, pero no se pudo enviar el correo de invitación. '
+                .'Usá "Reenviar invitación" desde su ficha.');
     }
 
     public function edit(Empleado $empleado): View
@@ -125,19 +139,45 @@ class EmpleadoController extends Controller
         ] + $this->opcionesDeFormulario());
     }
 
-    /** No toca la contrasena: el request la rechaza y acá tampoco se escribe. */
+    /**
+     * No toca la contraseña: el request la rechaza y acá tampoco se escribe.
+     *
+     * Si cambia el correo, deja de estar verificado. Y si la invitacion seguia
+     * pendiente, se reenvia a la direccion nueva: la anterior probablemente
+     * estaba mal escrita, que es la razon mas comun para corregirla.
+     */
     public function update(EmpleadoRequest $request, Empleado $empleado): RedirectResponse
     {
-        DB::transaction(function () use ($request, $empleado) {
-            $empleado->user->update($request->datosDelUsuario());
+        $usuario = $empleado->user;
+
+        $cambioElCorreo = DB::transaction(function () use ($request, $empleado, $usuario) {
+            $usuario->fill($request->datosDelUsuario());
+
+            $cambioElCorreo = $usuario->isDirty('email');
+
+            if ($cambioElCorreo) {
+                $usuario->email_verified_at = null;
+            }
+
+            $usuario->save();
             $empleado->update($request->datosDelEmpleado());
 
             $this->guardarDireccion($empleado, $request->datosDeLaDireccion());
+
+            return $cambioElCorreo;
         });
 
-        return redirect()
-            ->route('gestion.user.index')
+        $respuesta = redirect()
+            ->route('gestion.empleados.index')
             ->with('exito', 'Se guardaron los cambios del empleado.');
+
+        if ($cambioElCorreo && $usuario->invitacionPendiente()) {
+            return $this->enviarInvitacion($usuario)
+                ? $respuesta->with('info', "Le reenviamos la invitación a {$usuario->email}.")
+                : $respuesta->with('error', 'No se pudo reenviar la invitación al correo nuevo. Probá con "Reenviar invitación".');
+        }
+
+        return $respuesta;
     }
 
     /**
@@ -172,26 +212,26 @@ class EmpleadoController extends Controller
     }
 
     /**
-     * Circuito de contrasena olvidada. No hay autogestion: el empleado avisa a
-     * un administrativo y el administrativo le asigna una provisoria.
-     *
-     * OJO con una diferencia respecto del texto del requerimiento, que habla
-     * solo de "activar un flag": el flag por si solo no devuelve el acceso a
-     * alguien que olvido la clave, porque seguiria sin poder entrar. Por eso
-     * acá se asignan las dos cosas, clave nueva y flag.
+     * Para el empleado al que no le llego el correo o al que se le vencio el
+     * enlace. Solo tiene sentido mientras no haya elegido su contraseña: si ya
+     * la eligio y la olvido, el camino es "¿Olvidaste tu contraseña?".
      */
-    public function resetearPassword(ResetearPasswordRequest $request, Empleado $empleado): RedirectResponse
+    public function reenviarInvitacion(Empleado $empleado): RedirectResponse
     {
-        $passwordProvisoria = $request->validated('password') ?: Str::random(12);
+        $usuario = $empleado->user;
 
-        $empleado->user->update([
-            'password'               => $passwordProvisoria,
-            'forzar_cambio_password' => true,
-        ]);
+        if (! $usuario->activo) {
+            return back()->with('error', 'El empleado está dado de baja. Reactivalo antes de reenviar la invitación.');
+        }
 
-        return back()
-            ->with('exito', "Se asignó una contraseña provisoria a {$empleado->user->usuario}. En el próximo ingreso va a tener que cambiarla.")
-            ->with('password_provisoria', $passwordProvisoria);
+        if (! $usuario->invitacionPendiente()) {
+            return back()->with('error', "{$usuario->nombres} ya activó su cuenta. Si olvidó la contraseña, "
+                .'puede recuperarla con "¿Olvidaste tu contraseña?" en la pantalla de ingreso.');
+        }
+
+        return $this->enviarInvitacion($usuario)
+            ? back()->with('exito', "Le reenviamos la invitación a {$usuario->email}.")
+            : back()->with('error', 'No se pudo enviar el correo. Revisá la dirección y volvé a intentar.');
     }
 
     /**
@@ -218,6 +258,23 @@ class EmpleadoController extends Controller
         return User::where('activo', true)
             ->whereHas('rol', fn($query) => $query->where('nombre', 'administrador'))
             ->count();
+    }
+
+    /**
+     * Un fallo del servidor de correo no tiene que tirar abajo el alta: se
+     * registra en el log y el administrativo ve un aviso para reintentar.
+     */
+    private function enviarInvitacion(User $usuario): bool
+    {
+        try {
+            $usuario->notify(new InvitacionEmpleado());
+
+            return true;
+        } catch (Throwable $e) {
+            report($e);
+
+            return false;
+        }
     }
 
     /** Un solo domicilio particular por empleado, igual que en proveedores. */

@@ -1,6 +1,6 @@
-@extends('layouts.app')
+@extends('layouts.gestion')
 
-@section('title', 'PowerTech')
+@section('title', 'Venta')
 
 @section('content')
 

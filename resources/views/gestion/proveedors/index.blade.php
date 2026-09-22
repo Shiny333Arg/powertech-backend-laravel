@@ -1,4 +1,4 @@
-@extends('layouts.app')
+@extends('layouts.gestion')
 
 @section('title', 'Proveedores - PowerTech')
 

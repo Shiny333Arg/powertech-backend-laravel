@@ -1,14 +1,16 @@
+{{-- Aplicacion de gestion (empleados). Todas las vistas de resources/views/gestion extienden este layout. --}}
 <!DOCTYPE html>
 <html lang="es">
 
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
 
     <link rel="icon" type="image/ico" href="{{ asset('images/icon.ico') }}">
-    <title>{{ config('app.name', 'PowerTech') }}</title>
+    <title>@yield('title', 'Gestión') | {{ config('app.name', 'PowerTech') }}</title>
 
-    @vite(['resources/css/app.css', 'resources/js/app.js'])
+    @vite(['resources/css/app.css', 'resources/css/components/header.css', 'resources/js/app.js'])
 </head>
 
 <body class="d-flex flex-column min-vh-100">

@@ -1,67 +1,27 @@
 <?php
 
-use App\Http\Controllers\ProfileController;
-use Illuminate\Support\Facades\Route;
-
-Route::get('/', function () {
-    return view('welcome');
-});
-
-Route::get('/dashboard', function () {
-    return view('dashboard');
-})->middleware(['auth', 'verified'])->name('dashboard');
-
-Route::middleware('auth')->group(function () {
-    Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
-    Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
-    Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
-});
-
-require __DIR__.'/auth.php';
-
-
-// ============================================================
-// CONTROLLERS - GENERALES
-// ============================================================
-
 use App\Http\Controllers\HelpController;
-
-
-// ============================================================
-// CONTROLLERS - GESTIÓN
-// ============================================================
-
+use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\gestion\CategoriaController;
 use App\Http\Controllers\gestion\EmpleadoController;
 use App\Http\Controllers\gestion\ProductoController;
 use App\Http\Controllers\gestion\PromocionController;
 use App\Http\Controllers\gestion\ProveedorController;
+use Illuminate\Support\Facades\Route;
 
 
 // ============================================================
 // AUTENTICACIÓN
 // ============================================================
+//
+// Login, registro, "olvidé mi contraseña", invitación de empleados,
+// verificación de correo, cambio de contraseña y logout.
 
-Route::prefix('authentication')
-    ->name('authentication.')
-    ->group(function () {
-
-        Route::get('/', function () {
-            return view('authentication.index');
-        })->name('index');
-
-        Route::get('/logout', function () {
-            return view('authentication.logout');
-        })->name('logout');
-
-        Route::get('/reset-password', function () {
-            return view('authentication.reset-password');
-        })->name('reset-password');
-    });
+require __DIR__.'/auth.php';
 
 
 // ============================================================
-// CLIENTE
+// TIENDA - PÚBLICO
 // ============================================================
 
 // ========================================================
@@ -87,11 +47,38 @@ Route::prefix('help')
 
 
 // ============================================================
+// TIENDA - CLIENTE LOGUEADO
+// ============================================================
+//
+// Cuando exista el checkout, sus rutas llevan ademas 'verified':
+// no se compra con un correo sin confirmar.
+
+Route::middleware(['auth', 'ambito:tienda'])
+    ->group(function () {
+
+        // ========================================================
+        // PERFIL (datos personales y fiscales)
+        // ========================================================
+        // Los nombres profile.* son los de Breeze. La contraseña se
+        // cambia con password.update (routes/auth.php).
+
+        Route::get('/perfil', [ProfileController::class, 'edit'])
+            ->name('profile.edit');
+
+        Route::patch('/perfil', [ProfileController::class, 'update'])
+            ->name('profile.update');
+    });
+
+
+// ============================================================
 // GESTIÓN
 // ============================================================
+//
+// Solo empleados logueados. Un cliente que abre /gestion vuelve a la tienda.
 
 Route::prefix('gestion')
     ->name('gestion.')
+    ->middleware(['auth', 'ambito:gestion'])
     ->group(function () {
 
 
@@ -102,6 +89,16 @@ Route::prefix('gestion')
         Route::get('/', function () {
             return view('gestion.home.index');
         })->name('home');
+
+
+        // ========================================================
+        // MI CUENTA
+        // ========================================================
+        // El empleado solo puede cambiar su contraseña: el formulario
+        // de esta vista envia a password.update (routes/auth.php).
+
+        Route::view('/mi-cuenta', 'gestion.user.my-account')
+            ->name('mi-cuenta');
 
 
         // ========================================================
@@ -232,8 +229,9 @@ Route::prefix('gestion')
                 Route::patch('/{empleado}/reactivar', [EmpleadoController::class, 'reactivar'])
                     ->name('reactivar');
 
-                Route::patch('/{empleado}/resetear-password', [EmpleadoController::class, 'resetearPassword'])
-                    ->name('resetearPassword');
+                // Envia un mail: es una accion, no una modificacion del recurso.
+                Route::post('/{empleado}/reenviar-invitacion', [EmpleadoController::class, 'reenviarInvitacion'])
+                    ->name('reenviarInvitacion');
             });
 
 

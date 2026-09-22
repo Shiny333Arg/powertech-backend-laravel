@@ -1,39 +1,38 @@
-<x-guest-layout>
-    <form method="POST" action="{{ route('password.store') }}">
-        @csrf
+{{-- Destino del enlace de "olvidé mi contraseña" (NewPasswordController). --}}
+@extends('layouts.auth')
 
-        <!-- Password Reset Token -->
-        <input type="hidden" name="token" value="{{ $request->route('token') }}">
+@section('title', 'Nueva contraseña')
+@section('titulo', 'Elegí tu nueva contraseña')
 
-        <!-- Email Address -->
-        <div>
-            <x-input-label for="email" :value="__('Email')" />
-            <x-text-input id="email" class="block mt-1 w-full" type="email" name="email" :value="old('email', $request->email)" required autofocus autocomplete="username" />
-            <x-input-error :messages="$errors->get('email')" class="mt-2" />
-        </div>
+@section('content')
 
-        <!-- Password -->
-        <div class="mt-4">
-            <x-input-label for="password" :value="__('Password')" />
-            <x-text-input id="password" class="block mt-1 w-full" type="password" name="password" required autocomplete="new-password" />
-            <x-input-error :messages="$errors->get('password')" class="mt-2" />
-        </div>
+<form method="POST" action="{{ route('password.store') }}">
+    @csrf
 
-        <!-- Confirm Password -->
-        <div class="mt-4">
-            <x-input-label for="password_confirmation" :value="__('Confirm Password')" />
+    <input type="hidden" name="token" value="{{ $request->route('token') }}">
 
-            <x-text-input id="password_confirmation" class="block mt-1 w-full"
-                                type="password"
-                                name="password_confirmation" required autocomplete="new-password" />
+    <div class="mb-3">
+        <label for="email" class="form-label fw-semibold">Correo electrónico</label>
+        <input type="email" id="email" name="email" value="{{ old('email', $request->email) }}"
+            class="form-control rounded-3 @error('email') is-invalid @enderror"
+            required autocomplete="username">
 
-            <x-input-error :messages="$errors->get('password_confirmation')" class="mt-2" />
-        </div>
+        {{-- "El enlace no es valido o ya vencio" tambien aparece aca. --}}
+        @error('email')
+            <div class="invalid-feedback">
+                {{ $message }}
+                <a href="{{ route('password.request') }}">Pedí un enlace nuevo.</a>
+            </div>
+        @enderror
+    </div>
 
-        <div class="flex items-center justify-end mt-4">
-            <x-primary-button>
-                {{ __('Reset Password') }}
-            </x-primary-button>
-        </div>
-    </form>
-</x-guest-layout>
+    <x-password-input name="password" label="Nueva contraseña" autocomplete="new-password"
+        ayuda="Al menos 8 caracteres." />
+
+    <x-password-input name="password_confirmation" label="Repetí la nueva contraseña" autocomplete="new-password"
+        class="mb-4" />
+
+    <button type="submit" class="btn btn-primary w-100 rounded-3 fw-semibold">Guardar contraseña</button>
+</form>
+
+@endsection

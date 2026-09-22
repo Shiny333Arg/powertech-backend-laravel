@@ -1,4 +1,4 @@
-@extends('layouts.app')
+@extends('layouts.gestion')
 
 @section('title', 'PowerTech')
 
@@ -268,11 +268,6 @@
                         @endif
                     </td>
 
-                    <!-- Usuario -->
-                    <td>
-                        {{ $empleado->user->usuario }}
-                    </td>
-
                     <!-- Cargo -->
                     <td>
                         {{ ucfirst($empleado->user->rol?->nombre ?? 'Sin cargo') }}
@@ -389,34 +384,6 @@
                         </form>
 
                         @endif
-
-                        <!-- Restablecer contraseña -->
-                        <form
-                            action="{{ route('gestion.empleados.resetearPassword', $empleado) }}"
-                            method="POST"
-                            class="d-inline">
-
-                            @csrf
-                            @method('PATCH')
-
-                            <button
-                                type="submit"
-                                class="btn btn-sm btn-outline-primary"
-                                title="Restablecer contraseña">
-
-                                <svg xmlns="http://www.w3.org/2000/svg"
-                                    width="16"
-                                    height="16"
-                                    fill="currentColor"
-                                    viewBox="0 0 16 16">
-
-                                    <path d="M3.5 11.5a3.5 3.5 0 1 1 2.83-5.56L15 6v2h-1v1h-1v1h-2v-2h-1.17l-1.5 1.5A3.5 3.5 0 0 1 3.5 11.5m0-1a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5" />
-
-                                    <path d="M3.5 8a.5.5 0 1 1 0-1 .5.5 0 0 1 0 1" />
-                                </svg>
-                            </button>
-
-                        </form>
 
                     </td>
 

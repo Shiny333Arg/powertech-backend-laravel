@@ -9,6 +9,9 @@ use App\Models\User;
  * Sin metodo delete: un usuario NO se elimina nunca. De esta tabla cuelga toda
  * la trazabilidad —ventas registradas, cobros tomados, movimientos de stock
  * firmados, ordenes aprobadas—. El guard del modelo User rechaza el delete().
+ *
+ * Tampoco hay nada sobre contraseñas: el administrativo ya no las asigna ni
+ * las resetea. Cada empleado elige la suya desde la invitacion.
  */
 class EmpleadoPolicy
 {
@@ -37,9 +40,12 @@ class EmpleadoPolicy
         return $user->tienePermiso('empleado.baja');
     }
 
-    /** Clave provisoria + cambio forzado. Es el circuito de clave olvidada. */
-    public function resetearPassword(User $user, Empleado $empleado): bool
+    /**
+     * Reenviar la invitacion es terminar un alta que quedo a medias, asi que
+     * lo puede hacer quien puede dar de alta. No necesita permiso propio.
+     */
+    public function reenviarInvitacion(User $user, Empleado $empleado): bool
     {
-        return $user->tienePermiso('empleado.forzar_password');
+        return $user->tienePermiso('empleado.crear');
     }
 }
