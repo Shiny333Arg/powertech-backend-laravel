@@ -2,6 +2,8 @@
 
 @section('title', 'PowerTech')
 
+@vite('resources/css/gestion/user/index.css')
+
 @section('content')
 
 <!-- Contenido principal -->
@@ -233,7 +235,6 @@
                 <tr>
                     <th>Legajo</th>
                     <th>Empleado</th>
-                    <th>Usuario</th>
                     <th>Cargo</th>
                     <th>Documento</th>
                     <th>CUIL</th>
@@ -406,14 +407,13 @@
         </table>
 
     </div>
-</section>
 
-<!-- Paginación -->
-@if ($empleados->hasPages())
-<section class="mt-4 d-flex justify-content-center">
-    {{ $empleados->links() }}
+    @if ($empleados->hasPages())
+    <div class="d-flex justify-content-center mt-4">
+        {{ $empleados->onEachSide(2)->links() }}
+    </div>
+    @endif
 </section>
-@endif
 
 
 

@@ -71,7 +71,7 @@ class EmpleadoController extends Controller
             ->when($request->query('estado') === 'inactivos', fn($query) => $query
                 ->whereHas('user', fn($u) => $u->where('activo', false)))
             ->orderBy('legajo')
-            ->paginate(20)
+            ->paginate(10)
             ->withQueryString();
 
         return view('gestion.user.index', [

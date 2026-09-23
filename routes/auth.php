@@ -59,7 +59,10 @@ Route::middleware('guest')->group(function () {
     Route::post('invitacion/{user}', [InvitacionController::class, 'store'])
         ->middleware('throttle:6,1')
         ->name('invitacion.store');
-    
+        
+    Route::get('invitacion/{token}', [InvitacionController::class, 'create'])->name('invitacion.create');
+    Route::post('invitacion', [InvitacionController::class, 'store'])
+        ->middleware('throttle:6,1')->name('invitacion.store');
 });
 
 Route::middleware('auth')->group(function () {

@@ -51,7 +51,7 @@ class LoginRequest extends FormRequest
     {
         $this->ensureIsNotRateLimited();
 
-        if (! Auth::validate($this->only('email', 'password'))) {
+        if (! Auth::validate($this->only('email', 'password') + ['activo' => true])) {
             RateLimiter::hit($this->throttleKey());
 
             throw ValidationException::withMessages([

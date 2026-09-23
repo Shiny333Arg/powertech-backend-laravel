@@ -47,7 +47,9 @@ class CategoriaController extends Controller
             ->when($estado === 'inactivas', fn($query) => $query->inactivos())
             ->orderBy('orden')
             ->orderBy('nombre')
-            ->get();
+            // ->get();
+            ->paginate(10)
+            ->withQueryString();
 
         return view('gestion.category.index', compact('categorias', 'estado', 'nombre'));
     }

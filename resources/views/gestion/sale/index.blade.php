@@ -2,6 +2,8 @@
 
 @section('title', 'PowerTech')
 
+@vite('resources/css/gestion/sale/index.css')
+
 @section('content')
 
 

@@ -2,7 +2,7 @@
 
 @section('title', 'Categorías - PowerTech')
 
-@vite('resources/css/category/index.css')
+@vite('resources/css/gestion/category/index.css')
 
 @section('content')
 
@@ -38,7 +38,7 @@
 
 <section class="mb-4 d-flex flex-column flex-md-row justify-content-between align-items-stretch gap-3">
 
-    
+
     <a href="{{ route('gestion.categorias.create') }}"
         class="btn btn-success d-flex align-items-center justify-content-center gap-2 flex-fill flex-md-grow-0">
 
@@ -76,7 +76,7 @@
 
         Exportar listado a PDF
     </button>
-    
+
 
 </section>
 
@@ -155,7 +155,7 @@
 <section>
     <div class="table-responsive">
 
-        
+
         <table class="table table-bordered table-hover align-middle text-center" id="tablaCategorias">
 
             <thead class="table-dark">
@@ -319,7 +319,12 @@
             </tbody>
         </table>
     </div>
-    
+
+    @if ($categorias->hasPages())
+    <div class="d-flex justify-content-center mt-4">
+        {{ $categorias->onEachSide(2)->links() }}
+    </div>
+    @endif
 
 </section>
 

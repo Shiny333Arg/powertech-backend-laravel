@@ -54,7 +54,16 @@
     <p>admin@powertech.com.ar</p>
     <p>Cambiar.Esta.Clave</p>
     <p class="fw-semibold">Administrativo: Luis Alberto Spinetta</p>
-    <p>colque03032003@gmail.com</p>
+    <p>luis.spinetta@mail.com</p>
+    <p>Cambiar.Esta.Clave</p>
+    <p class="fw-semibold">Cajero: Carlos Alberto Solari</p>
+    <p>carlos.solari@mail.com</p>
+    <p>Cambiar.Esta.Clave</p>
+    <p class="fw-semibold">Vendedor: Gustavo Edgardo Cordera</p>
+    <p>gustavo.cordera@mail.com</p>
+    <p>Cambiar.Esta.Clave</p>
+    <p class="fw-semibold">Cliente: Patricio Rogelio Fontanet</p>
+    <p>patricio.fontanet@mail.com</p>
     <p>Cambiar.Esta.Clave</p>
 </div>
 

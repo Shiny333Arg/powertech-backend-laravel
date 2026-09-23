@@ -97,7 +97,7 @@ class ProveedorController extends Controller
         });
 
         return redirect()
-            ->route('gestion.proveedors.index')
+            ->route('gestion.proveedores.index')
             ->with('exito', "Se creó el proveedor «{$proveedor->razon_social}».");
     }
 

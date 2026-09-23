@@ -2,7 +2,7 @@
 
 @section('title', 'PowerTech')
 
-@vite('resources/css/item/index.css')
+@vite('resources/css/gestion/item/index.css')
 
 @section('content')
 
@@ -462,7 +462,7 @@
 
     <div class="d-flex justify-content-center mt-3">
 
-        {{ $productos->links() }}
+        {{ $productos->onEachSide(2)->links() }}
 
     </div>
 

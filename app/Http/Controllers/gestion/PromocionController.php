@@ -110,7 +110,7 @@ class PromocionController extends Controller
         });
 
         return redirect()
-            ->route('gestion.promotion.index')
+            ->route('gestion.promociones.index')
             ->with('exito', "Se creó la promoción «{$promocion->nombre}».")
             ->with('advertencia', $this->avisoDeConflictos($promocion));
     }

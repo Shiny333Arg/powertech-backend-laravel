@@ -9,19 +9,19 @@
     los controladores (authorizeResource), que todavia estan comentadas.
 --}}
 @php
-    $usuario = auth()->user();
+$usuario = auth()->user();
 
-    // [texto, ruta, patron para marcar la seccion activa, modelo de la policy (null = sin restriccion)]
-    $secciones = [
-        ['Inicio',      'gestion.home',               'gestion.home',          null],
-        ['Ventas',      'gestion.ventas.index',       'gestion.ventas.*',      null],
-        ['Productos',   'gestion.items.index',        'gestion.items.*',       \App\Models\Producto::class],
-        ['Categorías',  'gestion.categorias.index',   'gestion.categorias.*',  \App\Models\Categoria::class],
-        ['Promociones', 'gestion.promociones.index',  'gestion.promociones.*', \App\Models\Promocion::class],
-        ['Proveedores', 'gestion.proveedores.index',  'gestion.proveedores.*', \App\Models\Proveedor::class],
-        ['Empleados',   'gestion.empleados.index',    'gestion.empleados.*',   \App\Models\Empleado::class],
-        // Clientes: agregar cuando exista el modulo.
-    ];
+// [texto, ruta, patron para marcar la seccion activa, modelo de la policy (null = sin restriccion)]
+$secciones = [
+['Inicio', 'gestion.home', 'gestion.home', null],
+['Ventas', 'gestion.ventas.index', 'gestion.ventas.*', null],
+['Productos', 'gestion.items.index', 'gestion.items.*', \App\Models\Producto::class],
+['Categorías', 'gestion.categorias.index', 'gestion.categorias.*', \App\Models\Categoria::class],
+['Promociones', 'gestion.promociones.index', 'gestion.promociones.*', \App\Models\Promocion::class],
+['Proveedores', 'gestion.proveedores.index', 'gestion.proveedores.*', \App\Models\Proveedor::class],
+['Empleados', 'gestion.empleados.index', 'gestion.empleados.*', \App\Models\Empleado::class],
+// Clientes: agregar cuando exista el modulo.
+];
 @endphp
 
 <header>
@@ -43,21 +43,21 @@
         <ul class="navbar-nav ms-auto gap-lg-2">
 
           @foreach ($secciones as [$texto, $ruta, $patron, $modelo])
-            @if ($modelo === null || $usuario->can('viewAny', $modelo))
-              @php $activa = request()->routeIs($patron); @endphp
-              <li class="nav-item px-2">
-                <a class="nav-link rounded fw-bold text-white @if ($activa) active @endif"
-                  href="{{ route($ruta) }}" @if ($activa) aria-current="page" @endif>
-                  {{ $texto }}
-                </a>
-              </li>
-            @endif
+          @if ($modelo === null || $usuario->can('viewAny', $modelo))
+          @php $activa = request()->routeIs($patron); @endphp
+          <li class="nav-item px-2">
+            <a class="nav-link rounded fw-bold text-white @if ($activa) active @endif"
+              href="{{ route($ruta) }}" @if ($activa) aria-current="page" @endif>
+              {{ $texto }}
+            </a>
+          </li>
+          @endif
           @endforeach
 
           <li class="nav-item dropdown px-2">
             <a class="nav-link rounded dropdown-toggle fw-bold text-white @if (request()->routeIs('gestion.mi-cuenta')) active @endif"
               href="#" id="miCuentaDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-              {{ $usuario->nombres }}
+              Usuario
             </a>
 
             <ul class="dropdown-menu dropdown-menu-end bg-primary" aria-labelledby="miCuentaDropdown">
@@ -66,7 +66,9 @@
                 <div class="small opacity-75">{{ ucfirst($usuario->rol->nombre) }}</div>
               </li>
 
-              <li><hr class="dropdown-divider border-light opacity-25"></li>
+              <li>
+                <hr class="dropdown-divider border-light opacity-25">
+              </li>
 
               <li>
                 <a class="dropdown-item fw-bold d-flex align-items-center gap-2 text-white"
