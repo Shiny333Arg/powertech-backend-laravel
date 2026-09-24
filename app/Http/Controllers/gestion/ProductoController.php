@@ -144,14 +144,14 @@ class ProductoController extends Controller
             $producto->update($datos);
             $this->borrarImagen($imagenAnterior); // recien despues de guardar la nueva
 
-            return redirect()->route('productos.index')
+            return redirect()->route('gestion.items.index')
                 ->with('exito', "Se guardaron los cambios en «{$producto->nombre}».");
         }
 
         $producto->update($datos);
 
         return redirect()
-            ->route('gestion.productos.index')
+            ->route('gestion.items.index')
             ->with('exito', "Se guardaron los cambios en «{$producto->nombre}».");
     }
 

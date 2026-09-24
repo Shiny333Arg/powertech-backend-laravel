@@ -29,13 +29,13 @@
 
     <x-password-input name="password" label="Contraseña" autocomplete="current-password" />
 
-    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
-        <div class="form-check">
+    <div class="d-flex flex-wrap justify-content-center align-items-center gap-2 mb-4">
+        <!-- <div class="form-check">
             <input class="form-check-input" type="checkbox" id="remember" name="remember" @checked(old('remember'))
                 aria-describedby="remember-ayuda">
             <label class="form-check-label" for="remember">Recordarme</label>
             <div id="remember-ayuda" class="form-text mt-0">No lo marques en una computadora compartida.</div>
-        </div>
+        </div> -->
 
         <a href="{{ route('password.request') }}" class="small">¿Olvidaste tu contraseña?</a>
     </div>
@@ -50,18 +50,24 @@
     <a href="{{ route('register') }}" class="fw-semibold">Creá una</a>
 </p>
 <div>
+    <hr class="my-4">
+    <p class="fw-semibold text-center my-4">Cuentas de prueba:</p>
     <p class="fw-semibold">Administrador: Administrador PowerTech</p>
     <p>admin@powertech.com.ar</p>
     <p>Cambiar.Esta.Clave</p>
+    <hr class="my-4">
     <p class="fw-semibold">Administrativo: Luis Alberto Spinetta</p>
     <p>luis.spinetta@mail.com</p>
     <p>Cambiar.Esta.Clave</p>
+    <hr class="my-4">
+    <p class="fw-semibold">Vendedor: Gustavo Edgardo Cordera</p>
+    <p>gustavo.cordera@mail.com</p>
+    <p>Cambiar.Esta.Clave2</p>
+    <hr class="my-4">
     <p class="fw-semibold">Cajero: Carlos Alberto Solari</p>
     <p>carlos.solari@mail.com</p>
     <p>Cambiar.Esta.Clave</p>
-    <p class="fw-semibold">Vendedor: Gustavo Edgardo Cordera</p>
-    <p>gustavo.cordera@mail.com</p>
-    <p>Cambiar.Esta.Clave</p>
+    <hr class="my-4">
     <p class="fw-semibold">Cliente: Patricio Rogelio Fontanet</p>
     <p>patricio.fontanet@mail.com</p>
     <p>Cambiar.Esta.Clave</p>

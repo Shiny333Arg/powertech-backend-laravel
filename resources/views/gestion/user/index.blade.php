@@ -357,7 +357,7 @@
                         @else
 
                         <form
-                            action="{{ route('user.reactivar', $empleado) }}"
+                            action="{{ route('gestion.empleados.reactivar', $empleado) }}"
                             method="POST"
                             class="d-inline">
 

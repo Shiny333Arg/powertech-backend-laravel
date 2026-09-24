@@ -517,7 +517,7 @@
                         <!-- Reactivar -->
 
                         <form
-                            action="{{ route('proveedors.reactivar', $proveedor) }}"
+                            action="{{ route('gestion.proveedores.reactivar', $proveedor) }}"
                             method="POST"
                             class="d-inline">
 

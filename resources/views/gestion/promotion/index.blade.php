@@ -670,7 +670,7 @@
                         <!-- Reactivar -->
 
                         <form
-                            action="{{ route('promociones.reactivar', $promocion) }}"
+                            action="{{ route('gestion.promociones.reactivar', $promocion) }}"
                             method="POST"
                             class="d-inline">
 
