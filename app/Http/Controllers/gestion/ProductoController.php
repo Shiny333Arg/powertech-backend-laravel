@@ -65,7 +65,7 @@ class ProductoController extends Controller
             ->when($request->query('stock') === 'reponer', fn ($query) => $query->bajoPuntoReposicion())
             ->when($request->query('stock') === 'preventa', fn ($query) => $query->where('stock_disponible', '<', 0))
             ->orderBy('nombre')
-            ->paginate(20)
+            ->paginate(10)
             ->withQueryString();
 
         return view('gestion.item.index', [

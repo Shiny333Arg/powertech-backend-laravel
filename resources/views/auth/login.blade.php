@@ -57,19 +57,19 @@
     <p>Cambiar.Esta.Clave</p>
     <hr class="my-4">
     <p class="fw-semibold">Administrativo: Luis Alberto Spinetta</p>
-    <p>luis.spinetta@mail.com</p>
+    <p>flaco@mail.com</p>
     <p>Cambiar.Esta.Clave</p>
     <hr class="my-4">
     <p class="fw-semibold">Vendedor: Gustavo Edgardo Cordera</p>
-    <p>gustavo.cordera@mail.com</p>
-    <p>Cambiar.Esta.Clave2</p>
+    <p>pelado@mail.com</p>
+    <p>Cambiar.Esta.Clave</p>
     <hr class="my-4">
     <p class="fw-semibold">Cajero: Carlos Alberto Solari</p>
-    <p>carlos.solari@mail.com</p>
+    <p>indio@mail.com</p>
     <p>Cambiar.Esta.Clave</p>
     <hr class="my-4">
     <p class="fw-semibold">Cliente: Patricio Rogelio Fontanet</p>
-    <p>patricio.fontanet@mail.com</p>
+    <p>fontanet@mail.com</p>
     <p>Cambiar.Esta.Clave</p>
 </div>
 

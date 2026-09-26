@@ -4,6 +4,8 @@ namespace App\Providers;
 
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Pagination\Paginator;
+use App\Services\AutorizadorSimulado;
+use App\Services\Facturacion\AutorizadorComprobante;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -12,7 +14,10 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        $this->app->bind(
+            AutorizadorComprobante::class,
+            AutorizadorSimulado::class
+        );
     }
 
     /**

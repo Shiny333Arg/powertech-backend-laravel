@@ -1,12 +1,23 @@
 <?php
 
 use App\Http\Controllers\HelpController;
+use App\Http\Controllers\HomeController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\gestion\BusquedaController;
 use App\Http\Controllers\gestion\CategoriaController;
+use App\Http\Controllers\gestion\ClienteController;
+use App\Http\Controllers\gestion\ComprobanteController;
+use App\Http\Controllers\gestion\DashboardController;
+use App\Http\Controllers\gestion\DevolucionController;
+use App\Http\Controllers\gestion\DireccionController;
 use App\Http\Controllers\gestion\EmpleadoController;
+use App\Http\Controllers\gestion\EntregaController;
+use App\Http\Controllers\gestion\PagoController;
 use App\Http\Controllers\gestion\ProductoController;
 use App\Http\Controllers\gestion\PromocionController;
 use App\Http\Controllers\gestion\ProveedorController;
+use App\Http\Controllers\gestion\StockController;
+use App\Http\Controllers\gestion\VentaController;
 use Illuminate\Support\Facades\Route;
 
 
@@ -17,7 +28,7 @@ use Illuminate\Support\Facades\Route;
 // Login, registro, "olvidé mi contraseña", invitación de empleados,
 // verificación de correo, cambio de contraseña y logout.
 
-require __DIR__.'/auth.php';
+require __DIR__ . '/auth.php';
 
 
 // ============================================================
@@ -28,9 +39,11 @@ require __DIR__.'/auth.php';
 // HOME
 // ========================================================
 
-Route::get('/', function () {
-    return view('home.index');
-})->name('cliente.home');
+// Route::get('/', function () {
+//     return view('home.index');
+// })->name('cliente.home');
+Route::get('/', [HomeController::class, 'index'])
+    ->name('cliente.home');
 
 
 // ========================================================
@@ -75,6 +88,15 @@ Route::middleware(['auth', 'ambito:tienda'])
 // ============================================================
 //
 // Solo empleados logueados. Un cliente que abre /gestion vuelve a la tienda.
+//
+// Criterio de verbos, el mismo que ya usaba este archivo:
+//   PATCH  modifica el recurso        -> baja, reactivar, publicar
+//   POST   dispara una accion         -> validar, cobrar, entregar, devolver
+// Las transiciones del circuito de venta son acciones: generan movimientos de
+// stock y comprobantes, no editan la fila.
+//
+// Ninguna venta, comprobante, pago ni movimiento de stock tiene ruta DELETE.
+// No es un olvido: no se eliminan.
 
 Route::prefix('gestion')
     ->name('gestion.')
@@ -85,10 +107,11 @@ Route::prefix('gestion')
         // ========================================================
         // HOME
         // ========================================================
+        // Un solo tablero: arma los bloques de administrativo, vendedor
+        // y cajero segun los permisos de quien entra.
 
-        Route::get('/', function () {
-            return view('gestion.home.index');
-        })->name('home');
+        Route::get('/', [DashboardController::class, 'index'])
+            ->name('home');
 
 
         // ========================================================
@@ -170,6 +193,8 @@ Route::prefix('gestion')
                 Route::patch('/{producto}/despublicar', [ProductoController::class, 'despublicar'])
                     ->name('despublicar');
 
+                // OJO: estas dos se superponen con stock.ajustar y stock.show.
+                // Ver la nota al pie del bloque STOCK: hay que quedarse con una.
                 Route::patch('/{producto}/stock', [ProductoController::class, 'ajustarStock'])
                     ->name('ajustarStock');
 
@@ -181,22 +206,245 @@ Route::prefix('gestion')
         // ========================================================
         // VENTAS
         // ========================================================
+        // Sin destroy: la venta no se elimina ni se da de baja. Lo que en
+        // otro CRUD seria la D es 'cancelar', que libera el stock
+        // comprometido y conserva el numero y el historial.
+        //
+        // /create va antes de /{venta} para que no lo capture el wildcard.
 
         Route::prefix('sale')
             ->name('ventas.')
             ->group(function () {
 
-                Route::get('/', function () {
-                    return view('gestion.sale.index');
-                })->name('index');
+                Route::get('/', [VentaController::class, 'index'])
+                    ->name('index');
 
-                Route::get('/create', function () {
-                    return view('gestion.sale.create');
-                })->name('create');
+                Route::get('/create', [VentaController::class, 'create'])
+                    ->name('create');
 
-                Route::get('/view', function () {
-                    return view('gestion.sale.view');
-                })->name('view');
+                Route::post('/', [VentaController::class, 'store'])
+                    ->name('store');
+
+                Route::get('/{venta}', [VentaController::class, 'show'])
+                    ->name('show');
+
+                // Solo un presupuesto se edita: una venta confirmada ya
+                // comprometio stock y una pagada ya tiene CAE.
+                Route::get('/{venta}/edit', [VentaController::class, 'edit'])
+                    ->name('edit');
+
+                Route::put('/{venta}', [VentaController::class, 'update'])
+                    ->name('update');
+
+                // Validar confirma el presupuesto, habilita el cobro y
+                // compromete las unidades.
+                Route::post('/{venta}/validar', [VentaController::class, 'validar'])
+                    ->name('validar');
+
+                Route::post('/{venta}/cancelar', [VentaController::class, 'cancelar'])
+                    ->name('cancelar');
+            });
+
+
+        // ========================================================
+        // DEVOLUCIONES
+        // ========================================================
+        // Cuelgan de la venta porque no existen sin ella. Emiten nota de
+        // credito y reingresan el stock fisico.
+
+        Route::prefix('sale/{venta}/return')
+            ->name('devoluciones.')
+            ->group(function () {
+
+                Route::get('/', [DevolucionController::class, 'create'])
+                    ->name('create');
+
+                Route::post('/', [DevolucionController::class, 'store'])
+                    ->name('store');
+            });
+
+
+        // ========================================================
+        // COBROS
+        // ========================================================
+        // La caja. Un pago no se edita ni se borra: si se cobro de menos se
+        // agrega otro pago, si se cobro de mas se devuelve con nota de
+        // credito. Por eso solo hay lectura y alta.
+
+        Route::prefix('payment')
+            ->name('cobros.')
+            ->group(function () {
+
+                Route::get('/', [PagoController::class, 'index'])
+                    ->name('index');
+
+                Route::get('/pending', [PagoController::class, 'pendientes'])
+                    ->name('pendientes');
+
+                Route::get('/{venta}/create', [PagoController::class, 'create'])
+                    ->name('create');
+
+                Route::post('/{venta}', [PagoController::class, 'store'])
+                    ->name('store');
+            });
+
+
+        // ========================================================
+        // ENTREGAS
+        // ========================================================
+        // El deposito. Es el unico lugar del sistema donde baja el stock
+        // fisico, y baja cuando la mercaderia sale, no cuando se cobra.
+
+        Route::prefix('delivery')
+            ->name('entregas.')
+            ->group(function () {
+
+                Route::get('/', [EntregaController::class, 'index'])
+                    ->name('index');
+
+                Route::post('/{venta}/lista-retiro', [EntregaController::class, 'listaRetiro'])
+                    ->name('lista-retiro');
+
+                Route::post('/{venta}/despachar', [EntregaController::class, 'despachar'])
+                    ->name('despachar');
+
+                Route::post('/{venta}/entregar', [EntregaController::class, 'entregar'])
+                    ->name('entregar');
+            });
+
+
+        // ========================================================
+        // COMPROBANTES
+        // ========================================================
+        // Solo lectura y reintento. No hay alta manual —el comprobante nace
+        // de acreditar un pago o de una devolucion— ni edicion ni borrado:
+        // es inmutable una vez que tiene CAE.
+
+        Route::prefix('invoice')
+            ->name('comprobantes.')
+            ->group(function () {
+
+                Route::get('/', [ComprobanteController::class, 'index'])
+                    ->name('index');
+
+                Route::get('/{comprobante}', [ComprobanteController::class, 'show'])
+                    ->name('show');
+
+                Route::post('/{comprobante}/reintentar', [ComprobanteController::class, 'reintentar'])
+                    ->name('reintentar');
+            });
+
+
+        // ========================================================
+        // CLIENTES
+        // ========================================================
+        // Sin destroy: solo baja logica. Esta referenciado por ventas y
+        // comprobantes emitidos.
+
+        Route::prefix('customer')
+            ->name('clientes.')
+            ->group(function () {
+
+                Route::get('/', [ClienteController::class, 'index'])
+                    ->name('index');
+
+                Route::get('/create', [ClienteController::class, 'create'])
+                    ->name('create');
+
+                Route::post('/', [ClienteController::class, 'store'])
+                    ->name('store');
+
+                Route::get('/{cliente}', [ClienteController::class, 'show'])
+                    ->name('show');
+
+                Route::get('/{cliente}/edit', [ClienteController::class, 'edit'])
+                    ->name('edit');
+
+                Route::put('/{cliente}', [ClienteController::class, 'update'])
+                    ->name('update');
+
+                Route::patch('/{cliente}/baja', [ClienteController::class, 'baja'])
+                    ->name('baja');
+
+                Route::patch('/{cliente}/reactivar', [ClienteController::class, 'reactivar'])
+                    ->name('reactivar');
+            });
+
+
+        // ========================================================
+        // DIRECCIONES
+        // ========================================================
+        // Una sola tabla polimorfica para clientes, proveedores y empleados.
+        // El dueño sale de la URL y nunca del body: si el tipo llegara del
+        // formulario, cualquiera podria colgarle una direccion fiscal a otro.
+        //
+        // {tipo} es el discriminador, no un prefijo de recurso: sus valores
+        // son las claves de DireccionController::DUENOS.
+        //
+        // La direccion SI se borra: no es un documento. Los envios copian el
+        // domicilio en lugar de apuntar aca, justamente para que un despacho
+        // no cambie de destino si alguien edita el perfil.
+
+        Route::prefix('{tipo}/{id}/address')
+            ->name('direcciones.')
+            ->where(['tipo' => 'clientes|proveedores|empleados', 'id' => '[0-9]+'])
+            ->group(function () {
+
+                Route::post('/', [DireccionController::class, 'store'])
+                    ->name('store');
+
+                Route::put('/{direccion}', [DireccionController::class, 'update'])
+                    ->name('update');
+
+                Route::delete('/{direccion}', [DireccionController::class, 'destroy'])
+                    ->name('destroy');
+            });
+
+
+        // ========================================================
+        // STOCK
+        // ========================================================
+        // Kardex, ajustes con motivo y carga del conteo inicial. Ninguna
+        // pantalla escribe productos.stock_fisico directamente: todo cambio
+        // deja un movimiento.
+        //
+        // SUPERPOSICION A RESOLVER: items.ajustarStock e items.movimientos
+        // hacen lo mismo que stock.ajustar y stock.show. Conviene quedarse
+        // con un solo camino y borrar el otro, o el ajuste va a existir en
+        // dos pantallas con dos validaciones distintas.
+
+        Route::prefix('stock')
+            ->name('stock.')
+            ->group(function () {
+
+                Route::get('/', [StockController::class, 'index'])
+                    ->name('index');
+
+                Route::post('/ajustes', [StockController::class, 'ajustar'])
+                    ->name('ajustar');
+
+                Route::post('/carga-inicial', [StockController::class, 'cargaInicial'])
+                    ->name('carga-inicial');
+
+                Route::get('/{producto}', [StockController::class, 'show'])
+                    ->name('show');
+            });
+
+
+        // ========================================================
+        // BÚSQUEDA (JSON)
+        // ========================================================
+        // Autocompletado de la pantalla de venta. Devuelve JSON, no vistas.
+
+        Route::prefix('search')
+            ->name('buscar.')
+            ->group(function () {
+
+                Route::get('/item', [BusquedaController::class, 'productos'])
+                    ->name('productos');
+
+                Route::get('/customer', [BusquedaController::class, 'clientes'])
+                    ->name('clientes');
             });
 
 

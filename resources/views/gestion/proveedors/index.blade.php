@@ -588,7 +588,7 @@
 
 <div class="mt-4 d-flex justify-content-center">
 
-    {{ $proveedores->links() }}
+    {{ $proveedores->onEachSide(2)->links() }}
 
 </div>
 

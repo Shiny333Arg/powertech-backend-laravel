@@ -59,7 +59,7 @@ class ProveedorController extends Controller
             ->when($request->query('estado') === 'activos', fn ($query) => $query->activos())
             ->when($request->query('estado') === 'inactivos', fn ($query) => $query->inactivos())
             ->orderBy('razon_social')
-            ->paginate(20)
+            ->paginate(10)
             ->withQueryString();
 
         return view('gestion.proveedors.index', [

@@ -232,12 +232,13 @@
             <thead class="table-dark">
 
                 <tr>
+                    <th class="text-nowrap" id="columnaFoto"></th>
                     <th class="text-nowrap" id="columnaCodigo">Código</th>
                     <th class="text-nowrap" id="columnaNombre">Nombre</th>
                     <th class="text-nowrap" id="columnaMarca">Marca</th>
                     <th class="text-nowrap" id="columnaCategoria">Categoría</th>
                     <th class="text-nowrap" id="columnaPrecio">Precio</th>
-                    <th class="text-nowrap" id="columnaStockDisponible">Stock disponible</th>
+                    <th class="text-nowrap" id="columnaStockDisponible">Stock</th>
                     <th class="text-nowrap" id="columnaEstado">Estado</th>
                     <th class="text-nowrap" id="columnaOpciones">Opciones</th>
                 </tr>
@@ -250,6 +251,29 @@
                 @forelse ($productos as $producto)
 
                 <tr>
+                    @if ($producto->imagen)
+
+                    <td>
+                        <img
+                            src="{{ asset('storage/'.$producto->imagen) }}"
+                            alt="{{ $producto->nombre }}"
+                            class="w-100 h-100"
+                            style="object-fit: contain;"
+                            loading="lazy">
+                    </td>
+
+                    @else
+
+                    <td>
+                        <img
+                            src="{{ asset('images/Sin_Imagen.png') }}"
+                            alt="Sin imagen"
+                            class="w-100 h-100"
+                            style="object-fit: contain;"
+                            loading="lazy">
+                    </td>
+
+                    @endif
 
                     <td>
                         {{ $producto->codigo }}
