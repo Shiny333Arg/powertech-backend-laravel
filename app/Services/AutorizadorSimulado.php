@@ -1,7 +1,9 @@
 <?php
 
-namespace App\Services\Facturacion;
+namespace App\Services;
 
+use App\Services\Facturacion\AutorizadorComprobante;
+use App\Services\Facturacion\ResultadoAutorizacion;
 use App\Models\Comprobante;
 
 /**

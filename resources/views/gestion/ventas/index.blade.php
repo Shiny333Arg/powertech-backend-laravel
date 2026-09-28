@@ -17,7 +17,12 @@
 
 <!-- Botones -->
 
-<section class="mb-4 d-flex flex-column flex-md-row justify-content-between align-items-stretch gap-3">
+<section class="mb-4 d-flex flex-column flex-md-row align-items-stretch gap-3
+    @can('create', App\Models\Venta::class)
+        justify-content-between
+    @else
+        justify-content-end
+    @endcan">
 
     @can('create', App\Models\Venta::class)
 
@@ -63,7 +68,7 @@
 
         Exportar listado a PDF
     </button>
-    
+
 </section>
 
 
@@ -112,7 +117,7 @@
 
                 <option
                     value="{{ $opcion->value }}"
-                    @selected(($filtros['estado'] ?? null) === $opcion->value)>
+                    @selected(($filtros['estado'] ?? null)===$opcion->value)>
 
                     {{ method_exists($opcion, 'etiqueta') ? $opcion->etiqueta() : ucfirst(str_replace('_', ' ', $opcion->value)) }}
 
@@ -140,7 +145,7 @@
 
                 <option
                     value="{{ $opcion->value }}"
-                    @selected(($filtros['canal'] ?? null) === $opcion->value)>
+                    @selected(($filtros['canal'] ?? null)===$opcion->value)>
 
                     {{ ucfirst($opcion->value) }}
 

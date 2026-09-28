@@ -15,8 +15,14 @@
 
 <!-- Botones -->
 
-<section class="mb-4 d-flex flex-column flex-md-row justify-content-between align-items-stretch gap-3">
+<section class="mb-4 d-flex flex-column flex-md-row align-items-stretch gap-3
+    @can('create', App\Models\Producto::class)
+        justify-content-between
+    @else
+        justify-content-end
+    @endcan">
 
+    @can('create', App\Models\Producto::class)
 
     <a href="{{ route('gestion.items.create') }}"
         class="btn btn-success text-white d-flex align-items-center justify-content-center gap-2 flex-fill flex-md-grow-0">
@@ -37,6 +43,7 @@
         Registrar nuevo producto
     </a>
 
+    @endcan
 
     <!-- PDF -->
     <button
@@ -240,7 +247,9 @@
                     <th class="text-nowrap" id="columnaPrecio">Precio</th>
                     <th class="text-nowrap" id="columnaStockDisponible">Stock</th>
                     <th class="text-nowrap" id="columnaEstado">Estado</th>
+                    @can('create', App\Models\Producto::class)
                     <th class="text-nowrap" id="columnaOpciones">Opciones</th>
+                    @endcan
                 </tr>
 
             </thead>
@@ -347,6 +356,7 @@
                     </td>
 
 
+                    @can('create', App\Models\Producto::class)
                     <td class="text-nowrap">
 
                         <!-- Editar -->
@@ -455,6 +465,7 @@
                         @endif
 
                     </td>
+                    @endcan
 
                 </tr>
 

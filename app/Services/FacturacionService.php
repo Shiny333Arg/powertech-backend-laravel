@@ -67,7 +67,7 @@ class FacturacionService
 
         if ((float) $venta->costo_envio > 0) {
             throw FacturacionException::porque(
-                'Todavía no se puede facturar el costo de envío como línea del comprobante.'
+                'Todavía no se puede facturar el envío.'
             );
         }
 

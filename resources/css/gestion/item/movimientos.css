@@ -1,0 +1,41 @@
+/* resources/css/gestion/item/movimientos.css
+   Historial de stock de un producto. */
+
+/* Los saldos tienen que leerse de un vistazo: ancho fijo por dígito
+   para que la columna no baile entre filas. */
+#tablaMovimientos td,
+#tablaMovimientos th {
+    font-variant-numeric: tabular-nums;
+}
+
+/* La cabecera queda fija al hacer scroll horizontal en la tabla larga. */
+#tablaMovimientos thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+}
+
+/* El motivo es el único texto libre: que no estire la tabla. */
+#tablaMovimientos #columnaMotivo,
+#tablaMovimientos td:last-child {
+    min-width: 180px;
+    max-width: 320px;
+}
+
+/* Tarjetas de saldo: el número es el protagonista. */
+section .card .display-6 {
+    line-height: 1.1;
+}
+
+/* En pantallas chicas la tabla tiene muchas columnas: se achica la letra
+   antes que obligar a un scroll interminable. */
+@media (max-width: 767.98px) {
+
+    #tablaMovimientos {
+        font-size: 0.875rem;
+    }
+
+    section .card .display-6 {
+        font-size: 2rem;
+    }
+}

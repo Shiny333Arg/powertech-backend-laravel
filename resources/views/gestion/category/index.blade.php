@@ -36,8 +36,14 @@
 
 <!-- Botones -->
 
-<section class="mb-4 d-flex flex-column flex-md-row justify-content-between align-items-stretch gap-3">
+<section class="mb-4 d-flex flex-column flex-md-row align-items-stretch gap-3
+    @can('create', App\Models\Categoria::class)
+        justify-content-between
+    @else
+        justify-content-end
+    @endcan">
 
+    @can('create', App\Models\Categoria::class)
 
     <a href="{{ route('gestion.categorias.create') }}"
         class="btn btn-success d-flex align-items-center justify-content-center gap-2 flex-fill flex-md-grow-0">
@@ -56,6 +62,8 @@
 
         Registrar nueva categoría
     </a>
+
+    @endcan
 
     <button
         class="btn btn-outline-primary d-flex align-items-center justify-content-center gap-2 flex-fill flex-md-grow-0"
@@ -163,7 +171,9 @@
                     <th id="columnaNombre">Nombre</th>
                     <th id="columnaEstado">Estado</th>
                     <th id="columnaProductos">Productos</th>
+                    @can('create', App\Models\Categoria::class)
                     <th id="columnaOpciones" class="text-nowrap">Opciones</th>
+                    @endcan
                 </tr>
             </thead>
 
@@ -193,6 +203,7 @@
                         {{ $categoria->productos_count }}
                     </td>
 
+                    @can('create', App\Models\Categoria::class)
                     <td class="text-nowrap">
 
                         <!-- Editar -->
@@ -304,6 +315,7 @@
                         </form>
 
                     </td>
+                    @endcan
                 </tr>
 
                 @empty
