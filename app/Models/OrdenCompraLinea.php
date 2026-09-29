@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -31,8 +32,27 @@ class OrdenCompraLinea extends Model
         return $this->belongsTo(Producto::class, 'producto_id');
     }
 
-    public function pendiente(): int
+    /**
+     * Lo que todavia se espera de este renglon.
+     *
+     * Pasa a ser un accessor y no un metodo para poder usarlo en las vistas y
+     * en sum() sin parentesis, como el resto de los calculados del modelo. El
+     * max(0) cubre la recepcion de mas: si el proveedor manda 12 sobre 10
+     * pedidas, el pendiente es cero, no -2.
+     */
+    protected function pendiente(): Attribute
     {
-        return max(0, $this->cantidad_pedida - $this->cantidad_recibida);
+        return Attribute::get(fn () => max(0, $this->cantidad_pedida - $this->cantidad_recibida));
+    }
+
+    /** El estimado de este renglon: lo pedido al costo del catalogo. */
+    protected function subtotalEstimado(): Attribute
+    {
+        return Attribute::get(fn () => $this->cantidad_pedida * (float) $this->costo_unitario);
+    }
+
+    public function estaCompleta(): bool
+    {
+        return $this->pendiente === 0;
     }
 }

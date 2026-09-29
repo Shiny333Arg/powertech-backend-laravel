@@ -51,6 +51,30 @@ class Numerador extends Model
         return $numerador->ultimo_numero;
     }
 
+    /**
+     * El proximo numero ya formateado, para las series que guardan texto.
+     *
+     * <b>Por que existe además de proximoNumero().</b> `ventas.numero` es un
+     * INT y se guarda pelado; `ordenes_compra.numero` es un varchar(20) UK y lo
+     * que va ahí es la cadena presentable. Sin este metodo, cada lugar que crea
+     * una orden tiene que tomar el numero, volver a buscar el numerador para
+     * leerle el prefijo y formatear: tres pasos para el mismo resultado, y tres
+     * oportunidades de que uno arme "OC0000034" y otro "OC-0000034" y el indice
+     * unico los acepte a los dos.
+     *
+     * Corre bajo la misma transaccion y el mismo lock que proximoNumero().
+     */
+    public static function proximoFormateado(string $serie, int $digitos = 7): string
+    {
+        $numero = static::proximoNumero($serie);
+
+        // Ya esta en memoria y con la fila bloqueada por la llamada anterior:
+        // esta consulta no vuelve a competir con nadie.
+        $numerador = static::where('serie', $serie)->first();
+
+        return $numerador->formatear($numero, $digitos);
+    }
+
     /** Presentacion: la columna guarda el entero, la pantalla arma V-0001204. */
     public function formatear(int $numero, int $digitos = 7): string
     {

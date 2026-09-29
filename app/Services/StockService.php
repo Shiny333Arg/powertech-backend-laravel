@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Enums\TipoMovimientoStock;
+use App\Events\MovimientoStockRegistrado;
 use App\Exceptions\StockInsuficienteException;
 use App\Models\MovimientoStock;
 use App\Models\Producto;
@@ -25,6 +26,12 @@ use InvalidArgumentException;
  *
  * 3. stock_disponible no se toca jamas: es una columna generada y la recalcula
  *    el motor.
+ *
+ * Desde la reposicion automatica hay una cuarta:
+ *
+ * 4. Todo movimiento emite MovimientoStockRegistrado. Es el unico enganche del
+ *    restock con el resto del sistema: este servicio no sabe que existen las
+ *    ordenes de compra, y no tiene por que saberlo.
  */
 class StockService
 {
@@ -47,7 +54,7 @@ class StockService
         $deltaFisico       = $tipo->signoFisico() * $cantidad;
         $deltaComprometido = $tipo->signoComprometido() * $cantidad;
 
-        return DB::transaction(function () use ($producto, $tipo, $deltaFisico, $deltaComprometido, $opciones) {
+        $movimiento = DB::transaction(function () use ($producto, $tipo, $deltaFisico, $deltaComprometido, $opciones) {
 
             $columnas = [];
 
@@ -100,6 +107,19 @@ class StockService
                 'motivo'                        => $opciones['motivo'] ?? null,
             ]);
         });
+
+        // FUERA de la transaccion a proposito, y ademas el listener esta marcado
+        // afterCommit. Si esto corriera adentro y la venta que engloba a este
+        // movimiento hiciera rollback, quedaria una orden de compra emitida por
+        // un faltante que nunca existio. El evento anuncia hechos consumados.
+        //
+        // El producto viaja ya refrescado: quien escuche lee el saldo real sin
+        // volver a consultar.
+        $movimiento->setRelation('producto', $producto);
+
+        MovimientoStockRegistrado::dispatch($movimiento);
+
+        return $movimiento;
     }
 
     /** Conteo de puesta en marcha. El comprometido arranca en cero. */

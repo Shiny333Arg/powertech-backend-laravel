@@ -4,6 +4,7 @@ namespace App\Http\Controllers\gestion;
 
 use App\Enums\EstadoPago;
 use App\Enums\EstadoVenta;
+use App\Models\OrdenCompra;
 use App\Models\Pago;
 use App\Models\Producto;
 use App\Models\Promocion;
@@ -78,12 +79,30 @@ class DashboardController extends Controller
             // El umbral se compara contra el DISPONIBLE, no contra el fisico:
             // contra el fisico, un producto con todo vendido y pendiente de
             // entrega pareceria abastecido.
+            //
+            // Se traen proveedor_id y reposicion_automatica porque la vista los
+            // necesita para distinguir los tres casos que se ven igual en la
+            // tabla: ya pedido, sin pedir, y sin poder pedir.
             'bajoPuntoReposicion' => Producto::query()
-                ->where('activo', true)
+                ->activos()
                 ->bajoPuntoReposicion()
                 ->orderBy('stock_disponible')
                 ->limit(20)
-                ->get(['id', 'codigo', 'nombre', 'stock_fisico', 'stock_comprometido', 'stock_disponible', 'punto_reposicion']),
+                ->get([
+                    'id', 'codigo', 'nombre', 'proveedor_id', 'reposicion_automatica',
+                    'stock_fisico', 'stock_comprometido', 'stock_disponible', 'punto_reposicion',
+                ]),
+
+            // Reposicion automatica activada y sin proveedor: no hay a quien
+            // pedirle. No falla y no avisa; por eso se lista aparte en vez de
+            // quedar mezclado con el resto.
+            'sinProveedor' => Producto::query()
+                ->activos()
+                ->conReposicionAutomatica()
+                ->sinProveedor()
+                ->orderBy('nombre')
+                ->limit(20)
+                ->get(['id', 'codigo', 'nombre', 'stock_disponible', 'punto_reposicion']),
 
             // Preventas facturadas esperando mercaderia, por antiguedad.
             'pendientesDeStock' => Venta::query()
@@ -92,7 +111,10 @@ class DashboardController extends Controller
                 ->limit(20)
                 ->get(),
 
-            'ordenesPendientes' => DB::table('ordenes_compra')->where('estado', 'borrador')->count(),
+            // Pasa por el modelo y su scope en vez de un DB::table con el
+            // estado escrito a mano: la definicion de "pendiente de aprobacion"
+            // vive en un solo lugar y el enum la nombra.
+            'ordenesPendientes' => OrdenCompra::pendientesDeAprobacion()->count(),
 
             'comprobantesConProblema' => DB::table('comprobantes')
                 ->whereIn('estado', ['pendiente', 'rechazado'])->count(),

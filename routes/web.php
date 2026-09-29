@@ -12,6 +12,7 @@ use App\Http\Controllers\gestion\DevolucionController;
 use App\Http\Controllers\gestion\DireccionController;
 use App\Http\Controllers\gestion\EmpleadoController;
 use App\Http\Controllers\gestion\EntregaController;
+use App\Http\Controllers\gestion\OrdenCompraController;
 use App\Http\Controllers\gestion\PagoController;
 use App\Http\Controllers\gestion\ProductoController;
 use App\Http\Controllers\gestion\PromocionController;
@@ -95,8 +96,8 @@ Route::middleware(['auth', 'ambito:tienda'])
 // Las transiciones del circuito de venta son acciones: generan movimientos de
 // stock y comprobantes, no editan la fila.
 //
-// Ninguna venta, comprobante, pago ni movimiento de stock tiene ruta DELETE.
-// No es un olvido: no se eliminan.
+// Ninguna venta, comprobante, pago, movimiento de stock ni orden de compra
+// tiene ruta DELETE. No es un olvido: no se eliminan.
 
 Route::prefix('gestion')
     ->name('gestion.')
@@ -428,6 +429,63 @@ Route::prefix('gestion')
 
                 Route::get('/{producto}', [StockController::class, 'show'])
                     ->name('show');
+            });
+
+
+        // ========================================================
+        // PEDIDOS A PROVEEDORES (ÓRDENES DE COMPRA)
+        // ========================================================
+        // Sin destroy, por el mismo criterio que ventas: la orden no se
+        // elimina ni se da de baja. Lo que en otro CRUD seria la D es
+        // 'cancelar', que conserva el numero y el historial y —esto es lo que
+        // importa para el circuito— vuelve a habilitar la reposicion
+        // automatica de sus productos.
+        //
+        // Criterio de verbos, el mismo del resto del archivo:
+        //   PUT   modifica el recurso  -> el detalle del borrador
+        //   POST  dispara una accion   -> aprobar, enviar, cancelar
+        // Aprobar y enviar son acciones y no ediciones: la primera deja
+        // registro de quien autorizo, la segunda le manda un correo al
+        // proveedor. Ninguna de las dos es "guardar un campo".
+        //
+        // /create va antes de /{orden} para que no lo capture el wildcard.
+
+        Route::prefix('purchase-order')
+            ->name('compras.')
+            ->group(function () {
+
+                Route::get('/', [OrdenCompraController::class, 'index'])
+                    ->name('index');
+
+                Route::get('/create', [OrdenCompraController::class, 'create'])
+                    ->name('create');
+
+                Route::post('/', [OrdenCompraController::class, 'store'])
+                    ->name('store');
+
+                Route::get('/{orden}', [OrdenCompraController::class, 'show'])
+                    ->name('show');
+
+                // Solo un borrador se edita: una orden aprobada ya paso por
+                // la decision de un administrativo y una enviada ya esta en
+                // manos del proveedor.
+                Route::get('/{orden}/edit', [OrdenCompraController::class, 'edit'])
+                    ->name('edit');
+
+                Route::put('/{orden}', [OrdenCompraController::class, 'update'])
+                    ->name('update');
+
+                // Requerimiento explicito: ninguna orden sale sin que un
+                // administrativo la apruebe.
+                Route::post('/{orden}/aprobar', [OrdenCompraController::class, 'aprobar'])
+                    ->name('aprobar');
+
+                // Manda el remito por correo. Es el unico canal de pedido.
+                Route::post('/{orden}/enviar', [OrdenCompraController::class, 'enviar'])
+                    ->name('enviar');
+
+                Route::post('/{orden}/cancelar', [OrdenCompraController::class, 'cancelar'])
+                    ->name('cancelar');
             });
 
 

@@ -77,17 +77,39 @@ class ProductoRequest extends FormRequest
     }
 
     /**
-     * Sin proveedor no hay a quien emitirle la orden de reposicion, asi que la
-     * reposicion automatica quedaria activada sin poder disparar nada. Es una
-     * combinacion de dos campos y por eso no entra en rules().
+     * Las combinaciones que dejarian la reposicion automatica activada sin
+     * poder hacer nada. Son cruces de dos campos y por eso no entran en
+     * rules().
+     *
+     * Las dos apuntan al mismo problema: un producto que se queda sin stock y
+     * el sistema no avisa, porque desde afuera parece configurado.
      */
     public function withValidator($validator): void
     {
         $validator->after(function ($validator) {
-            if ($this->boolean('reposicion_automatica') && ! $this->filled('proveedor_id')) {
+            if (! $this->boolean('reposicion_automatica')) {
+                return;
+            }
+
+            // Sin proveedor no hay a quien emitirle el pedido.
+            if (! $this->filled('proveedor_id')) {
                 $validator->errors()->add(
                     'reposicion_automatica',
                     'Para reponer automáticamente hay que indicar el proveedor al que se le emite la orden.'
+                );
+            }
+
+            // cantidad_reposicion es el lote de compra: cuántas unidades se
+            // piden POR ENCIMA de cubrir el faltante. En cero, cada pedido
+            // repone justo hasta el umbral y el producto vuelve a cruzarlo con
+            // la venta siguiente: un pedido por unidad vendida. La validación
+            // general acepta 0 porque un producto sin reposición automática
+            // puede tenerlo; activada, no.
+            if ((int) $this->input('cantidad_reposicion') < 1) {
+                $validator->errors()->add(
+                    'cantidad_reposicion',
+                    'Con reposición automática, la cantidad a reponer tiene que ser al menos 1: '
+                    .'en cero, cada venta generaría un pedido nuevo.'
                 );
             }
         });

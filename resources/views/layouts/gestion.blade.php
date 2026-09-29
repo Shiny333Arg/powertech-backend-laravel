@@ -23,6 +23,16 @@
 
     @include('components.footer')
 
+    {{--
+        Scripts propios de una vista. Va DESPUES de @vite para que el JS de la
+        pagina encuentre cargado lo que app.js expone (Bootstrap, entre otras
+        cosas), y al final del body para que el DOM ya exista: el formulario de
+        pedidos consulta sus renglones apenas arranca.
+
+        Una vista lo usa con @push('scripts') ... @endpush.
+    --}}
+    @stack('scripts')
+
 </body>
 
 </html>

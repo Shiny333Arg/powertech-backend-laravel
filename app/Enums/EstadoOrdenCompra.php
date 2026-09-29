@@ -45,4 +45,78 @@ enum EstadoOrdenCompra: string
             array_filter(self::cases(), fn (self $estado) => $estado->esAbierta()),
         ));
     }
+
+    /** Fin de vida: no vuelve a mover stock ni se puede reabrir. */
+    public function esCerrada(): bool
+    {
+        return ! $this->esAbierta();
+    }
+
+    /** @return list<string> */
+    public static function cerradas(): array
+    {
+        return array_values(array_map(
+            fn (self $estado) => $estado->value,
+            array_filter(self::cases(), fn (self $estado) => $estado->esCerrada()),
+        ));
+    }
+
+    /**
+     * Solo el borrador se edita.
+     *
+     * Una aprobada ya paso por la decision de un administrativo y una enviada
+     * ya esta en manos del proveedor: cambiarles el detalle es reescribir lo
+     * que otro leyo. Lo que se hace en ese caso es cancelarla y emitir otra.
+     */
+    public function permiteEdicion(): bool
+    {
+        return $this === self::Borrador;
+    }
+
+    /**
+     * La maquina de estados completa, en un solo lugar.
+     *
+     * Vale la pena leerla como diagrama:
+     *
+     *   borrador ──aprobar──> aprobada ──enviar──> enviada ──recibir──> recibida_parcial
+     *       │                     │                   │                      │
+     *       └─────────────────────┴───cancelar────────┴──────────────────────┘
+     *                                                 └──recibir todo──> recibida
+     *
+     * Tres cosas que la tabla dice y conviene no perder de vista:
+     *  - No se puede enviar sin aprobar. Es el requerimiento explicito de que
+     *    toda orden pase por un administrativo.
+     *  - Una recibida_parcial puede seguir recibiendo, o cerrarse completa.
+     *  - Recibida y cancelada son terminales: de ahi no se sale.
+     */
+    public function puedeTransicionarA(self $destino): bool
+    {
+        return in_array($destino, $this->transicionesPosibles(), true);
+    }
+
+    /** @return list<self> */
+    public function transicionesPosibles(): array
+    {
+        return match ($this) {
+            self::Borrador        => [self::Aprobada, self::Cancelada],
+            self::Aprobada        => [self::Enviada, self::Cancelada],
+            self::Enviada         => [self::RecibidaParcial, self::Recibida, self::Cancelada],
+            self::RecibidaParcial => [self::Recibida, self::Cancelada],
+            self::Recibida        => [],
+            self::Cancelada       => [],
+        };
+    }
+
+    /** Clase de Bootstrap para el badge de estado. Lo usan index y show. */
+    public function color(): string
+    {
+        return match ($this) {
+            self::Borrador        => 'secondary',
+            self::Aprobada        => 'info',
+            self::Enviada         => 'primary',
+            self::RecibidaParcial => 'warning',
+            self::Recibida        => 'success',
+            self::Cancelada       => 'danger',
+        };
+    }
 }

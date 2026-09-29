@@ -1,0 +1,251 @@
+<?php
+
+namespace App\Services;
+
+use App\Enums\OrigenOrdenCompra;
+use App\Models\OrdenCompra;
+use App\Models\Producto;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
+
+/**
+ * Decide SI hay que reponer. No sabe armar una orden: eso es OrdenCompraService.
+ *
+ * Separarlos no es ceremonia. La decision es lo que se prueba con casos borde
+ * (disponible negativo, umbral recien subido, orden ya abierta) y lo que se va
+ * a querer ajustar cuando los umbrales resulten mal calibrados; el armado del
+ * documento no cambia. Ademas, la orden manual usa OrdenCompraService sin pasar
+ * por acá.
+ *
+ * <b>Los dos caminos que llegan hasta este servicio</b>
+ *
+ *   reactivo : StockService emite MovimientoStockRegistrado -> EvaluarReposicion
+ *              evalua ESE producto. Responde en el momento del faltante.
+ *   barrido  : el comando compras:revisar-reposicion recorre todo el catalogo.
+ *              Cubre lo que el reactivo no puede ver: que alguien SUBA el punto
+ *              de reposicion de un producto que ya estaba por debajo, productos
+ *              cargados en falta, y eventos perdidos por un worker caido.
+ *
+ * Los dos terminan en evaluarProducto(), y evaluarProducto() es idempotente:
+ * correrlo dos veces seguidas no genera dos pedidos.
+ */
+class ReposicionService
+{
+    /**
+     * Cuanto espera el lock por producto antes de rendirse.
+     *
+     * Si otra evaluacion del mismo producto esta en curso, la segunda no tiene
+     * nada que aportar —va a leer el mismo saldo y encontrar la orden que la
+     * primera acaba de crear—, asi que espera poco y se va.
+     */
+    private const ESPERA_LOCK_SEGUNDOS = 5;
+
+    public function __construct(
+        private readonly OrdenCompraService $ordenes,
+    ) {}
+
+    // ------------------------------------------------------------------
+    // Evaluacion
+    // ------------------------------------------------------------------
+
+    /**
+     * Evalua un producto y, si corresponde, lo deja pedido.
+     *
+     * Devuelve la orden que quedo cubriendolo, o null si no habia nada que
+     * hacer. Que devuelva null es el caso normal: la enorme mayoria de los
+     * movimientos de stock no dispara ninguna reposicion.
+     *
+     * <b>El lock no es opcional.</b> Dos ventas simultaneas del mismo producto
+     * emiten dos eventos, los toman dos workers, y los dos ven "no hay orden
+     * abierta" antes de que ninguno la haya creado: sin el lock salen dos
+     * ordenes por el mismo faltante. Es exactamente la carrera que la tabla no
+     * puede impedir sola, porque no hay indice unico que exprese "un producto
+     * no puede estar en dos ordenes abiertas".
+     */
+    public function evaluarProducto(Producto $producto): ?OrdenCompra
+    {
+        $lock = Cache::lock("reposicion:producto:{$producto->getKey()}", 30);
+
+        if (! $lock->block(self::ESPERA_LOCK_SEGUNDOS, fn () => true)) {
+            // Otra evaluacion del mismo producto esta corriendo. La nuestra es
+            // redundante por definicion: no hay nada que reintentar.
+            return null;
+        }
+
+        try {
+            // Releido bajo el lock: entre que se emitio el evento y que el
+            // worker lo tomo pudo entrar una recepcion de compra y el faltante
+            // ya no existe. Decidir sobre el saldo del evento seria pedir de
+            // mas.
+            $producto->refresh();
+
+            if (! $this->necesitaReposicion($producto)) {
+                return null;
+            }
+
+            if ($this->tieneOrdenAbierta($producto)) {
+                // El faltante ya esta pedido. Volver a pedirlo es el error
+                // clasico de este circuito: la orden pendiente todavia no
+                // sumo nada al stock, asi que el producto sigue bajo el
+                // umbral en cada corrida.
+                return null;
+            }
+
+            return $this->ordenes->pedir(
+                $producto,
+                $this->cantidadSugerida($producto),
+                OrigenOrdenCompra::Automatica,
+            );
+        } finally {
+            $lock->release();
+        }
+    }
+
+    /**
+     * Barrido completo del catalogo.
+     *
+     * @param  bool  $simular  true = informa sin escribir nada
+     * @return array{evaluados:int, pedidos:int, sin_proveedor:int, ordenes: list<string>}
+     */
+    public function evaluarTodos(bool $simular = false): array
+    {
+        $resumen = [
+            'evaluados'     => 0,
+            'pedidos'       => 0,
+            'sin_proveedor' => $this->sinProveedor()->count(),
+            'ordenes'       => [],
+        ];
+
+        $this->candidatos()->chunkById(200, function (Collection $productos) use (&$resumen, $simular) {
+            foreach ($productos as $producto) {
+                $resumen['evaluados']++;
+
+                if ($simular) {
+                    if ($this->necesitaReposicion($producto) && ! $this->tieneOrdenAbierta($producto)) {
+                        $resumen['pedidos']++;
+                        $resumen['ordenes'][] = sprintf(
+                            '%s — disponible %d, umbral %d, pediria %d',
+                            $producto->codigo,
+                            $producto->stock_disponible,
+                            $producto->punto_reposicion,
+                            $this->cantidadSugerida($producto),
+                        );
+                    }
+
+                    continue;
+                }
+
+                $orden = $this->evaluarProducto($producto);
+
+                if ($orden !== null) {
+                    $resumen['pedidos']++;
+                    $resumen['ordenes'][] = "{$producto->codigo} → {$orden->numero}";
+                }
+            }
+        });
+
+        return $resumen;
+    }
+
+    // ------------------------------------------------------------------
+    // Reglas
+    // ------------------------------------------------------------------
+
+    /**
+     * Las cuatro condiciones, en orden de costo creciente.
+     *
+     * <b>El umbral se compara contra el DISPONIBLE</b>, no contra el fisico.
+     * Contra el fisico, un producto con todas sus unidades ya vendidas y
+     * pendientes de entrega pareceria abastecido y nunca se repondria.
+     *
+     * <b>Se usa <= y no <</b>: "quedan 5 y el punto de reposicion es 5" ya es
+     * el momento de reponer. El umbral es el piso al que no se quiere bajar, no
+     * el valor al que se puede llegar.
+     */
+    public function necesitaReposicion(Producto $producto): bool
+    {
+        return $producto->activo
+            && $producto->reposicion_automatica
+            && $producto->proveedor_id !== null
+            && $producto->stock_disponible <= $producto->punto_reposicion;
+    }
+
+    /**
+     * Cuanto pedir: lo que falta para volver al umbral, mas el lote de compra.
+     *
+     * El faltante se calcula contra el disponible, que <b>puede ser negativo</b>
+     * por preventa. Es intencional: con disponible -3 y umbral 5, el faltante
+     * es 8, no 5. Lo que se le debe a clientes que ya pagaron entra en el
+     * pedido, que es justamente lo que destraba esas ventas.
+     *
+     * Nunca devuelve menos de 1: llegar acá significa que hay algo que pedir.
+     */
+    public function cantidadSugerida(Producto $producto): int
+    {
+        $faltante = $producto->punto_reposicion - $producto->stock_disponible;
+
+        return max(1, $faltante + $producto->cantidad_reposicion);
+    }
+
+    /**
+     * Una orden abierta todavia puede sumar stock, asi que el faltante ya esta
+     * cubierto aunque la mercaderia no haya llegado.
+     *
+     * Abierta = borrador, aprobada, enviada o recibida_parcial. Una recibida
+     * parcial sigue contando: el saldo pendiente esta en camino.
+     */
+    public function tieneOrdenAbierta(Producto $producto): bool
+    {
+        return OrdenCompra::query()
+            ->abiertas()
+            ->whereHas('lineas', fn ($linea) => $linea->where('producto_id', $producto->getKey()))
+            ->exists();
+    }
+
+    // ------------------------------------------------------------------
+    // Consultas de apoyo (dashboard y barrido)
+    // ------------------------------------------------------------------
+
+    /** Los que el barrido mira: activos, con reposicion automatica y con proveedor. */
+    public function candidatos()
+    {
+        return Producto::query()
+            ->activos()
+            ->conReposicionAutomatica()
+            ->bajoPuntoReposicion();
+    }
+
+    /**
+     * El agujero silencioso: reposicion automatica activada y sin proveedor.
+     *
+     * ProductoRequest ya no deja guardar esa combinacion, pero se llega igual
+     * por dos caminos —datos previos a esa validacion, y dar de baja al
+     * proveedor despues— y el resultado es un producto que se queda sin stock
+     * sin que nadie se entere. Por eso va al dashboard en vez de fallar callado.
+     */
+    public function sinProveedor()
+    {
+        return Producto::query()
+            ->activos()
+            ->conReposicionAutomatica()
+            ->whereNull('proveedor_id')
+            ->orderBy('stock_disponible');
+    }
+
+    /**
+     * Para el tablero del administrativo: que se repuso solo, y por que.
+     *
+     * No hace falta que sea exacto al instante; se usa para mirar si los
+     * umbrales estan bien puestos.
+     */
+    public function registrarDescarte(Producto $producto, string $motivo): void
+    {
+        Log::info('Reposicion descartada', [
+            'producto'    => $producto->codigo,
+            'disponible'  => $producto->stock_disponible,
+            'umbral'      => $producto->punto_reposicion,
+            'motivo'      => $motivo,
+        ]);
+    }
+}

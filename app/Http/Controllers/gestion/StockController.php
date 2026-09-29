@@ -56,7 +56,7 @@ class StockController extends Controller
             ->when($filtros['desde'] ?? null, fn ($q, $d) => $q->whereDate('created_at', '>=', $d))
             ->when($filtros['hasta'] ?? null, fn ($q, $h) => $q->whereDate('created_at', '<=', $h))
             ->latest('id')
-            ->paginate(50)
+            ->paginate(20)
             ->withQueryString();
 
         return view('gestion.stock.index', [
@@ -76,7 +76,7 @@ class StockController extends Controller
             'movimientos' => $producto->movimientosStock()
                 ->with('usuario:id,nombres,apellido')
                 ->latest('id')
-                ->paginate(50),
+                ->paginate(20),
         ]);
     }
 

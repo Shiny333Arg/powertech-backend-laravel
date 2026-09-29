@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\EstadoOrdenCompra;
 use App\Models\Concerns\ProtegeContraBorrado;
 use App\Models\Concerns\TieneBajaLogica;
 use Illuminate\Database\Eloquent\Builder;
@@ -106,16 +107,67 @@ class Producto extends Model
         return $query->where('stock_disponible', '>', 0);
     }
 
-    /** Alimenta el dashboard de reposicion. Se compara contra el disponible. */
+    /**
+     * Alimenta el dashboard de reposicion y el barrido diario.
+     *
+     * Se compara contra el DISPONIBLE, no contra el fisico: contra el fisico,
+     * un producto con todas sus unidades vendidas y pendientes de entrega
+     * pareceria abastecido y nunca se repondria.
+     *
+     * <b>La comparacion es <=, no <.</b> "Quedan 5 y el punto de reposicion es
+     * 5" ya es el momento de pedir: el umbral es el piso que no se quiere
+     * cruzar, no un valor al que se pueda llegar y quedarse. El DER original
+     * decia '<'; esto lo corrige, y hay que corregirlo tambien alla para que
+     * no queden dos definiciones del mismo umbral.
+     */
     public function scopeBajoPuntoReposicion(Builder $query): Builder
     {
-        return $query->whereColumn('stock_disponible', '<', 'punto_reposicion');
+        return $query->whereColumn('stock_disponible', '<=', 'punto_reposicion');
+    }
+
+    /** Los que el restock automatico mira. Sin esto, mirarlo es un where suelto. */
+    public function scopeConReposicionAutomatica(Builder $query): Builder
+    {
+        return $query->where('reposicion_automatica', true);
+    }
+
+    /**
+     * Reposicion automatica activada y sin proveedor: no hay a quien pedirle.
+     *
+     * ProductoRequest ya no deja guardar esa combinacion, pero se llega igual
+     * por datos anteriores a esa validacion o porque el proveedor se dio de
+     * baja despues. Es el agujero que hay que poder listar.
+     */
+    public function scopeSinProveedor(Builder $query): Builder
+    {
+        return $query->whereNull('proveedor_id');
     }
 
     /** Preventa: hay unidades comprometidas que todavia no estan en el deposito. */
     public function enPreventa(): bool
     {
         return $this->stock_disponible < 0;
+    }
+
+    public function necesitaReposicion(): bool
+    {
+        return $this->stock_disponible <= $this->punto_reposicion;
+    }
+
+    /**
+     * La orden abierta que ya cubre este faltante, si existe.
+     *
+     * Devolver la orden en vez de un booleano es lo que permite que la pantalla
+     * de stock muestre "ya pedido en OC-0000034" con enlace, en lugar de un
+     * cartel generico que obliga a ir a buscarla.
+     */
+    public function ordenAbierta(): ?OrdenCompra
+    {
+        return OrdenCompra::query()
+            ->whereIn('estado', EstadoOrdenCompra::abiertas())
+            ->conProducto($this->getKey())
+            ->latest('id')
+            ->first();
     }
 }
 

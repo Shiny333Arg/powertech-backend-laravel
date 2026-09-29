@@ -380,7 +380,7 @@
 
                         <!-- Historial de stock -->
                         <a
-                            href="{{ route('gestion.items.movimientos', $producto) }}"
+                            href="{{ route('gestion.stock.show', $producto) }}"
                             class="btn btn-sm btn-info text-white me-1"
                             title="Historial de stock">
 

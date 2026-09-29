@@ -52,7 +52,7 @@
 
                 @foreach ($tipos as $opcion)
 
-                <option value="{{ $opcion->value }}" @selected(($filtros['tipo'] ?? null) === $opcion->value)>
+                <option value="{{ $opcion->value }}" @selected(($filtros['tipo'] ?? null)===$opcion->value)>
                     {{ ucfirst(str_replace('_', ' ', $opcion->value)) }}
                 </option>
 
@@ -105,8 +105,8 @@
                     <th class="text-nowrap">Fecha</th>
                     <th class="text-nowrap">Producto</th>
                     <th class="text-nowrap">Tipo</th>
-                    <th class="text-nowrap">Δ físico</th>
-                    <th class="text-nowrap">Δ comprometido</th>
+                    <th class="text-nowrap">Físico</th>
+                    <th class="text-nowrap">Comprometido</th>
                     <th class="text-nowrap">Saldo</th>
                     <th class="text-nowrap">Responsable</th>
                     <th class="text-nowrap">Motivo</th>
@@ -135,8 +135,20 @@
                     </td>
 
                     <td>
-                        <span class="badge text-bg-light border">
-                            {{ ucfirst(str_replace('_', ' ', $movimiento->tipo->value)) }}
+                        @php
+                        $claseTipo = match ($movimiento->tipo) {
+                        \App\Enums\TipoMovimientoStock::Inicial => 'text-bg-primary',
+                        \App\Enums\TipoMovimientoStock::Compra => 'text-bg-success',
+                        \App\Enums\TipoMovimientoStock::Reserva => 'text-bg-warning',
+                        \App\Enums\TipoMovimientoStock::Entrega => 'text-bg-danger',
+                        \App\Enums\TipoMovimientoStock::Liberacion => 'text-bg-info',
+                        \App\Enums\TipoMovimientoStock::Devolucion => 'text-bg-secondary',
+                        \App\Enums\TipoMovimientoStock::Ajuste => 'text-bg-dark',
+                        };
+                        @endphp
+
+                        <span class="badge {{ $claseTipo }}">
+                            {{ $movimiento->tipo->etiqueta() }}
                         </span>
                     </td>
 
