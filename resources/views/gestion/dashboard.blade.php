@@ -23,10 +23,7 @@ $usuario = auth()->user();
     <div class="alert alert-success alert-dismissible fade show" role="alert">
         {{ session('success') }}
 
-        <button type="button"
-            class="btn-close"
-            data-bs-dismiss="alert"
-            aria-label="Cerrar">
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar">
         </button>
     </div>
     @endif
@@ -35,10 +32,7 @@ $usuario = auth()->user();
     <div class="alert alert-danger alert-dismissible fade show" role="alert">
         {{ session('error') }}
 
-        <button type="button"
-            class="btn-close"
-            data-bs-dismiss="alert"
-            aria-label="Cerrar">
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar">
         </button>
     </div>
     @endif
@@ -47,10 +41,7 @@ $usuario = auth()->user();
     <div class="alert alert-warning alert-dismissible fade show" role="alert">
         {{ session('warning') }}
 
-        <button type="button"
-            class="btn-close"
-            data-bs-dismiss="alert"
-            aria-label="Cerrar">
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar">
         </button>
     </div>
     @endif
@@ -59,10 +50,7 @@ $usuario = auth()->user();
     <div class="alert alert-info alert-dismissible fade show" role="alert">
         {{ session('info') }}
 
-        <button type="button"
-            class="btn-close"
-            data-bs-dismiss="alert"
-            aria-label="Cerrar">
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar">
         </button>
     </div>
     @endif
@@ -70,6 +58,7 @@ $usuario = auth()->user();
 
     {{-- Cajero --}}
     @isset($cajero)
+
     <section class="mb-5">
 
         <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
@@ -139,8 +128,7 @@ $usuario = auth()->user();
                 <li class="list-group-item d-flex flex-wrap justify-content-between align-items-center gap-2">
 
                     <div>
-                        <a href="{{ route('gestion.ventas.show', $pago->venta_id) }}"
-                            class="text-decoration-underline">
+                        <a href="{{ route('gestion.ventas.show', $pago->venta_id) }}" class="text-decoration-underline">
                             V-{{ str_pad((string) $pago->venta?->numero, 7, '0', STR_PAD_LEFT) }}
                         </a>
 
@@ -248,8 +236,7 @@ $usuario = auth()->user();
                         @foreach ($vendedor['presupuestosAbiertos'] as $venta)
                         <li class="list-group-item d-flex flex-wrap justify-content-between align-items-center gap-2">
 
-                            <a href="{{ route('gestion.ventas.show', $venta) }}"
-                                class="text-decoration-underline">
+                            <a href="{{ route('gestion.ventas.show', $venta) }}" class="text-decoration-underline">
                                 {{ $venta->numeroFormateado() }}
                             </a>
 
@@ -330,6 +317,7 @@ $usuario = auth()->user();
 
     {{-- Administrativo --}}
     @isset($gestion)
+    @can('create', App\Models\Producto::class)
     <section class="mb-5">
 
         <h2 class="h5 fw-semibold mb-3">
@@ -396,8 +384,7 @@ $usuario = auth()->user();
 
             {{-- Comprobantes --}}
             <div class="col-12 col-sm-6 col-lg-3">
-                <div class="card h-100 shadow-sm
-                    {{ $gestion['comprobantesConProblema'] > 0 ? 'border-danger' : '' }}">
+                <div class="card h-100 shadow-sm {{ $gestion['comprobantesConProblema'] > 0 ? 'border-danger' : '' }}">
 
                     <div class="card-body">
 
@@ -405,14 +392,12 @@ $usuario = auth()->user();
                             Comprobantes sin CAE
                         </p>
 
-                        <p class="h3 fw-semibold mb-1
-                            {{ $gestion['comprobantesConProblema'] > 0 ? 'text-danger' : '' }}">
+                        <p class="h3 fw-semibold mb-1 {{ $gestion['comprobantesConProblema'] > 0 ? 'text-danger' : '' }}">
                             {{ $gestion['comprobantesConProblema'] }}
                         </p>
 
                         @if ($gestion['comprobantesConProblema'] > 0)
-                        <a href="{{ route('gestion.comprobantes.index', ['estado' => 'rechazado']) }}"
-                            class="small text-danger">
+                        <a href="{{ route('gestion.comprobantes.index', ['estado' => 'rechazado']) }}" class="small text-danger">
                             Revisar
                         </a>
                         @endif
@@ -420,6 +405,75 @@ $usuario = auth()->user();
                     </div>
                 </div>
             </div>
+
+        </div>
+
+
+        {{-- Compras y reposición --}}
+        <div class="row g-3 mb-3">
+
+            {{--
+                Pedidos por aprobar. Es lo único accionable de este tablero:
+                el sistema arma el borrador, pero no sale sin que un
+                administrativo lo mire.
+            --}}
+            <div class="col-12 col-sm-6 col-lg-3">
+                <div class="card h-100 shadow-sm
+                    {{ $gestion['ordenesPendientes'] > 0 ? 'border-warning' : '' }}">
+
+                    <div class="card-body">
+
+                        <p class="small text-muted mb-1">
+                            Pedidos por aprobar
+                        </p>
+
+                        <p class="h3 fw-semibold mb-1
+                            {{ $gestion['ordenesPendientes'] > 0 ? 'text-warning' : '' }}">
+                            {{ $gestion['ordenesPendientes'] }}
+                        </p>
+
+                        @if ($gestion['ordenesPendientes'] > 0)
+                        <a href="{{ route('gestion.compras.index', ['estado' => 'borrador']) }}"
+                            class="small">
+                            Revisar
+                        </a>
+                        @else
+                        <p class="small text-muted mb-0">
+                            Ningún pedido esperando aprobación.
+                        </p>
+                        @endif
+
+                    </div>
+                </div>
+            </div>
+
+
+            {{--
+                El agujero silencioso: reposición automática activada y sin
+                proveedor. No falla, no avisa, y el producto se queda sin
+                stock. Solo aparece cuando hay alguno.
+            --}}
+            @if ($gestion['sinProveedor']->isNotEmpty())
+            <div class="col-12 col-sm-6 col-lg-3">
+                <div class="card h-100 shadow-sm border-danger">
+                    <div class="card-body">
+
+                        <p class="small text-muted mb-1">
+                            Sin proveedor
+                        </p>
+
+                        <p class="h3 fw-semibold mb-1 text-danger">
+                            {{ $gestion['sinProveedor']->count() }}
+                        </p>
+
+                        <p class="small text-muted mb-0">
+                            Tienen reposición automática y no se les puede emitir pedido.
+                        </p>
+
+                    </div>
+                </div>
+            </div>
+            @endif
 
         </div>
 
@@ -461,24 +515,74 @@ $usuario = auth()->user();
                     <ul class="list-group list-group-flush">
 
                         @foreach ($gestion['bajoPuntoReposicion'] as $producto)
-                        <li class="list-group-item d-flex flex-wrap justify-content-between align-items-center gap-2">
+                        <li class="list-group-item">
 
-                            <a href="{{ route('gestion.stock.show', $producto) }}"
-                                class="text-dark text-decoration-underline">
-                                {{ $producto->nombre }}
-                            </a>
+                            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
 
-                            <span class="small">
-                                Disponible:
-                                <strong>
-                                    {{ $producto->stock_disponible }}
-                                </strong>
-                            </span>
+                                <a href="{{ route('gestion.stock.show', $producto) }}"
+                                    class="text-dark text-decoration-underline">
+                                    {{ $producto->nombre }}
+                                </a>
 
-                            <span class="text-muted small">
-                                Físico: {{ $producto->stock_fisico }}
-                                · Comprometido: {{ $producto->stock_comprometido }}
-                            </span>
+                                {{--
+                                    El estado del faltante. Los tres casos se
+                                    ven igual en la columna de stock y no son
+                                    lo mismo: uno ya está pedido, otro está por
+                                    pedirse, y el tercero no se puede pedir.
+
+                                    La orden abierta viene resuelta desde el
+                                    controlador en una sola consulta: mirarla
+                                    acá por producto serían veinte.
+                                --}}
+                                @php
+                                $orden = $gestion['ordenesPorProducto']->get($producto->id);
+                                @endphp
+
+                                @if ($orden)
+                                <a href="{{ route('gestion.compras.show', $orden) }}"
+                                    class="badge text-bg-{{ $orden->estado->color() }} text-decoration-none">
+                                    {{ $orden->numero }}
+                                </a>
+                                @elseif (! $producto->reposicion_automatica)
+                                <span class="badge text-bg-light text-muted">
+                                    Reposición manual
+                                </span>
+                                @elseif ($producto->proveedor_id === null)
+                                <span class="badge text-bg-danger">
+                                    Sin proveedor
+                                </span>
+                                @else
+                                <span class="badge text-bg-secondary">
+                                    Sin pedir
+                                </span>
+                                @endif
+
+                            </div>
+
+                            <div class="d-flex flex-wrap align-items-center gap-2 mt-1">
+
+                                {{--
+                                    Disponible en negativo = preventa: hay
+                                    unidades vendidas y cobradas que todavía no
+                                    están en el depósito. No es lo mismo que
+                                    "queda poco", así que se marca distinto.
+                                --}}
+                                <span class="small">
+                                    Disponible:
+                                    <strong class="{{ $producto->stock_disponible < 0 ? 'text-danger' : 'text-warning' }}">
+                                        {{ $producto->stock_disponible }}
+                                    </strong>
+                                    <span class="text-muted">
+                                        / punto {{ $producto->punto_reposicion }}
+                                    </span>
+                                </span>
+
+                                <span class="text-muted small">
+                                    Físico: {{ $producto->stock_fisico }}
+                                    · Comprometido: {{ $producto->stock_comprometido }}
+                                </span>
+
+                            </div>
 
                         </li>
                         @endforeach
@@ -550,6 +654,54 @@ $usuario = auth()->user();
         </div>
 
 
+        {{--
+            Reposición automática sin proveedor.
+
+            Va como lista aparte y no mezclado en el bloque de arriba porque el
+            problema no es de stock: es de configuración del producto, y se
+            arregla en otra pantalla.
+        --}}
+        @if ($gestion['sinProveedor']->isNotEmpty())
+        <div class="card shadow-sm border-danger mb-3">
+
+            <div class="card-header bg-white">
+
+                <h3 class="h6 mb-1 text-danger">
+                    Reposición automática sin proveedor
+                </h3>
+
+                <p class="small text-muted mb-0">
+                    No generan ningún pedido y su faltante pasa desapercibido hasta que alguien lo note.
+                </p>
+
+            </div>
+
+            <ul class="list-group list-group-flush">
+
+                @foreach ($gestion['sinProveedor'] as $producto)
+                <li class="list-group-item d-flex flex-wrap justify-content-between align-items-center gap-2">
+
+                    <span>
+                        <span class="text-muted small">
+                            {{ $producto->codigo }}
+                        </span>
+                        {{ $producto->nombre }}
+                    </span>
+
+                    <a href="{{ route('gestion.items.edit', $producto) }}"
+                        class="btn btn-sm btn-outline-danger">
+                        Asignar proveedor
+                    </a>
+
+                </li>
+                @endforeach
+
+            </ul>
+
+        </div>
+        @endif
+
+
         {{-- Más vendidos --}}
         <div class="card shadow-sm">
 
@@ -596,6 +748,7 @@ $usuario = auth()->user();
         </div>
 
     </section>
+    @endcan
     @endisset
 
 

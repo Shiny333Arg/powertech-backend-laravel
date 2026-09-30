@@ -176,6 +176,11 @@ class ProductoController extends Controller
         return back()->with('exito', "«{$producto->nombre}» vuelve a estar en operación.");
     }
 
+    /** Situacion de stock de un producto y su historico. */
+    public function show(Request $request, Producto $producto): View
+    {
+    }
+
     /**
      * Publicacion en la tienda: pregunta distinta de la baja. Un producto activo
      * que se vende en mostrador y no se publica —reservado, de exhibicion— es un

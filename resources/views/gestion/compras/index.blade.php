@@ -4,7 +4,7 @@
 
 @section('content')
 
-    @include('gestion.partials.alertas')
+    @include('gestion.partials.alertas') 
 
     <!-- Título principal -->
     <section class="mb-4 text-center">

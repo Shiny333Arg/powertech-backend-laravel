@@ -5,12 +5,14 @@ namespace App\Http\Controllers\gestion;
 use App\Enums\EstadoPago;
 use App\Enums\EstadoVenta;
 use App\Models\OrdenCompra;
+use App\Models\OrdenCompraLinea;
 use App\Models\Pago;
 use App\Models\Producto;
 use App\Models\Promocion;
 use App\Models\Venta;
 use App\Models\VentaLinea;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
@@ -54,6 +56,23 @@ class DashboardController extends Controller
             EstadoVenta::Vencida->value,
         ];
 
+        // El umbral se compara contra el DISPONIBLE, no contra el fisico:
+        // contra el fisico, un producto con todo vendido y pendiente de
+        // entrega pareceria abastecido.
+        //
+        // Se traen proveedor_id y reposicion_automatica porque la vista los
+        // necesita para distinguir los tres casos que en la columna de stock
+        // se ven igual: ya pedido, sin pedir, y sin poder pedir.
+        $bajoPuntoReposicion = Producto::query()
+            ->activos()
+            ->bajoPuntoReposicion()
+            ->orderBy('stock_disponible')
+            ->limit(20)
+            ->get([
+                'id', 'codigo', 'nombre', 'proveedor_id', 'reposicion_automatica',
+                'stock_fisico', 'stock_comprometido', 'stock_disponible', 'punto_reposicion',
+            ]);
+
         return [
             'ventasHoy' => Venta::whereDate('fecha', today())
                 ->whereNotIn('estado', $cerradas)->count(),
@@ -76,22 +95,12 @@ class DashboardController extends Controller
                 ->limit(10)
                 ->get(),
 
-            // El umbral se compara contra el DISPONIBLE, no contra el fisico:
-            // contra el fisico, un producto con todo vendido y pendiente de
-            // entrega pareceria abastecido.
-            //
-            // Se traen proveedor_id y reposicion_automatica porque la vista los
-            // necesita para distinguir los tres casos que se ven igual en la
-            // tabla: ya pedido, sin pedir, y sin poder pedir.
-            'bajoPuntoReposicion' => Producto::query()
-                ->activos()
-                ->bajoPuntoReposicion()
-                ->orderBy('stock_disponible')
-                ->limit(20)
-                ->get([
-                    'id', 'codigo', 'nombre', 'proveedor_id', 'reposicion_automatica',
-                    'stock_fisico', 'stock_comprometido', 'stock_disponible', 'punto_reposicion',
-                ]),
+            'bajoPuntoReposicion' => $bajoPuntoReposicion,
+
+            // La orden abierta de cada uno de esos productos, resuelta de una
+            // sola vez. Preguntarlo en la vista producto por producto serian
+            // veinte consultas mas en cada carga del tablero.
+            'ordenesPorProducto' => $this->ordenesAbiertasDe($bajoPuntoReposicion),
 
             // Reposicion automatica activada y sin proveedor: no hay a quien
             // pedirle. No falla y no avisa; por eso se lista aparte en vez de
@@ -119,6 +128,35 @@ class DashboardController extends Controller
             'comprobantesConProblema' => DB::table('comprobantes')
                 ->whereIn('estado', ['pendiente', 'rechazado'])->count(),
         ];
+    }
+
+    /**
+     * Mapa producto_id => orden de compra abierta que lo cubre.
+     *
+     * Se entra por las LINEAS y no por las ordenes porque la pregunta es por
+     * producto: entrar por ordenes obligaria a recorrerlas todas buscando en
+     * cuales aparece cada uno.
+     *
+     * Por diseño un producto no puede estar en dos ordenes abiertas a la vez
+     * —lo impide la verificacion de ReposicionService— asi que quedarse con
+     * una por producto no pierde informacion.
+     *
+     * @param  Collection<int, Producto>  $productos
+     * @return Collection<int, OrdenCompra>
+     */
+    private function ordenesAbiertasDe(Collection $productos): Collection
+    {
+        if ($productos->isEmpty()) {
+            return collect();
+        }
+
+        return OrdenCompraLinea::query()
+            ->whereIn('producto_id', $productos->pluck('id'))
+            ->whereHas('ordenCompra', fn ($orden) => $orden->abiertas())
+            ->with('ordenCompra:id,numero,estado')
+            ->get(['id', 'orden_compra_id', 'producto_id'])
+            ->mapWithKeys(fn (OrdenCompraLinea $linea) => [$linea->producto_id => $linea->ordenCompra])
+            ->filter();
     }
 
     /**

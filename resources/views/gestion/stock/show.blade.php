@@ -214,7 +214,7 @@ $tipos = [
 </section>
 
 
-@include('gestion.partials.alertas')
+<!-- @-i-nclude('gestion.partials.alertas') -->
 
 
 <!-- Saldos actuales -->

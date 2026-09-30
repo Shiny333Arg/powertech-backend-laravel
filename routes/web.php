@@ -81,6 +81,10 @@ Route::middleware(['auth', 'ambito:tienda'])
 
         Route::patch('/perfil', [ProfileController::class, 'update'])
             ->name('profile.update');
+
+
+        // Route::get('/ver/{item}', [ProductoController::class, 'show'])
+        //             ->name('show');
     });
 
 

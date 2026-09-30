@@ -1,3 +1,4 @@
+
 {{--
     Badge de estado. Sirve para cualquier enum del dominio: venta, pago,
     comprobante u orden de compra.
