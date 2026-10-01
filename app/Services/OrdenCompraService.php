@@ -34,6 +34,8 @@ use RuntimeException;
  *    devuelve el numero.
  *  - Las automaticas y las manuales comparten todo salvo el campo 'origen':
  *    distinguirlas es la unica forma de medir si los umbrales estan calibrados.
+ *  - El detalle se modifica solo en borrador. Aprobada o enviada, el documento
+ *    esta cerrado: es lo que alguien autorizo y lo que el proveedor recibio.
  *  - Una orden no se elimina. Su fin de vida es 'cancelada' o 'recibida', igual
  *    que una venta.
  *  - total_estimado se recalcula siempre desde las lineas, nunca se acumula a
@@ -84,6 +86,62 @@ class OrdenCompraService
                     ?? $this->nuevoBorrador($proveedor, $origen);
 
                 $this->agregarLinea($orden, $producto, $cantidad);
+
+                return $orden->fresh('lineas.producto');
+            });
+        });
+    }
+
+    /**
+     * Sube la cantidad pedida de un producto en un borrador, hasta cubrir el
+     * faltante de ahora.
+     *
+     * <b>Por que hace falta.</b> Existir un pedido no significa que alcance. El
+     * faltante crece con cada venta, y entre la primera que cruzo el umbral y
+     * el momento en que alguien aprueba pueden pasar horas y varias ventas mas.
+     * Sin esto, el pedido queda congelado en el faltante del primer minuto: la
+     * mercaderia llega, el disponible sigue negativo y las preventas que
+     * esperaban esa entrega no se destraban.
+     *
+     * <b>Solo sube.</b> Si el administrativo puso una cantidad mayor a mano es
+     * una decision suya y el automatico no la pisa. Y si el faltante se redujo
+     * —una devolucion, una venta cancelada— recortar el pedido seria discutirle
+     * al que ya lo reviso.
+     *
+     * Devuelve la orden si cambio algo, o null si ya cubria el faltante. Ese
+     * null es lo que mantiene idempotente al barrido.
+     */
+    public function ampliar(OrdenCompra $orden, Producto $producto, int $cantidad): ?OrdenCompra
+    {
+        if (! $orden->esBorrador()) {
+            throw TransicionNoPermitidaException::porque(
+                "El pedido {$orden->numero} ya no es un borrador: su detalle no se modifica."
+            );
+        }
+
+        // Mismo lock que pedir(), y por el mismo motivo: dos productos del
+        // mismo proveedor pueden estar tocando este borrador a la vez.
+        $lock = Cache::lock("orden-compra:proveedor:{$orden->proveedor_id}", 30);
+
+        return $lock->block(10, function () use ($orden, $producto, $cantidad) {
+            return DB::transaction(function () use ($orden, $producto, $cantidad) {
+                $linea = $orden->lineaDe($producto->getKey());
+
+                // El producto esta en otra orden abierta, no en esta. No
+                // deberia pasar —ReposicionService busca la orden que lo
+                // contiene— pero no es motivo para inventarle un renglon a un
+                // pedido que no lo tenia.
+                if ($linea === null) {
+                    return null;
+                }
+
+                if ($cantidad <= $linea->cantidad_pedida) {
+                    return null;
+                }
+
+                $linea->update(['cantidad_pedida' => $cantidad]);
+
+                $orden->recalcularTotalEstimado();
 
                 return $orden->fresh('lineas.producto');
             });
@@ -162,6 +220,10 @@ class OrdenCompraService
      * orden sale sin que una persona la haya mirado.
      *
      * Deja registro de quien y cuando, que es el punto de pedirla.
+     *
+     * Aprobar es tambien lo que CONGELA las cantidades: a partir de acá la
+     * reposicion automatica ya no las amplia, porque el documento paso a ser
+     * lo que esta persona autorizo.
      */
     public function aprobar(OrdenCompra $orden, User $usuario): OrdenCompra
     {
@@ -219,7 +281,8 @@ class OrdenCompraService
      * Cancelar es tambien lo que <b>vuelve a habilitar la reposicion</b> de sus
      * productos: mientras la orden este abierta, ReposicionService los da por
      * pedidos y no genera nada. En cuanto pasa a cancelada, el faltante vuelve
-     * a ser visible y la proxima corrida lo pide de nuevo.
+     * a ser visible y la proxima corrida lo pide de nuevo, por la cantidad que
+     * haga falta en ese momento.
      */
     public function cancelar(OrdenCompra $orden, User $usuario, string $motivo): OrdenCompra
     {
@@ -263,15 +326,17 @@ class OrdenCompraService
     }
 
     /**
-     * Suma un producto al borrador, o acumula sobre el renglon existente.
+     * Suma un producto al borrador.
      *
-     * Acumular en vez de repetir el producto evita que el proveedor reciba un
-     * remito con el mismo item dos veces: pasa cuando el faltante crece entre
-     * dos evaluaciones y la orden todavia no se aprobo.
+     * La rama que acumula es defensa, no el camino normal: el crecimiento del
+     * faltante sobre un producto que ya esta en el pedido lo maneja ampliar().
+     * Acá cubre el caso de que alguien llame a pedir() con un producto que el
+     * borrador ya tiene, para que el proveedor no reciba un remito con el mismo
+     * item en dos renglones.
      */
     public function agregarLinea(OrdenCompra $orden, Producto $producto, int $cantidad): void
     {
-        $linea = $orden->lineas()->where('producto_id', $producto->getKey())->first();
+        $linea = $orden->lineaDe($producto->getKey());
 
         if ($linea !== null) {
             $linea->increment('cantidad_pedida', $cantidad);

@@ -28,7 +28,8 @@ use Illuminate\Support\Facades\Log;
  *              cargados en falta, y eventos perdidos por un worker caido.
  *
  * Los dos terminan en evaluarProducto(), y evaluarProducto() es idempotente:
- * correrlo dos veces seguidas no genera dos pedidos.
+ * correrlo dos veces seguidas no genera dos pedidos ni infla el pedido que ya
+ * cubre el faltante.
  */
 class ReposicionService
 {
@@ -50,11 +51,12 @@ class ReposicionService
     // ------------------------------------------------------------------
 
     /**
-     * Evalua un producto y, si corresponde, lo deja pedido.
+     * Evalua un producto y, si corresponde, lo deja pedido por la cantidad que
+     * hace falta HOY.
      *
-     * Devuelve la orden que quedo cubriendolo, o null si no habia nada que
-     * hacer. Que devuelva null es el caso normal: la enorme mayoria de los
-     * movimientos de stock no dispara ninguna reposicion.
+     * Devuelve la orden que quedo cubriendolo si hubo algun cambio, o null si
+     * no habia nada que hacer. Que devuelva null es el caso normal: la enorme
+     * mayoria de los movimientos de stock no dispara ninguna reposicion.
      *
      * <b>El lock no es opcional.</b> Dos ventas simultaneas del mismo producto
      * emiten dos eventos, los toman dos workers, y los dos ven "no hay orden
@@ -84,19 +86,42 @@ class ReposicionService
                 return null;
             }
 
-            if ($this->tieneOrdenAbierta($producto)) {
-                // El faltante ya esta pedido. Volver a pedirlo es el error
-                // clasico de este circuito: la orden pendiente todavia no
-                // sumo nada al stock, asi que el producto sigue bajo el
-                // umbral en cada corrida.
-                return null;
+            $abierta = $this->ordenAbiertaDe($producto);
+
+            // Sin orden abierta: se pide de cero.
+            if ($abierta === null) {
+                return $this->ordenes->pedir(
+                    $producto,
+                    $this->cantidadSugerida($producto),
+                    OrigenOrdenCompra::Automatica,
+                );
             }
 
-            return $this->ordenes->pedir(
-                $producto,
-                $this->cantidadSugerida($producto),
-                OrigenOrdenCompra::Automatica,
-            );
+            // Hay una orden abierta, pero eso no significa que alcance.
+            //
+            // El faltante pudo CRECER despues de emitirla: varias ventas
+            // seguidas del mismo producto, cada una empujando el disponible mas
+            // abajo. Dar el faltante por cubierto solo porque existe un pedido
+            // deja al producto pedido de menos, y cuando la mercaderia llega no
+            // destraba las preventas que la esperaban.
+            //
+            // Mientras sea BORRADOR se amplia: nadie lo aprobo y nada salio,
+            // asi que no hay documento que respetar.
+            if ($abierta->esBorrador()) {
+                return $this->ordenes->ampliar(
+                    $abierta,
+                    $producto,
+                    $this->cantidadSugerida($producto),
+                );
+            }
+
+            // Aprobada, enviada o recibida parcial: el documento esta cerrado.
+            // Cambiarle la cantidad seria reescribir lo que el administrativo
+            // aprobo y lo que el proveedor ya recibio. Se deja como esta, y el
+            // faltante que quedo descubierto se avisa en la pantalla del pedido
+            // (OrdenCompraLinea::cubreElFaltante()). Lo que sobre se pide en el
+            // ciclo siguiente, cuando esta orden se cierre.
+            return null;
         } finally {
             $lock->release();
         }
@@ -122,15 +147,11 @@ class ReposicionService
                 $resumen['evaluados']++;
 
                 if ($simular) {
-                    if ($this->necesitaReposicion($producto) && ! $this->tieneOrdenAbierta($producto)) {
+                    $prevision = $this->preverAccion($producto);
+
+                    if ($prevision !== null) {
                         $resumen['pedidos']++;
-                        $resumen['ordenes'][] = sprintf(
-                            '%s — disponible %d, umbral %d, pediria %d',
-                            $producto->codigo,
-                            $producto->stock_disponible,
-                            $producto->punto_reposicion,
-                            $this->cantidadSugerida($producto),
-                        );
+                        $resumen['ordenes'][] = $prevision;
                     }
 
                     continue;
@@ -146,6 +167,52 @@ class ReposicionService
         });
 
         return $resumen;
+    }
+
+    /**
+     * Que haria evaluarProducto() sin escribir nada. Solo para el --dry-run.
+     *
+     * Replica las mismas ramas a proposito: un dry-run que use otra logica
+     * miente, y el punto de la opcion es poder confiar en lo que informa.
+     */
+    private function preverAccion(Producto $producto): ?string
+    {
+        if (! $this->necesitaReposicion($producto)) {
+            return null;
+        }
+
+        $cantidad = $this->cantidadSugerida($producto);
+        $abierta  = $this->ordenAbiertaDe($producto);
+
+        if ($abierta === null) {
+            return sprintf(
+                '%s — disponible %d, umbral %d, pediria %d',
+                $producto->codigo,
+                $producto->stock_disponible,
+                $producto->punto_reposicion,
+                $cantidad,
+            );
+        }
+
+        if (! $abierta->esBorrador()) {
+            return null; // documento cerrado: no se toca
+        }
+
+        $pedida = $abierta->lineaDe($producto->getKey())?->cantidad_pedida ?? 0;
+
+        if ($cantidad <= $pedida) {
+            return null; // el borrador ya cubre el faltante
+        }
+
+        return sprintf(
+            '%s — disponible %d, umbral %d, ampliaria %s de %d a %d',
+            $producto->codigo,
+            $producto->stock_disponible,
+            $producto->punto_reposicion,
+            $abierta->numero,
+            $pedida,
+            $cantidad,
+        );
     }
 
     // ------------------------------------------------------------------
@@ -189,18 +256,27 @@ class ReposicionService
     }
 
     /**
-     * Una orden abierta todavia puede sumar stock, asi que el faltante ya esta
-     * cubierto aunque la mercaderia no haya llegado.
+     * La orden abierta que ya cubre este faltante, si existe.
      *
      * Abierta = borrador, aprobada, enviada o recibida_parcial. Una recibida
      * parcial sigue contando: el saldo pendiente esta en camino.
+     *
+     * Devuelve la orden y no un booleano porque lo que se hace con ella depende
+     * de su estado: un borrador se amplia, un documento cerrado se respeta.
      */
-    public function tieneOrdenAbierta(Producto $producto): bool
+    public function ordenAbiertaDe(Producto $producto): ?OrdenCompra
     {
         return OrdenCompra::query()
             ->abiertas()
-            ->whereHas('lineas', fn ($linea) => $linea->where('producto_id', $producto->getKey()))
-            ->exists();
+            ->conProducto($producto->getKey())
+            ->latest('id')
+            ->first();
+    }
+
+    /** Se conserva por comodidad de lectura en pantallas y condiciones simples. */
+    public function tieneOrdenAbierta(Producto $producto): bool
+    {
+        return $this->ordenAbiertaDe($producto) !== null;
     }
 
     // ------------------------------------------------------------------
@@ -242,10 +318,10 @@ class ReposicionService
     public function registrarDescarte(Producto $producto, string $motivo): void
     {
         Log::info('Reposicion descartada', [
-            'producto'    => $producto->codigo,
-            'disponible'  => $producto->stock_disponible,
-            'umbral'      => $producto->punto_reposicion,
-            'motivo'      => $motivo,
+            'producto'   => $producto->codigo,
+            'disponible' => $producto->stock_disponible,
+            'umbral'     => $producto->punto_reposicion,
+            'motivo'     => $motivo,
         ]);
     }
 }

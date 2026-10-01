@@ -35,10 +35,10 @@ class OrdenCompraLinea extends Model
     /**
      * Lo que todavia se espera de este renglon.
      *
-     * Pasa a ser un accessor y no un metodo para poder usarlo en las vistas y
-     * en sum() sin parentesis, como el resto de los calculados del modelo. El
-     * max(0) cubre la recepcion de mas: si el proveedor manda 12 sobre 10
-     * pedidas, el pendiente es cero, no -2.
+     * Es un accessor y no un metodo para poder usarlo en las vistas y en sum()
+     * sin parentesis, como el resto de los calculados del modelo. El max(0)
+     * cubre la recepcion de mas: si el proveedor manda 12 sobre 10 pedidas, el
+     * pendiente es cero, no -2.
      */
     protected function pendiente(): Attribute
     {
@@ -54,5 +54,54 @@ class OrdenCompraLinea extends Model
     public function estaCompleta(): bool
     {
         return $this->pendiente === 0;
+    }
+
+    /**
+     * ¿Lo que falta recibir de este renglon todavia alcanza para sacar al
+     * producto de su punto de reposicion?
+     *
+     * <b>Para que sirve.</b> El faltante de un producto crece con cada venta.
+     * Mientras el pedido es borrador, la reposicion automatica lo amplia sola;
+     * una vez aprobado, el documento queda congelado —es lo que una persona
+     * autorizo y lo que el proveedor va a recibir— y si se sigue vendiendo, la
+     * cantidad pedida se queda corta sin que nada lo diga.
+     *
+     * Ese es el caso que este metodo hace visible: el pedido va a llegar
+     * completo y el disponible va a seguir en negativo, con preventas que
+     * esperaban esa entrega y no se van a poder entregar. Verlo antes de que
+     * llegue le da al administrativo la chance de emitir otro pedido a tiempo.
+     *
+     * Necesita la relacion 'producto' cargada; sin ella no se pronuncia.
+     */
+    public function cubreElFaltante(): bool
+    {
+        $producto = $this->producto;
+
+        if ($producto === null) {
+            return true;
+        }
+
+        // El disponible puede ser negativo por preventa, y entonces el faltante
+        // incluye lo que ya se le debe a clientes. Es la misma cuenta que hace
+        // ReposicionService::cantidadSugerida(), sin el lote de compra: acá la
+        // pregunta es si alcanza para volver a cero de deuda, no si conviene
+        // pedir de mas.
+        $faltante = $producto->punto_reposicion - $producto->stock_disponible;
+
+        return $this->pendiente >= $faltante;
+    }
+
+    /** Cuantas unidades quedarian sin cubrir. Cero si el renglon alcanza. */
+    public function faltanteDescubierto(): int
+    {
+        $producto = $this->producto;
+
+        if ($producto === null) {
+            return 0;
+        }
+
+        $faltante = $producto->punto_reposicion - $producto->stock_disponible;
+
+        return max(0, $faltante - $this->pendiente);
     }
 }

@@ -118,6 +118,38 @@ class OrdenCompra extends Model
     }
 
     // ------------------------------------------------------------------
+    // Lineas
+    // ------------------------------------------------------------------
+
+    /**
+     * El renglon de un producto en esta orden, o null si no esta.
+     *
+     * Consulta fresca y no la relacion cargada a proposito: la usan el alta
+     * automatica y la ampliacion, las dos dentro de una transaccion, donde una
+     * coleccion en memoria puede estar desactualizada respecto de lo que otro
+     * worker acaba de escribir.
+     */
+    public function lineaDe(int $productoId): ?OrdenCompraLinea
+    {
+        return $this->lineas()->where('producto_id', $productoId)->first();
+    }
+
+    /**
+     * Los renglones cuyo pendiente ya no alcanza para sacar al producto de su
+     * punto de reposicion.
+     *
+     * Pasa cuando se siguio vendiendo despues de aprobar el pedido: el faltante
+     * crecio y el documento ya estaba cerrado. Recibirlo completo no va a
+     * destrabar las preventas, y conviene saberlo antes de que llegue.
+     *
+     * @return \Illuminate\Support\Collection<int, OrdenCompraLinea>
+     */
+    public function lineasInsuficientes()
+    {
+        return $this->lineas->reject(fn (OrdenCompraLinea $linea) => $linea->cubreElFaltante());
+    }
+
+    // ------------------------------------------------------------------
     // Totales
     // ------------------------------------------------------------------
 
