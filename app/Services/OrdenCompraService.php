@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Enums\CanalPedido;
 use App\Enums\EstadoOrdenCompra;
 use App\Enums\OrigenOrdenCompra;
+use App\Events\OrdenCompraCancelada;
 use App\Exceptions\TransicionNoPermitidaException;
 use App\Mail\RemitoDePedido;
 use App\Models\Numerador;
@@ -281,8 +282,14 @@ class OrdenCompraService
      * Cancelar es tambien lo que <b>vuelve a habilitar la reposicion</b> de sus
      * productos: mientras la orden este abierta, ReposicionService los da por
      * pedidos y no genera nada. En cuanto pasa a cancelada, el faltante vuelve
-     * a ser visible y la proxima corrida lo pide de nuevo, por la cantidad que
-     * haga falta en ese momento.
+     * a estar descubierto, y el evento que se emite acá lo hace pedir en el
+     * acto por la cantidad que haga falta en ese momento.
+     *
+     * <b>El evento no es un lujo.</b> Cancelar no mueve stock —la mercaderia
+     * nunca llego— asi que el listener reactivo no se entera, y el barrido
+     * recien pasa a las 7 de la manana. Sin el aviso, un producto en preventa
+     * con clientes que ya pagaron se queda esperando toda la noche sin que nada
+     * lo pida.
      */
     public function cancelar(OrdenCompra $orden, User $usuario, string $motivo): OrdenCompra
     {
@@ -292,6 +299,11 @@ class OrdenCompraService
             'estado'        => EstadoOrdenCompra::Cancelada,
             'observaciones' => $this->anotar($orden->observaciones, "Cancelada por {$usuario->usuario}: {$motivo}"),
         ])->save();
+
+        // Por evento y no llamando a ReposicionService: ese servicio ya depende
+        // de este —le pide que arme los pedidos— y al revés seria una
+        // dependencia circular. El mismo patron que MovimientoStockRegistrado.
+        OrdenCompraCancelada::dispatch($orden);
 
         return $orden;
     }

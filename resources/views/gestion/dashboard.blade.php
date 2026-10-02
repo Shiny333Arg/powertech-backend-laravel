@@ -478,7 +478,7 @@ $usuario = auth()->user();
         </div>
 
 
-        <div class="row g-3 mb-3">
+        <div class="row g-3 mb-3 py-4">
 
             {{-- Bajo punto de reposición --}}
             <div class="col-12 col-lg-6">

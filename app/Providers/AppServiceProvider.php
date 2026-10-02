@@ -3,7 +3,9 @@
 namespace App\Providers;
 
 use App\Events\MovimientoStockRegistrado;
+use App\Events\OrdenCompraCancelada;
 use App\Listeners\EvaluarReposicion;
+use App\Listeners\ReponerPorCancelacion;
 use App\Models\OrdenCompra;
 use App\Policies\OrdenCompraPolicy;
 use App\Services\AutorizadorSimulado;
@@ -37,14 +39,23 @@ class AppServiceProvider extends ServiceProvider
         // Reposición automática
         // ------------------------------------------------------------
         //
-        // El único enganche entre el stock y las compras. StockService emite
-        // el evento sin saber que existe; acá se decide quién lo escucha.
+        // Los dos enganches del restock con el resto del sistema. Ni
+        // StockService ni OrdenCompraService saben que existe la reposición:
+        // emiten hechos, y acá se decide quién los escucha.
         //
-        // Se registra explícitamente y no por convención de nombres para que
+        // Se registran explícitamente y no por convención de nombres para que
         // el enganche sea visible: alguien que lee este archivo ve que mover
-        // stock puede terminar generando una orden de compra. Con el
-        // descubrimiento automático, eso solo se descubre leyendo el listener.
+        // stock, o cancelar un pedido, puede terminar generando una orden de
+        // compra. Con el descubrimiento automático eso solo se descubre
+        // leyendo los listeners.
+
+        // Camino reactivo: bajó el disponible de un producto.
         Event::listen(MovimientoStockRegistrado::class, EvaluarReposicion::class);
+
+        // Cancelar un pedido vuelve a descubrir el faltante que cubría, y no
+        // mueve stock: sin este listener, nadie se entera hasta el barrido
+        // diario.
+        Event::listen(OrdenCompraCancelada::class, ReponerPorCancelacion::class);
 
         // La orden de compra no se elimina: la policy no tiene delete(), y la
         // ruta tampoco existe.

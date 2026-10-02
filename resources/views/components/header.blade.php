@@ -140,7 +140,7 @@
                                             @if (request()->routeIs('gestion.items.*')) active @endif"
                                             href="{{ route('gestion.items.index') }}">
 
-                                            Productos
+                                            Stock
 
                                         </a>
                                     </li>
