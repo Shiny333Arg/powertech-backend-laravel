@@ -101,6 +101,45 @@
         </form>
         @endcan
 
+        {{-- La entrada de mercadería. Solo sobre un pedido ya enviado. --}}
+        @can('recibir', $orden)
+        <a
+            href="{{ route('gestion.compras.recibir', $orden) }}"
+            class="btn btn-success d-flex align-items-center justify-content-center gap-2">
+
+            <svg xmlns="http://www.w3.org/2000/svg"
+                width="18"
+                height="18"
+                fill="currentColor"
+                viewBox="0 0 16 16">
+                <path fill-rule="evenodd"
+                    d="M8 1a.5.5 0 0 1 .5.5v8.793l2.646-2.647a.5.5 0 0 1 .708.708l-3.5 3.5a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L7.5 10.293V1.5A.5.5 0 0 1 8 1" />
+                <path d="M2 13.5a.5.5 0 0 1 .5-.5h11a.5.5 0 0 1 0 1h-11a.5.5 0 0 1-.5-.5" />
+            </svg>
+
+            Recibir mercadería
+        </a>
+        @endcan
+
+        @can('cerrar', $orden)
+        <button
+            type="button"
+            class="btn btn-outline-warning d-flex align-items-center justify-content-center gap-2"
+            data-bs-toggle="modal"
+            data-bs-target="#cerrarPedido">
+
+            <svg xmlns="http://www.w3.org/2000/svg"
+                width="18"
+                height="18"
+                fill="currentColor"
+                viewBox="0 0 16 16">
+                <path d="M11 2a3 3 0 0 1 3 3v1h.5a1.5 1.5 0 0 1 1.5 1.5v6a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 0 13.5v-6A1.5 1.5 0 0 1 1.5 6H2V5a3 3 0 0 1 3-3zm0 1H5a2 2 0 0 0-2 2v1h10V5a2 2 0 0 0-2-2" />
+            </svg>
+
+            Cerrar con faltante
+        </button>
+        @endcan
+
         @can('cancelar', $orden)
         <button
             type="button"
@@ -189,6 +228,18 @@
     </div>
 @endif
 
+{{-- Aviso de excedente --}}
+@if ($orden->tieneExcedentes())
+    <div class="alert alert-info alert-dismissible fade show mb-4" role="alert">
+        <strong>Entró más de lo pedido en algún renglón.</strong>
+        Está registrado así a propósito: la mercadería está en el depósito. Tené en cuenta que el
+        total estimado se calculó sobre lo pedido, así que la factura del proveedor va a venir por
+        más.
+
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar"></button>
+    </div>
+@endif
+
 {{-- Contenido --}}
 <div class="row g-4">
 
@@ -248,7 +299,11 @@
                                 <td class="text-nowrap">
                                     {{ $linea->cantidad_recibida }}
 
-                                    @if ($linea->pendiente > 0 && $orden->estado === \App\Enums\EstadoOrdenCompra::RecibidaParcial)
+                                    @if ($linea->tieneExcedente())
+                                        <span class="badge text-bg-info ms-1">
+                                            +{{ $linea->excedente }} de más
+                                        </span>
+                                    @elseif ($linea->pendiente > 0 && $orden->estado === \App\Enums\EstadoOrdenCompra::RecibidaParcial)
                                         <span class="badge text-bg-warning ms-1">
                                             faltan {{ $linea->pendiente }}
                                         </span>
@@ -288,6 +343,64 @@
             </div>
 
         </section>
+
+        {{-- Entregas recibidas --}}
+        @if ($orden->recepciones->isNotEmpty())
+            <section class="p-4 rounded-4 bg-light shadow-sm border mb-4">
+
+                <h2 class="h5 fw-bold mb-1">Entregas recibidas</h2>
+
+                <p class="text-muted small mb-3">
+                    Cada entrada quedó como un movimiento de stock contra este pedido. No hay tabla
+                    de recepciones aparte: el movimiento <em>es</em> el registro de la entrada.
+                </p>
+
+                <div class="table-responsive">
+
+                    <table class="table table-sm align-middle mb-0">
+
+                        <thead class="table-light">
+                            <tr>
+                                <th class="text-nowrap">Fecha</th>
+                                <th class="text-nowrap">Producto</th>
+                                <th class="text-nowrap text-center">Unidades</th>
+                                <th class="text-nowrap">Remito</th>
+                                <th class="text-nowrap">Cargó</th>
+                            </tr>
+                        </thead>
+
+                        <tbody>
+                            @foreach ($orden->recepciones as $movimiento)
+                                <tr>
+                                    <td class="text-nowrap">
+                                        {{ $movimiento->created_at->format('d/m/Y H:i') }}
+                                    </td>
+
+                                    <td>
+                                        {{ $movimiento->producto?->nombre ?? '—' }}
+                                    </td>
+
+                                    <td class="text-center fw-semibold">
+                                        +{{ $movimiento->cantidad_fisico }}
+                                    </td>
+
+                                    <td class="text-nowrap">
+                                        {{ $movimiento->motivo ?? '—' }}
+                                    </td>
+
+                                    <td class="text-nowrap">
+                                        {{ $movimiento->usuario?->usuario ?? 'Sistema' }}
+                                    </td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+
+                    </table>
+
+                </div>
+
+            </section>
+        @endif
 
     </div>
 
@@ -333,9 +446,24 @@
             @endif
 
             @if ($orden->fecha_entrega_estimada)
-                <div class="d-flex justify-content-between gap-3">
+                <div class="d-flex justify-content-between gap-3 mb-2">
                     <span class="text-muted">Entrega estimada</span>
                     <span class="text-end">{{ $orden->fecha_entrega_estimada->format('d/m/Y') }}</span>
+                </div>
+            @endif
+
+            @if ($orden->unidadesRecibidas() > 0)
+                <div class="d-flex justify-content-between gap-3">
+                    <span class="text-muted">Unidades recibidas</span>
+                    <span class="text-end">
+                        {{ $orden->unidadesRecibidas() }}
+
+                        @if ($orden->unidadesPendientes() > 0)
+                            <span class="text-warning">
+                                (faltan {{ $orden->unidadesPendientes() }})
+                            </span>
+                        @endif
+                    </span>
                 </div>
             @endif
 
@@ -387,6 +515,97 @@
 
     </div>
 </div>
+
+{{-- Modal de cierre con faltante --}}
+@can('cerrar', $orden)
+<div class="modal fade" id="cerrarPedido" tabindex="-1" aria-hidden="true">
+
+    <div class="modal-dialog">
+
+        <form
+            method="POST"
+            action="{{ route('gestion.compras.cerrar', $orden) }}"
+            class="modal-content">
+
+            @csrf
+
+            <div class="modal-header">
+                <h3 class="modal-title h5">
+                    Cerrar el pedido {{ $orden->numero }} con faltante
+                </h3>
+
+                <button
+                    type="button"
+                    class="btn-close"
+                    data-bs-dismiss="modal"
+                    aria-label="Cerrar">
+                </button>
+            </div>
+
+            <div class="modal-body">
+
+                <p class="small text-muted">
+                    Es para cuando el proveedor avisa que el saldo no va a venir. El pedido queda
+                    como recibido con lo que entró, y las
+                    <strong>{{ $orden->unidadesPendientes() }} unidades que faltan</strong> dejan de
+                    estar pedidas.
+                </p>
+
+                <p class="small text-muted">
+                    Mientras el pedido siga recibido parcialmente, la reposición automática lo cuenta
+                    como pedido vigente y <strong>no vuelve a pedir esos productos</strong>. Cerrarlo
+                    es lo que destraba el faltante: si siguen bajo el punto de reposición, se va a
+                    generar un pedido nuevo por lo que haga falta.
+                </p>
+
+                <p class="small text-muted">
+                    Si el motivo es que el producto se discontinuó, apagale primero la reposición
+                    automática en su ficha.
+                </p>
+
+                <label for="motivoCierre" class="form-label fw-semibold">
+                    Motivo
+                </label>
+
+                <textarea
+                    id="motivoCierre"
+                    name="motivo"
+                    rows="3"
+                    maxlength="255"
+                    class="form-control @error('motivo') is-invalid @enderror"
+                    required></textarea>
+
+                @error('motivo')
+                    <div class="invalid-feedback">
+                        {{ $message }}
+                    </div>
+                @enderror
+
+            </div>
+
+            <div class="modal-footer">
+
+                <button
+                    type="button"
+                    class="btn-outline-secondary btn"
+                    data-bs-dismiss="modal">
+                    Volver
+                </button>
+
+                <button
+                    type="submit"
+                    class="btn btn-warning">
+                    Dar por cerrado el pedido
+                </button>
+
+            </div>
+
+        </form>
+
+    </div>
+
+</div>
+@endcan
 
 {{-- Modal de cancelación --}}
 @can('cancelar', $orden)

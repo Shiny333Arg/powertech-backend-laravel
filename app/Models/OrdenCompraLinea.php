@@ -45,6 +45,22 @@ class OrdenCompraLinea extends Model
         return Attribute::get(fn () => max(0, $this->cantidad_pedida - $this->cantidad_recibida));
     }
 
+    /**
+     * Unidades recibidas por encima de lo pedido.
+     *
+     * Se acepta recibir de mas: la mercaderia esta en el deposito y negarse a
+     * registrarla no la hace desaparecer, solo obliga al operador a cargar lo
+     * pedido y despues un ajuste por la diferencia —un ajuste que no tiene
+     * origen apuntando a la orden y deja el historico sin explicar de donde
+     * salieron esas unidades. Lo que si hace falta es que el excedente se vea,
+     * porque el total estimado se calculo sobre lo pedido y la factura del
+     * proveedor va a venir por mas.
+     */
+    protected function excedente(): Attribute
+    {
+        return Attribute::get(fn () => max(0, $this->cantidad_recibida - $this->cantidad_pedida));
+    }
+
     /** El estimado de este renglon: lo pedido al costo del catalogo. */
     protected function subtotalEstimado(): Attribute
     {
@@ -54,6 +70,17 @@ class OrdenCompraLinea extends Model
     public function estaCompleta(): bool
     {
         return $this->pendiente === 0;
+    }
+
+    public function tieneExcedente(): bool
+    {
+        return $this->excedente > 0;
+    }
+
+    /** Todavia no llego ni una unidad de este renglon. */
+    public function sinRecibir(): bool
+    {
+        return $this->cantidad_recibida === 0;
     }
 
     /**

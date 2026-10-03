@@ -9,6 +9,8 @@ use App\Exceptions\TransicionNoPermitidaException;
 use App\Models\Producto;
 use App\Models\User;
 use App\Models\Venta;
+use App\Models\VentaLinea;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -25,11 +27,6 @@ use Illuminate\Support\Facades\DB;
  * Por eso el movimiento de `entrega` se registra una sola vez, y las
  * transiciones posteriores (despachada -> entregada) ya no tocan stock. El
  * guard es la existencia del movimiento, no el estado.
- *
- * <b>Contrato asumido de StockService:</b>
- *   entregar(Producto $p, int $cantidad, Model $origen, ?User $usuario)
- *     descuenta fisico y libera comprometido en un solo movimiento.
- *     Lanza StockInsuficienteException si no hay unidades.
  */
 class EntregaService
 {
@@ -44,10 +41,10 @@ class EntregaService
     /**
      * Decide que pasa con una venta recien pagada.
      *
-     * Si hay stock fisico para todas sus lineas va a preparacion; si no, queda
-     * en `pendiente_stock`: facturada, con las unidades comprometidas, hasta
-     * que llegue la reposicion. Alcanza con que falte un solo producto para
-     * que toda la venta espere.
+     * Si hay stock fisico libre para todas sus lineas va a preparacion; si no,
+     * queda en `pendiente_stock`: facturada, con las unidades comprometidas,
+     * hasta que llegue la reposicion. Alcanza con que falte un solo producto
+     * para que toda la venta espere.
      */
     public function preparar(Venta $venta): Venta
     {
@@ -148,10 +145,19 @@ class EntregaService
      * ventas en `pendiente_stock` que ya puedan entregarse, EN ORDEN DE
      * ANTIGUEDAD: quien pago primero se entrega primero.
      *
-     * El orden no es un detalle estetico. Sin el, dos preventas del mismo
-     * producto compiten por las unidades recien llegadas segun el orden que
-     * devuelva el motor, y el cliente que pago primero puede quedar esperando
-     * otro ciclo de reposicion.
+     * El orden lo garantiza el scope pendientesDeStock(), que ya ordena por
+     * fecha. Tenerlo en el scope y no en cada consulta es lo que hace que esta
+     * cola y la pantalla del deposito muestren lo mismo en el mismo orden sin
+     * que nadie se tenga que acordar.
+     *
+     * <b>Lo que el orden por antiguedad NO resuelve.</b> Decide a quien se le
+     * promete primero, no cuanto hay para prometer. Si llegan 10 unidades y hay
+     * tres preventas de 10 esperando, comparar cada una contra el fisico crudo
+     * las habilita a las tres: las tres le dicen al cliente que su pedido se
+     * esta preparando, la primera que se despache se lleva todo y las otras dos
+     * fallan recien en el mostrador, con el pedido ya armado. Por eso lo que se
+     * compara es el fisico LIBRE, y por eso se descuenta sobre la marcha lo que
+     * se va asignando en este mismo recorrido.
      *
      * @return int cuantas ventas se liberaron
      */
@@ -160,17 +166,31 @@ class EntregaService
         $ventas = Venta::query()
             ->pendientesDeStock()
             ->whereHas('lineas', fn ($q) => $q->where('producto_id', $producto->id))
-            ->with('lineas.producto')
+            ->with('lineas')
             ->get();
+
+        if ($ventas->isEmpty()) {
+            return 0;
+        }
+
+        $libre = $this->fisicoLibreDe($this->productosDe($ventas));
 
         $liberadas = 0;
 
         foreach ($ventas as $venta) {
-            if (! $this->hayStockFisico($venta)) {
+            if (! $this->alcanzaCon($venta, $libre)) {
                 continue;
             }
 
             $this->transicionar($venta, EstadoVenta::EnPreparacion);
+
+            // Estas unidades ya tienen dueño. Descontarlas acá es lo que
+            // impide prometerle las mismas diez unidades a las tres ventas
+            // siguientes de la cola.
+            foreach ($venta->lineas as $linea) {
+                $libre[$linea->producto_id] -= $linea->cantidad;
+            }
+
             $liberadas++;
         }
 
@@ -178,23 +198,101 @@ class EntregaService
     }
 
     // ------------------------------------------------------------------
-    // Auxiliares
+    // Disponibilidad fisica
     // ------------------------------------------------------------------
 
-    /** Hay fisico para todas las lineas de la venta. */
+    /**
+     * Hay fisico libre para todas las lineas de la venta.
+     *
+     * Libre, no total: ver fisicoLibreDe().
+     */
     public function hayStockFisico(Venta $venta): bool
     {
-        // fresh() a proposito: el saldo pudo moverlo otra operacion mientras
-        // esta venta estaba en pantalla.
-        foreach ($venta->load('lineas')->lineas as $linea) {
-            $fisico = Producto::whereKey($linea->producto_id)->value('stock_fisico');
+        $venta->loadMissing('lineas');
 
-            if ((int) $fisico < $linea->cantidad) {
+        $libre = $this->fisicoLibreDe($venta->lineas->pluck('producto_id'));
+
+        return $this->alcanzaCon($venta, $libre);
+    }
+
+    /**
+     * Unidades de cada producto que estan en el deposito y todavia no estan
+     * prometidas a nadie.
+     *
+     * <b>El fisico solo no sirve para esta pregunta.</b> Una venta en
+     * `en_preparacion` o `lista_retiro` tiene su mercaderia en el estante —no
+     * salio todavia, el movimiento de entrega corre al despachar o al
+     * entregar— pero esas unidades ya tienen dueño. Contarlas como disponibles
+     * es prometer dos veces lo mismo.
+     *
+     * `despachada` queda afuera: ahi el movimiento de entrega ya corrio y esas
+     * unidades ya no estan en el fisico, asi que restarlas seria restarlas dos
+     * veces. `pagada` tambien queda afuera, por una razon distinta: es un
+     * estado de transito de milisegundos —preparar() corre inmediatamente
+     * despues de acreditar el pago— y esperar a que se resuelva no cambia la
+     * cuenta.
+     *
+     * No se usa stock_disponible (fisico − comprometido) porque el comprometido
+     * incluye TODAS las ventas sin entregar, empezando por las preventas que
+     * son justamente las que esta cola quiere liberar: con esa cuenta, un
+     * producto en preventa nunca alcanzaria para nadie.
+     *
+     * @param  iterable<int>  $productoIds
+     * @return array<int, int>  producto_id => unidades libres
+     */
+    private function fisicoLibreDe(iterable $productoIds): array
+    {
+        $ids = collect($productoIds)->map(fn ($id) => (int) $id)->unique()->values();
+
+        if ($ids->isEmpty()) {
+            return [];
+        }
+
+        $fisico = Producto::query()
+            ->whereIn('id', $ids)
+            ->pluck('stock_fisico', 'id');
+
+        $prometido = VentaLinea::query()
+            ->whereIn('producto_id', $ids)
+            ->whereHas('venta', fn ($q) => $q->whereIn('estado', [
+                EstadoVenta::EnPreparacion->value,
+                EstadoVenta::ListaRetiro->value,
+            ]))
+            ->groupBy('producto_id')
+            ->selectRaw('producto_id, SUM(cantidad) as reservado')
+            ->pluck('reservado', 'producto_id');
+
+        return $ids
+            ->mapWithKeys(fn (int $id) => [
+                $id => (int) ($fisico[$id] ?? 0) - (int) ($prometido[$id] ?? 0),
+            ])
+            ->all();
+    }
+
+    /**
+     * @param  array<int, int>  $libre
+     */
+    private function alcanzaCon(Venta $venta, array $libre): bool
+    {
+        foreach ($venta->lineas as $linea) {
+            if (($libre[$linea->producto_id] ?? 0) < $linea->cantidad) {
                 return false;
             }
         }
 
         return true;
+    }
+
+    /**
+     * @param  Collection<int, Venta>  $ventas
+     * @return Collection<int, int>
+     */
+    private function productosDe(Collection $ventas): Collection
+    {
+        return $ventas
+            ->flatMap(fn (Venta $venta) => $venta->lineas->pluck('producto_id'))
+            ->unique()
+            ->values();
     }
 
     private function transicionar(Venta $venta, EstadoVenta $destino): Venta

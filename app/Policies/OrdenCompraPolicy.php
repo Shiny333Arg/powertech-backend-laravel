@@ -2,6 +2,7 @@
 
 namespace App\Policies;
 
+use App\Enums\EstadoOrdenCompra;
 use App\Models\OrdenCompra;
 use App\Models\User;
 
@@ -19,6 +20,12 @@ use App\Models\User;
  *  - <b>El estado manda sobre el permiso.</b> Tener 'compra.editar' no alcanza
  *    para editar una orden enviada: el documento ya esta en manos del
  *    proveedor. Por eso update() consulta el estado, no solo el permiso.
+ *
+ * <b>La recepcion no lleva separacion de funciones</b>, a diferencia de la
+ * aprobacion. Aprobar es autorizar un gasto, y por eso importa que lo mire otro;
+ * recibir es constatar que algo llego al deposito, y el que constata es el que
+ * esta parado ahi. Trabarlo solo lograria que la mercaderia se cargue tarde o
+ * con el usuario de otro.
  */
 class OrdenCompraPolicy
 {
@@ -52,7 +59,7 @@ class OrdenCompraPolicy
             return false;
         }
 
-        if (! $orden->estado->puedeTransicionarA(\App\Enums\EstadoOrdenCompra::Aprobada)) {
+        if (! $orden->estado->puedeTransicionarA(EstadoOrdenCompra::Aprobada)) {
             return false;
         }
 
@@ -67,12 +74,35 @@ class OrdenCompraPolicy
     public function enviar(User $user, OrdenCompra $orden): bool
     {
         return $user->tienePermiso('compra.enviar')
-            && $orden->estado->puedeTransicionarA(\App\Enums\EstadoOrdenCompra::Enviada);
+            && $orden->estado->puedeTransicionarA(EstadoOrdenCompra::Enviada);
     }
 
     public function cancelar(User $user, OrdenCompra $orden): bool
     {
         return $user->tienePermiso('compra.cancelar')
-            && $orden->estado->puedeTransicionarA(\App\Enums\EstadoOrdenCompra::Cancelada);
+            && $orden->estado->puedeTransicionarA(EstadoOrdenCompra::Cancelada);
+    }
+
+    /**
+     * Cargar una entrega de mercaderia.
+     *
+     * Solo sobre una orden enviada o recibida a medias: contra un borrador o
+     * una aprobada sin enviar no hay nada que pueda estar entrando.
+     */
+    public function recibir(User $user, OrdenCompra $orden): bool
+    {
+        return $user->tienePermiso('compra.recibir') && $orden->esRecibible();
+    }
+
+    /**
+     * Dar por terminado un pedido que quedo a medio recibir.
+     *
+     * Mismo permiso que recibir: es la otra cara de la misma tarea, la decide
+     * el deposito cuando el proveedor avisa que el resto no viene, y no mueve
+     * dinero ni autoriza nada.
+     */
+    public function cerrar(User $user, OrdenCompra $orden): bool
+    {
+        return $user->tienePermiso('compra.recibir') && $orden->esCerrable();
     }
 }

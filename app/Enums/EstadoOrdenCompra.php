@@ -74,19 +74,36 @@ enum EstadoOrdenCompra: string
     }
 
     /**
+     * ¿Se le puede cargar una recepcion de mercaderia?
+     *
+     * Solo 'enviada' y 'recibida_parcial'. Un borrador todavia no lo aprobo
+     * nadie y una aprobada sin enviar no llego al proveedor, asi que no hay
+     * nada que pueda estar entrando contra ella; si la mercaderia aparece
+     * igual, lo que falta es enviar el pedido, no recibirlo.
+     */
+    public function permiteRecepcion(): bool
+    {
+        return $this->es(self::Enviada, self::RecibidaParcial);
+    }
+
+    /**
      * La maquina de estados completa, en un solo lugar.
      *
      * Vale la pena leerla como diagrama:
      *
      *   borrador ──aprobar──> aprobada ──enviar──> enviada ──recibir──> recibida_parcial
-     *       │                     │                   │                      │
+     *       │                     │                   │                      │ ↺
      *       └─────────────────────┴───cancelar────────┴──────────────────────┘
      *                                                 └──recibir todo──> recibida
      *
-     * Tres cosas que la tabla dice y conviene no perder de vista:
+     * Cuatro cosas que la tabla dice y conviene no perder de vista:
      *  - No se puede enviar sin aprobar. Es el requerimiento explicito de que
      *    toda orden pase por un administrativo.
      *  - Una recibida_parcial puede seguir recibiendo, o cerrarse completa.
+     *  - <b>recibida_parcial admite transicionar a si misma</b>: la segunda y
+     *    la tercera entrega parcial contra la misma orden no cambian el estado,
+     *    pero igual pasan por el mismo chequeo que las demas. Sin esta linea,
+     *    la segunda recepcion parcial de un pedido explota.
      *  - Recibida y cancelada son terminales: de ahi no se sale.
      */
     public function puedeTransicionarA(self $destino): bool
@@ -101,7 +118,7 @@ enum EstadoOrdenCompra: string
             self::Borrador        => [self::Aprobada, self::Cancelada],
             self::Aprobada        => [self::Enviada, self::Cancelada],
             self::Enviada         => [self::RecibidaParcial, self::Recibida, self::Cancelada],
-            self::RecibidaParcial => [self::Recibida, self::Cancelada],
+            self::RecibidaParcial => [self::RecibidaParcial, self::Recibida, self::Cancelada],
             self::Recibida        => [],
             self::Cancelada       => [],
         };

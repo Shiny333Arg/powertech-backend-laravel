@@ -17,6 +17,7 @@ use App\Http\Controllers\gestion\PagoController;
 use App\Http\Controllers\gestion\ProductoController;
 use App\Http\Controllers\gestion\PromocionController;
 use App\Http\Controllers\gestion\ProveedorController;
+use App\Http\Controllers\gestion\RecepcionController;
 use App\Http\Controllers\gestion\StockController;
 use App\Http\Controllers\gestion\VentaController;
 use Illuminate\Support\Facades\Route;
@@ -490,6 +491,18 @@ Route::prefix('gestion')
 
                 Route::post('/{orden}/cancelar', [OrdenCompraController::class, 'cancelar'])
                     ->name('cancelar');
+                // La entrada de mercadería. GET arma el formulario, POST registra la entrega.
+                // No es un PUT sobre la orden: lo que se crea es un movimiento de stock.
+                Route::get('/{orden}/recibir', [RecepcionController::class, 'create'])
+                    ->name('recibir');
+
+                Route::post('/{orden}/recibir', [RecepcionController::class, 'store'])
+                    ->name('recibir.store');
+
+                // Da por terminado un pedido que quedó a medio recibir. Sin esto, una orden
+                // en recibida_parcial bloquea la reposición de sus productos para siempre.
+                Route::post('/{orden}/cerrar', [RecepcionController::class, 'cerrar'])
+                    ->name('cerrar');
             });
 
 

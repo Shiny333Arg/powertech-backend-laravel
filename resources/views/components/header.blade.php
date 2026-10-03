@@ -1,4 +1,4 @@
-{{-- 
+{{--
   Barra de la aplicación de gestión.
 
   Cada sección se muestra solo si el cargo del empleado tiene permiso para
@@ -22,15 +22,15 @@
 --}}
 
 @php
-    $usuario = auth()->user();
+$usuario = auth()->user();
 
-    // [texto, ruta, patrón para marcar la sección activa, modelo de la policy
-    //  (null = sin restricción)]
-    $secciones = [
-        ['Inicio', 'gestion.home', 'gestion.home', null],
-        ['Ventas', 'gestion.ventas.index', 'gestion.ventas.*', null],
-        ['Promociones', 'gestion.promociones.index', 'gestion.promociones.*', \App\Models\Promocion::class],
-    ];
+// [texto, ruta, patrón para marcar la sección activa, modelo de la policy
+// (null = sin restricción)]
+$secciones = [
+['Inicio', 'gestion.home', 'gestion.home', null],
+['Ventas', 'gestion.ventas.index', 'gestion.ventas.*', null],
+['Promociones', 'gestion.promociones.index', 'gestion.promociones.*', \App\Models\Promocion::class],
+];
 @endphp
 
 
@@ -75,25 +75,25 @@
 
                     @foreach ($secciones as [$texto, $ruta, $patron, $modelo])
 
-                        @if ($modelo === null || $usuario->can('viewAny', $modelo))
+                    @if ($modelo === null || $usuario->can('viewAny', $modelo))
 
-                            @php
-                                $activa = request()->routeIs($patron);
-                            @endphp
+                    @php
+                    $activa = request()->routeIs($patron);
+                    @endphp
 
-                            <li class="nav-item px-2">
+                    <li class="nav-item px-2">
 
-                                <a class="nav-link rounded fw-bold text-white @if ($activa) active @endif"
-                                    href="{{ route($ruta) }}"
-                                    @if ($activa) aria-current="page" @endif>
+                        <a class="nav-link rounded fw-bold text-white @if ($activa) active @endif"
+                            href="{{ route($ruta) }}"
+                            @if ($activa) aria-current="page" @endif>
 
-                                    {{ $texto }}
+                            {{ $texto }}
 
-                                </a>
+                        </a>
 
-                            </li>
+                    </li>
 
-                        @endif
+                    @endif
 
                     @endforeach
 
@@ -103,81 +103,81 @@
                          ================================================== --}}
 
                     @php
-                        $productosActivos =
-                            request()->routeIs('gestion.items.*') ||
-                            request()->routeIs('gestion.categorias.*') ||
-                            request()->routeIs('gestion.stock.*');
+                    $productosActivos =
+                    request()->routeIs('gestion.items.*') ||
+                    request()->routeIs('gestion.categorias.*') ||
+                    request()->routeIs('gestion.stock.*');
                     @endphp
 
                     @if (
-                        $usuario->can('viewAny', \App\Models\Producto::class) ||
-                        $usuario->can('viewAny', \App\Models\Categoria::class)
+                    $usuario->can('viewAny', \App\Models\Producto::class) ||
+                    $usuario->can('viewAny', \App\Models\Categoria::class)
                     )
 
-                        <li class="nav-item dropdown px-2">
+                    <li class="nav-item dropdown px-2">
 
-                            <a class="nav-link rounded dropdown-toggle fw-bold text-white
+                        <a class="nav-link rounded dropdown-toggle fw-bold text-white
                                 @if ($productosActivos) active @endif"
-                                href="#"
-                                id="productosDropdown"
-                                role="button"
-                                data-bs-toggle="dropdown"
-                                aria-expanded="false">
+                            href="#"
+                            id="productosDropdown"
+                            role="button"
+                            data-bs-toggle="dropdown"
+                            aria-expanded="false">
 
-                                Productos
+                            Productos
 
-                            </a>
+                        </a>
 
 
-                            <ul class="dropdown-menu dropdown-menu-end bg-primary"
-                                aria-labelledby="productosDropdown">
+                        <ul class="dropdown-menu dropdown-menu-end bg-primary"
+                            aria-labelledby="productosDropdown">
 
-                                {{-- Productos --}}
-                                @can('viewAny', \App\Models\Producto::class)
+                            {{-- Productos --}}
+                            @can('viewAny', \App\Models\Producto::class)
 
-                                    <li>
-                                        <a class="dropdown-item fw-bold text-white
+                            <li>
+                                <a class="dropdown-item fw-bold text-white
                                             @if (request()->routeIs('gestion.items.*')) active @endif"
-                                            href="{{ route('gestion.items.index') }}">
+                                    href="{{ route('gestion.items.index') }}">
 
-                                            Stock
+                                    Stock
 
-                                        </a>
-                                    </li>
+                                </a>
+                            </li>
 
-                                @endcan
+                            @endcan
 
 
-                                {{-- Categorías --}}
-                                @can('viewAny', \App\Models\Categoria::class)
+                            {{-- Categorías --}}
+                            @can('viewAny', \App\Models\Categoria::class)
 
-                                    <li>
-                                        <a class="dropdown-item fw-bold text-white
+                            <li>
+                                <a class="dropdown-item fw-bold text-white
                                             @if (request()->routeIs('gestion.categorias.*')) active @endif"
-                                            href="{{ route('gestion.categorias.index') }}">
+                                    href="{{ route('gestion.categorias.index') }}">
 
-                                            Categorías
+                                    Categorías
 
-                                        </a>
-                                    </li>
+                                </a>
+                            </li>
 
-                                @endcan
+                            @endcan
 
 
-                                {{-- Movimientos de stock --}}
-                                <li>
-                                    <a class="dropdown-item fw-bold text-white
+                            {{-- Movimientos de stock --}}
+                            <li>
+                                <a class="dropdown-item fw-bold text-white
                                         @if (request()->routeIs('gestion.stock.*')) active @endif"
-                                        href="{{ route('gestion.stock.index') }}">
+                                    href="{{ route('gestion.stock.index') }}">
 
-                                        Movimientos
+                                    Movimientos
 
-                                    </a>
-                                </li>
+                                </a>
+                            </li>
 
-                            </ul>
+                        </ul>
 
-                        </li>
+                    </li>
 
                     @endif
 
@@ -187,69 +187,79 @@
                          ================================================== --}}
 
                     @php
-                        $usuariosActivos =
-                            request()->routeIs('gestion.empleados.*') ||
-                            request()->routeIs('gestion.clientes.*');
+                    $usuariosActivos =
+                    request()->routeIs('gestion.empleados.*') ||
+                    request()->routeIs('gestion.clientes.*');
                     @endphp
 
                     @if (
-                        $usuario->can('viewAny', \App\Models\Empleado::class) ||
-                        $usuario->can('viewAny', \App\Models\Cliente::class)
+                    $usuario->can('viewAny', \App\Models\Empleado::class) &&
+                    $usuario->can('viewAny', \App\Models\Cliente::class)
                     )
 
-                        <li class="nav-item dropdown px-2">
+                    <li class="nav-item dropdown px-2">
 
-                            <a class="nav-link rounded dropdown-toggle fw-bold text-white
+                        <a class="nav-link rounded dropdown-toggle fw-bold text-white
                                 @if ($usuariosActivos) active @endif"
-                                href="#"
-                                id="usuariosDropdown"
-                                role="button"
-                                data-bs-toggle="dropdown"
-                                aria-expanded="false">
+                            href="#"
+                            id="usuariosDropdown"
+                            role="button"
+                            data-bs-toggle="dropdown"
+                            aria-expanded="false">
 
-                                Usuarios
+                            Usuarios
 
-                            </a>
+                        </a>
 
 
-                            <ul class="dropdown-menu dropdown-menu-end bg-primary"
-                                aria-labelledby="usuariosDropdown">
+                        <ul class="dropdown-menu dropdown-menu-end bg-primary"
+                            aria-labelledby="usuariosDropdown">
 
-                                {{-- Empleados --}}
-                                @can('viewAny', \App\Models\Empleado::class)
+                            {{-- Empleados --}}
+                            @can('viewAny', \App\Models\Empleado::class)
 
-                                    <li>
-                                        <a class="dropdown-item fw-bold text-white
+                            <li>
+                                <a class="dropdown-item fw-bold text-white
                                             @if (request()->routeIs('gestion.empleados.*')) active @endif"
-                                            href="{{ route('gestion.empleados.index') }}">
+                                    href="{{ route('gestion.empleados.index') }}">
 
-                                            Empleados
+                                    Empleados
 
-                                        </a>
-                                    </li>
+                                </a>
+                            </li>
 
-                                @endcan
+                            @endcan
 
 
-                                {{-- Clientes --}}
-                                @can('viewAny', \App\Models\Cliente::class)
+                            {{-- Clientes --}}
+                            @can('viewAny', \App\Models\Cliente::class)
 
-                                    <li>
-                                        <a class="dropdown-item fw-bold text-white
+                            <li>
+                                <a class="dropdown-item fw-bold text-white
                                             @if (request()->routeIs('gestion.clientes.*')) active @endif"
-                                            href="{{ route('gestion.clientes.index') }}">
+                                    href="{{ route('gestion.clientes.index') }}">
 
-                                            Clientes
+                                    Clientes
 
-                                        </a>
-                                    </li>
+                                </a>
+                            </li>
 
-                                @endcan
+                            @endcan
 
-                            </ul>
+                        </ul>
 
-                        </li>
+                    </li>
 
+                    @else
+                    <li class="nav-item px-2">
+                        <a class="dropdown-item fw-bold text-white nav-link rounded fw-bold text-white
+                            @if (request()->routeIs('gestion.clientes.*')) active @endif"
+                            href="{{ route('gestion.clientes.index') }}">
+
+                            Clientes
+
+                        </a>
+                    </li>
                     @endif
 
 
@@ -258,68 +268,68 @@
                          ================================================== --}}
 
                     @php
-                        $pedidosActivos =
-                            request()->routeIs('gestion.compras.*') ||
-                            request()->routeIs('gestion.proveedores.*');
+                    $pedidosActivos =
+                    request()->routeIs('gestion.compras.*') ||
+                    request()->routeIs('gestion.proveedores.*');
                     @endphp
 
                     @if (
-                        $usuario->can('viewAny', \App\Models\OrdenCompra::class) ||
-                        $usuario->can('viewAny', \App\Models\Proveedor::class)
+                    $usuario->can('viewAny', \App\Models\OrdenCompra::class) ||
+                    $usuario->can('viewAny', \App\Models\Proveedor::class)
                     )
 
-                        <li class="nav-item dropdown px-2">
+                    <li class="nav-item dropdown px-2">
 
-                            <a class="nav-link rounded dropdown-toggle fw-bold text-white
+                        <a class="nav-link rounded dropdown-toggle fw-bold text-white
                                 @if ($pedidosActivos) active @endif"
-                                href="#"
-                                id="pedidosDropdown"
-                                role="button"
-                                data-bs-toggle="dropdown"
-                                aria-expanded="false">
+                            href="#"
+                            id="pedidosDropdown"
+                            role="button"
+                            data-bs-toggle="dropdown"
+                            aria-expanded="false">
 
-                                Pedidos
+                            Pedidos
 
-                            </a>
+                        </a>
 
 
-                            <ul class="dropdown-menu dropdown-menu-end bg-primary"
-                                aria-labelledby="pedidosDropdown">
+                        <ul class="dropdown-menu dropdown-menu-end bg-primary"
+                            aria-labelledby="pedidosDropdown">
 
-                                {{-- Compras --}}
-                                @can('viewAny', \App\Models\OrdenCompra::class)
+                            {{-- Compras --}}
+                            @can('viewAny', \App\Models\OrdenCompra::class)
 
-                                    <li>
-                                        <a class="dropdown-item fw-bold text-white
+                            <li>
+                                <a class="dropdown-item fw-bold text-white
                                             @if (request()->routeIs('gestion.compras.*')) active @endif"
-                                            href="{{ route('gestion.compras.index') }}">
+                                    href="{{ route('gestion.compras.index') }}">
 
-                                            Compras
+                                    Compras
 
-                                        </a>
-                                    </li>
+                                </a>
+                            </li>
 
-                                @endcan
+                            @endcan
 
 
-                                {{-- Proveedores --}}
-                                @can('viewAny', \App\Models\Proveedor::class)
+                            {{-- Proveedores --}}
+                            @can('viewAny', \App\Models\Proveedor::class)
 
-                                    <li>
-                                        <a class="dropdown-item fw-bold text-white
+                            <li>
+                                <a class="dropdown-item fw-bold text-white
                                             @if (request()->routeIs('gestion.proveedores.*')) active @endif"
-                                            href="{{ route('gestion.proveedores.index') }}">
+                                    href="{{ route('gestion.proveedores.index') }}">
 
-                                            Proveedores
+                                    Proveedores
 
-                                        </a>
-                                    </li>
+                                </a>
+                            </li>
 
-                                @endcan
+                            @endcan
 
-                            </ul>
+                        </ul>
 
-                        </li>
+                    </li>
 
                     @endif
 

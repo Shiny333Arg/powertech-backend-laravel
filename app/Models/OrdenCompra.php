@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\EstadoOrdenCompra;
 use App\Enums\OrigenOrdenCompra;
+use App\Enums\TipoMovimientoStock;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -59,6 +60,22 @@ class OrdenCompra extends Model
         return $this->morphMany(MovimientoStock::class, 'origen');
     }
 
+    /**
+     * Las entradas de mercaderia contra esta orden, de la mas nueva a la mas
+     * vieja.
+     *
+     * Es el historial de recepciones, y existe sin tabla de recepciones porque
+     * cada entrada ya es un movimiento de stock con su fecha, su autor y el
+     * remito del proveedor en 'motivo'. Agregar una tabla seria guardar dos
+     * veces lo mismo.
+     */
+    public function recepciones(): MorphMany
+    {
+        return $this->movimientosStock()
+            ->where('tipo', TipoMovimientoStock::Compra->value)
+            ->latest('created_at');
+    }
+
     // ------------------------------------------------------------------
     // Scopes
     // ------------------------------------------------------------------
@@ -78,6 +95,15 @@ class OrdenCompra extends Model
     public function scopeCerradas(Builder $query): Builder
     {
         return $query->whereIn('estado', EstadoOrdenCompra::cerradas());
+    }
+
+    /** Lo que el deposito tiene para recibir: enviadas y recibidas a medias. */
+    public function scopeEnRecepcion(Builder $query): Builder
+    {
+        return $query->whereIn('estado', [
+            EstadoOrdenCompra::Enviada->value,
+            EstadoOrdenCompra::RecibidaParcial->value,
+        ]);
     }
 
     /** ¿Este producto ya esta pedido? Es la pregunta del restock automatico. */
@@ -111,10 +137,60 @@ class OrdenCompra extends Model
         return $this->estado->esAbierta();
     }
 
+    /** Se le puede cargar una entrega de mercaderia. */
+    public function esRecibible(): bool
+    {
+        return $this->estado->permiteRecepcion();
+    }
+
+    /**
+     * Quedo a medio recibir y se puede dar por terminada.
+     *
+     * Es el caso del proveedor que manda 8 de 10 y avisa que el resto no viene.
+     * Sin una accion explicita de cierre, la orden se queda en
+     * 'recibida_parcial' para siempre, que es un estado ABIERTO: el restock la
+     * cuenta como pedido vigente y nunca vuelve a pedir esos productos.
+     */
+    public function esCerrable(): bool
+    {
+        return $this->estado === EstadoOrdenCompra::RecibidaParcial;
+    }
+
     /** Mientras quede algo por recibir, la orden sigue en juego. */
     public function unidadesPendientes(): int
     {
         return $this->lineas->sum(fn (OrdenCompraLinea $linea) => $linea->pendiente);
+    }
+
+    public function unidadesRecibidas(): int
+    {
+        return $this->lineas->sum('cantidad_recibida');
+    }
+
+    /** Todos los renglones estan servidos. */
+    public function estaCompleta(): bool
+    {
+        return $this->lineas->every(fn (OrdenCompraLinea $linea) => $linea->estaCompleta());
+    }
+
+    /** Llego algo de mas en algun renglon. */
+    public function tieneExcedentes(): bool
+    {
+        return $this->lineas->contains(fn (OrdenCompraLinea $linea) => $linea->tieneExcedente());
+    }
+
+    /**
+     * El estado que le corresponde despues de cargar una entrega.
+     *
+     * Se calcula desde las lineas y no desde lo que acaba de entrar: lo que
+     * define si la orden esta servida es el acumulado de 'cantidad_recibida',
+     * no el tamaño de esta entrega. Exige las lineas frescas.
+     */
+    public function estadoTrasRecepcion(): EstadoOrdenCompra
+    {
+        return $this->estaCompleta()
+            ? EstadoOrdenCompra::Recibida
+            : EstadoOrdenCompra::RecibidaParcial;
     }
 
     // ------------------------------------------------------------------
@@ -163,7 +239,8 @@ class OrdenCompra extends Model
      *
      * Es una estimacion por definicion —usa el costo del catalogo, no el
      * precio real que va a facturar el proveedor— y por eso la columna se
-     * llama total_estimado.
+     * llama total_estimado. <b>No se recalcula al recibir</b>, ni siquiera
+     * cuando llega de mas: lo que estima es el pedido, no la entrega.
      */
     public function recalcularTotalEstimado(): static
     {
