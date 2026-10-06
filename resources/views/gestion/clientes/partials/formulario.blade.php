@@ -216,7 +216,7 @@
         </button>
 
         <a
-            href="{{ $cliente ? route('gestion.clientes.show', $cliente) : route('gestion.clientes.index') }}"
+            href="{{ url()->previous() }}"
             class="btn btn-outline-secondary px-4 fw-semibold shadow-sm">
             Volver
         </a>

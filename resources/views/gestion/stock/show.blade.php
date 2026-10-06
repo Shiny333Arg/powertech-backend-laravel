@@ -43,7 +43,7 @@ $tipos = [
 <section class="mb-4 d-flex flex-column flex-md-row align-items-stretch justify-content-between gap-3">
 
     <a
-        href="{{ route('gestion.items.index') }}"
+        href="{{ url()->previous() }}"
         class="btn btn-outline-secondary d-flex align-items-center justify-content-center gap-2 flex-fill flex-md-grow-0">
 
         <svg

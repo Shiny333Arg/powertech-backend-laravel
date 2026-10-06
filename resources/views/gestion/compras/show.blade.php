@@ -357,9 +357,9 @@
 
                 <div class="table-responsive">
 
-                    <table class="table table-sm align-middle mb-0">
+                    <table class="table table-bordered align-middle text-center mb-0">
 
-                        <thead class="table-light">
+                        <thead class="table-dark">
                             <tr>
                                 <th class="text-nowrap">Fecha</th>
                                 <th class="text-nowrap">Producto</th>
