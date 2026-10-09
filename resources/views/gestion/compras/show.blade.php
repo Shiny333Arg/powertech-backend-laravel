@@ -20,7 +20,53 @@
 
 @include('gestion.partials.alertas')
 
-{{-- Navegación y acciones --}}
+{{--
+    Las acciones disponibles, resueltas una sola vez.
+
+    Se consulta la policy con Gate::allows en lugar de @can por cada boton, por
+    dos motivos: permite saber si quedo ALGUNA accion habilitada —y explicar por
+    que no, en vez de mostrar una barra vacia— y evita repetir la misma consulta
+    cuando el boton y su modal preguntan lo mismo.
+
+    Un @can que da false no distingue entre "te falta el permiso" y "el estado
+    no lo permite". Esa diferencia es justo la que necesita ver el usuario.
+--}}
+@php
+$puede = [
+'editar' => \Illuminate\Support\Facades\Gate::allows('update', $orden),
+'aprobar' => \Illuminate\Support\Facades\Gate::allows('aprobar', $orden),
+'enviar' => \Illuminate\Support\Facades\Gate::allows('enviar', $orden),
+'recibir' => \Illuminate\Support\Facades\Gate::allows('recibir', $orden),
+'cerrar' => \Illuminate\Support\Facades\Gate::allows('cerrar', $orden),
+'cancelar' => \Illuminate\Support\Facades\Gate::allows('cancelar', $orden),
+];
+
+$hayAcciones = in_array(true, $puede, true);
+
+// Separacion de funciones: la orden la cargo quien la esta mirando.
+$esPropio = $orden->usuario_creo_id !== null
+&& $orden->usuario_creo_id === auth()->id();
+
+$motivoSinAcciones = match (true) {
+$orden->estado->esCerrada()
+=> 'Este pedido está cerrado y no admite más acciones.',
+
+$orden->esBorrador() && $esPropio && ! auth()->user()->tienePermiso('compra.aprobar_propias')
+=> 'Este pedido lo cargaste vos y no tenés permiso para aprobar tus propios pedidos: lo tiene que aprobar otro usuario.',
+
+default
+=> 'No tenés permisos para operar sobre este pedido.',
+};
+@endphp
+
+{{--
+    Navegación y acciones.
+
+    Los botones que disparan un POST van dentro de un <form>, y el form es el
+    flex item, no el boton. Sin w-100 en el boton, en pantalla angosta el form
+    se estira y el boton queda del ancho de su texto: por eso "Aprobar" y
+    "Enviar" se veian mas cortos que "Editar detalle" y "Recibir mercadería".
+--}}
 <section class="mb-4 d-flex flex-column flex-md-row align-items-stretch gap-2">
 
     <a
@@ -41,7 +87,7 @@
 
     <div class="d-flex flex-column flex-md-row gap-2 ms-md-auto">
 
-        @can('update', $orden)
+        @if ($puede['editar'])
         <a
             href="{{ route('gestion.compras.edit', $orden) }}"
             class="btn btn-outline-secondary d-flex align-items-center justify-content-center gap-2">
@@ -56,15 +102,15 @@
 
             Editar detalle
         </a>
-        @endcan
+        @endif
 
-        @can('aprobar', $orden)
-        <form method="POST" action="{{ route('gestion.compras.aprobar', $orden) }}" class="d-flex">
+        @if ($puede['aprobar'])
+        <form method="POST" action="{{ route('gestion.compras.aprobar', $orden) }}">
             @csrf
 
             <button
                 type="submit"
-                class="btn btn-success d-flex align-items-center justify-content-center gap-2">
+                class="btn btn-success w-100 d-flex align-items-center justify-content-center gap-2">
 
                 <svg xmlns="http://www.w3.org/2000/svg"
                     width="18"
@@ -77,32 +123,27 @@
                 Aprobar
             </button>
         </form>
-        @endcan
+        @endif
 
-        @can('enviar', $orden)
-        <form method="POST" action="{{ route('gestion.compras.enviar', $orden) }}" class="d-flex">
+        @if ($puede['enviar'])
+        <form method="POST" action="{{ route('gestion.compras.enviar', $orden) }}">
             @csrf
 
             <button
                 type="submit"
-                class="btn btn-primary d-flex align-items-center justify-content-center gap-2">
+                class="btn btn-primary w-100 d-flex align-items-center justify-content-center gap-2">
 
-                <svg xmlns="http://www.w3.org/2000/svg"
-                    width="18"
-                    height="18"
-                    fill="currentColor"
-                    viewBox="0 0 16 16">
-                    <path d="M15.854.146a.5.5 0 0 0-.708 0L.146 15.146a.5.5 0 0 0 .708.708L6.5 10.207l3.293 3.293a.5.5 0 0 0 .707-.707L7.207 9.5 15.854.854a.5.5 0 0 0 0-.708" />
-                    <path d="M6.5 10.207 2.707 6.414 15.146.146a.5.5 0 0 1 .708.708z" />
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-envelope" viewBox="0 0 16 16">
+                    <path d="M0 4a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2zm2-1a1 1 0 0 0-1 1v.217l7 4.2 7-4.2V4a1 1 0 0 0-1-1zm13 2.383-4.708 2.825L15 11.105zm-.034 6.876-5.64-3.471L8 9.583l-1.326-.795-5.64 3.47A1 1 0 0 0 2 13h12a1 1 0 0 0 .966-.741M1 11.105l4.708-2.897L1 5.383z" />
                 </svg>
 
                 Enviar remito por correo
             </button>
         </form>
-        @endcan
+        @endif
 
         {{-- La entrada de mercadería. Solo sobre un pedido ya enviado. --}}
-        @can('recibir', $orden)
+        @if ($puede['recibir'])
         <a
             href="{{ route('gestion.compras.recibir', $orden) }}"
             class="btn btn-success d-flex align-items-center justify-content-center gap-2">
@@ -119,9 +160,9 @@
 
             Recibir mercadería
         </a>
-        @endcan
+        @endif
 
-        @can('cerrar', $orden)
+        @if ($puede['cerrar'])
         <button
             type="button"
             class="btn btn-outline-warning d-flex align-items-center justify-content-center gap-2"
@@ -138,9 +179,9 @@
 
             Cerrar con faltante
         </button>
-        @endcan
+        @endif
 
-        @can('cancelar', $orden)
+        @if ($puede['cancelar'])
         <button
             type="button"
             class="btn btn-outline-danger d-flex align-items-center justify-content-center gap-2"
@@ -158,86 +199,96 @@
 
             Cancelar
         </button>
-        @endcan
+        @endif
+
+        {{--
+            Una barra vacía parece un error de la pantalla. Decir por qué no hay
+            acciones evita la consulta de "el botón no me aparece".
+        --}}
+        @unless ($hayAcciones)
+        <p class="text-muted small mb-0 align-self-md-center text-md-end">
+            {{ $motivoSinAcciones }}
+        </p>
+        @endunless
 
     </div>
 </section>
 
 {{-- Aviso sobre el canal de pedido --}}
 @if ($orden->estado === \App\Enums\EstadoOrdenCompra::Aprobada)
-    @if ($orden->proveedor->canal_pedido !== \App\Enums\CanalPedido::Email)
-        <div class="alert alert-warning alert-dismissible fade show mb-4" role="alert">
-            <strong>Este proveedor no está configurado para recibir pedidos por correo.</strong>
-            Su canal es «{{ $orden->proveedor->canal_pedido->etiqueta() }}».
-            <a href="{{ route('gestion.proveedores.edit', $orden->proveedor) }}" class="alert-link">
-                Cambialo a email
-            </a>
-            para poder enviarle el remito.
+@if ($orden->proveedor->canal_pedido !== \App\Enums\CanalPedido::Email)
+<div class="alert alert-warning alert-dismissible fade show mb-4" role="alert">
+    <strong>Este proveedor no está configurado para recibir pedidos por correo.</strong>
+    Su canal es «{{ $orden->proveedor->canal_pedido->etiqueta() }}».
+    <a href="{{ route('gestion.proveedores.edit', $orden->proveedor) }}" class="alert-link">
+        Cambialo a email
+    </a>
+    para poder enviarle el remito.
 
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar"></button>
-        </div>
-    @elseif (blank($orden->proveedor->email))
-        <div class="alert alert-warning alert-dismissible fade show mb-4" role="alert">
-            <strong>{{ $orden->proveedor->razon_social }} no tiene correo cargado.</strong>
-            <a href="{{ route('gestion.proveedores.edit', $orden->proveedor) }}" class="alert-link">
-                Cargalo en su ficha
-            </a>
-            para poder enviarle el remito.
+    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar"></button>
+</div>
+@elseif (blank($orden->proveedor->email))
+<div class="alert alert-warning alert-dismissible fade show mb-4" role="alert">
+    <strong>{{ $orden->proveedor->razon_social }} no tiene correo cargado.</strong>
+    <a href="{{ route('gestion.proveedores.edit', $orden->proveedor) }}" class="alert-link">
+        Cargalo en su ficha
+    </a>
+    para poder enviarle el remito.
 
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar"></button>
-        </div>
-    @endif
+    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar"></button>
+</div>
+@endif
 @endif
 
 @php
-    $insuficientes = $orden->estaAbierta() ? $orden->lineasInsuficientes() : collect();
+$insuficientes = $orden->estaAbierta() ? $orden->lineasInsuficientes() : collect();
 @endphp
 
 {{-- Aviso de faltante --}}
 @if ($insuficientes->isNotEmpty())
-    <div class="alert alert-warning alert-dismissible fade show mb-4" role="alert">
-        <p class="mb-2">
-            <strong>Este pedido ya no cubre el faltante.</strong>
-            Se siguió vendiendo después de emitirlo, así que
-            {{ $insuficientes->count() === 1 ? 'un producto va a quedar' : 'algunos productos van a quedar' }}
-            en negativo incluso recibiendo todo.
-        </p>
+<div class="alert alert-warning alert-dismissible fade show mb-4" role="alert">
+    <p class="mb-2">
+        <strong>Este pedido ya no cubre el faltante.</strong>
+        Se siguió vendiendo después de emitirlo, así que
+        {{ $insuficientes->count() === 1 ? 'un producto va a quedar' : 'algunos productos van a quedar' }}
+        en negativo incluso recibiendo todo.
+    </p>
 
-        <ul class="mb-2 small">
-            @foreach ($insuficientes as $linea)
-                <li>
-                    <strong>{{ $linea->producto->nombre }}</strong> —
-                    pendiente de recibir {{ $linea->pendiente }},
-                    faltan {{ $linea->faltanteDescubierto() }} más
-                    (disponible {{ $linea->producto->stock_disponible }},
-                    punto de reposición {{ $linea->producto->punto_reposicion }})
-                </li>
-            @endforeach
-        </ul>
+    <ul class="mb-2 small">
+        @foreach ($insuficientes as $linea)
+        <li>
+            <strong>{{ $linea->producto->nombre }}</strong> —
+            pendiente de recibir {{ $linea->pendiente }},
+            faltan {{ $linea->faltanteDescubierto() }} más
+            (disponible {{ $linea->producto->stock_disponible }},
+            punto de reposición {{ $linea->producto->punto_reposicion }})
+        </li>
+        @endforeach
+    </ul>
 
-        <p class="mb-0 small">
-            @if ($orden->esBorrador())
-                Podés ajustar las cantidades desde «Editar detalle» antes de aprobar.
-            @else
-                El detalle de un pedido aprobado no se modifica. El saldo se va a pedir
-                solo en cuanto este pedido se cierre, o podés emitir otro a mano ahora.
-            @endif
-        </p>
+    <p class="mb-0 small">
+        @if ($orden->esBorrador())
+        Podés ajustar las cantidades desde «Editar detalle» antes de aprobar.
+        @else
+        El detalle de un pedido aprobado no se modifica. El saldo se va a pedir
+        solo en cuanto este pedido se cierre, o podés emitir otro a mano ahora.
+        @endif
+    </p>
 
-        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar"></button>
-    </div>
+    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar"></button>
+</div>
 @endif
 
 {{-- Aviso de excedente --}}
 @if ($orden->tieneExcedentes())
-    <div class="alert alert-info alert-dismissible fade show mb-4" role="alert">
-        <strong>Entró más de lo pedido en algún renglón.</strong>
-        Está registrado así a propósito: la mercadería está en el depósito. Tené en cuenta que el
-        total estimado se calculó sobre lo pedido, así que la factura del proveedor va a venir por
-        más.
+<div class="alert alert-info alert-dismissible fade show mb-4" role="alert">
+    <strong>Entró más de lo pedido en algún renglón.</strong>
+    Está registrado así a propósito: la mercadería está en el depósito. Tené en cuenta que el
+    total estimado se calculó sobre lo pedido, así que la factura del proveedor va a venir por
+    más.
 
-        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar"></button>
-    </div>
+    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar"></button>
+</div>
 @endif
 
 {{-- Contenido --}}
@@ -265,59 +316,59 @@
                             <th class="text-nowrap">Producto</th>
                             <th class="text-nowrap">Pedido</th>
                             <th class="text-nowrap">Recibido</th>
-                            <th class="text-nowrap">Costo est.</th>
+                            <th class="text-nowrap">Costo unitario</th>
                             <th class="text-nowrap">Subtotal</th>
                         </tr>
                     </thead>
 
                     <tbody>
                         @foreach ($orden->lineas as $linea)
-                            <tr>
-                                <td class="text-nowrap">
-                                    {{ $linea->producto->codigo }}
-                                </td>
+                        <tr>
+                            <td class="text-nowrap">
+                                {{ $linea->producto->codigo }}
+                            </td>
 
-                                <td class="text-start">
-                                    <div class="fw-semibold">
-                                        {{ $linea->producto->nombre }}
-                                    </div>
+                            <td class="text-start">
+                                <div class="fw-semibold">
+                                    {{ $linea->producto->nombre }}
+                                </div>
 
-                                    @if ($orden->estaAbierta() && ! $linea->cubreElFaltante())
-                                        <div class="text-warning small mt-1">
-                                            <span class="badge text-bg-warning">
-                                                No alcanza
-                                            </span>
-                                            Faltan {{ $linea->faltanteDescubierto() }} unidades para cubrir el faltante actual.
-                                        </div>
-                                    @endif
-                                </td>
+                                @if ($orden->estaAbierta() && ! $linea->cubreElFaltante())
+                                <div class="text-warning small mt-1">
+                                    <span class="badge text-bg-warning">
+                                        No alcanza
+                                    </span>
+                                    Faltan {{ $linea->faltanteDescubierto() }} unidades para cubrir el faltante actual.
+                                </div>
+                                @endif
+                            </td>
 
-                                <td class="text-nowrap fw-semibold">
-                                    {{ $linea->cantidad_pedida }}
-                                </td>
+                            <td class="text-nowrap fw-semibold">
+                                {{ $linea->cantidad_pedida }}
+                            </td>
 
-                                <td class="text-nowrap">
-                                    {{ $linea->cantidad_recibida }}
+                            <td class="text-nowrap">
+                                {{ $linea->cantidad_recibida }}
 
-                                    @if ($linea->tieneExcedente())
-                                        <span class="badge text-bg-info ms-1">
-                                            +{{ $linea->excedente }} de más
-                                        </span>
-                                    @elseif ($linea->pendiente > 0 && $orden->estado === \App\Enums\EstadoOrdenCompra::RecibidaParcial)
-                                        <span class="badge text-bg-warning ms-1">
-                                            faltan {{ $linea->pendiente }}
-                                        </span>
-                                    @endif
-                                </td>
+                                @if ($linea->tieneExcedente())
+                                <span class="badge text-bg-info ms-1">
+                                    +{{ $linea->excedente }} de más
+                                </span>
+                                @elseif ($linea->pendiente > 0 && $orden->estado === \App\Enums\EstadoOrdenCompra::RecibidaParcial)
+                                <span class="badge text-bg-warning ms-1">
+                                    faltan {{ $linea->pendiente }}
+                                </span>
+                                @endif
+                            </td>
 
-                                <td class="text-nowrap">
-                                    $ {{ number_format((float) $linea->costo_unitario, 2, ',', '.') }}
-                                </td>
+                            <td class="text-nowrap">
+                                $ {{ number_format((float) $linea->costo_unitario, 2, ',', '.') }}
+                            </td>
 
-                                <td class="text-nowrap fw-semibold">
-                                    $ {{ number_format($linea->subtotal_estimado, 2, ',', '.') }}
-                                </td>
-                            </tr>
+                            <td class="text-nowrap fw-semibold">
+                                $ {{ number_format($linea->subtotal_estimado, 2, ',', '.') }}
+                            </td>
+                        </tr>
                         @endforeach
                     </tbody>
 
@@ -346,60 +397,60 @@
 
         {{-- Entregas recibidas --}}
         @if ($orden->recepciones->isNotEmpty())
-            <section class="p-4 rounded-4 bg-light shadow-sm border mb-4">
+        <section class="p-4 rounded-4 bg-light shadow-sm border mb-4">
 
-                <h2 class="h5 fw-bold mb-1">Entregas recibidas</h2>
+            <h2 class="h5 fw-bold mb-1">Entregas recibidas</h2>
 
-                <p class="text-muted small mb-3">
-                    Cada entrada quedó como un movimiento de stock contra este pedido. No hay tabla
-                    de recepciones aparte: el movimiento <em>es</em> el registro de la entrada.
-                </p>
+            <p class="text-muted small mb-3">
+                Cada entrada quedó como un movimiento de stock contra este pedido. No hay tabla
+                de recepciones aparte: el movimiento <em>es</em> el registro de la entrada.
+            </p>
 
-                <div class="table-responsive">
+            <div class="table-responsive">
 
-                    <table class="table table-bordered align-middle text-center mb-0">
+                <table class="table table-bordered align-middle text-center mb-0">
 
-                        <thead class="table-dark">
-                            <tr>
-                                <th class="text-nowrap">Fecha</th>
-                                <th class="text-nowrap">Producto</th>
-                                <th class="text-nowrap text-center">Unidades</th>
-                                <th class="text-nowrap">Remito</th>
-                                <th class="text-nowrap">Cargó</th>
-                            </tr>
-                        </thead>
+                    <thead class="table-dark">
+                        <tr>
+                            <th class="text-nowrap">Fecha</th>
+                            <th class="text-nowrap">Producto</th>
+                            <th class="text-nowrap text-center">Unidades</th>
+                            <th class="text-nowrap">Remito</th>
+                            <th class="text-nowrap">Cargó</th>
+                        </tr>
+                    </thead>
 
-                        <tbody>
-                            @foreach ($orden->recepciones as $movimiento)
-                                <tr>
-                                    <td class="text-nowrap">
-                                        {{ $movimiento->created_at->format('d/m/Y H:i') }}
-                                    </td>
+                    <tbody>
+                        @foreach ($orden->recepciones as $movimiento)
+                        <tr>
+                            <td class="text-nowrap">
+                                {{ $movimiento->created_at->format('d/m/Y H:i') }}
+                            </td>
 
-                                    <td>
-                                        {{ $movimiento->producto?->nombre ?? '—' }}
-                                    </td>
+                            <td>
+                                {{ $movimiento->producto?->nombre ?? '—' }}
+                            </td>
 
-                                    <td class="text-center fw-semibold">
-                                        +{{ $movimiento->cantidad_fisico }}
-                                    </td>
+                            <td class="text-center fw-semibold">
+                                +{{ $movimiento->cantidad_fisico }}
+                            </td>
 
-                                    <td class="text-nowrap">
-                                        {{ $movimiento->motivo ?? '—' }}
-                                    </td>
+                            <td class="text-nowrap">
+                                {{ $movimiento->motivo ?? '—' }}
+                            </td>
 
-                                    <td class="text-nowrap">
-                                        {{ $movimiento->usuario?->usuario ?? 'Sistema' }}
-                                    </td>
-                                </tr>
-                            @endforeach
-                        </tbody>
+                            <td class="text-nowrap">
+                                {{ $movimiento->usuario?->nombre_completo ?? 'Sistema' }}
+                            </td>
+                        </tr>
+                        @endforeach
+                    </tbody>
 
-                    </table>
+                </table>
 
-                </div>
+            </div>
 
-            </section>
+        </section>
         @endif
 
     </div>
@@ -422,49 +473,49 @@
             <div class="d-flex justify-content-between gap-3 mb-2">
                 <span class="text-muted">Creado por</span>
                 <span class="text-end">
-                    {{ $orden->usuarioCreo?->usuario ?? 'Sistema (reposición)' }}
+                    {{ $orden->usuarioCreo?->nombre_completo ?? 'Sistema (reposición)' }}
                 </span>
             </div>
 
             @if ($orden->fecha_aprobacion)
-                <div class="d-flex justify-content-between gap-3 mb-2">
-                    <span class="text-muted">Aprobado por</span>
-                    <span class="text-end">{{ $orden->usuarioAprobo?->usuario ?? '—' }}</span>
-                </div>
+            <div class="d-flex justify-content-between gap-3 mb-2">
+                <span class="text-muted">Aprobado por</span>
+                <span class="text-end">{{ $orden->usuarioAprobo?->nombre_completo ?? '—' }}</span>
+            </div>
 
-                <div class="d-flex justify-content-between gap-3 mb-2">
-                    <span class="text-muted">Fecha de aprobación</span>
-                    <span class="text-end">{{ $orden->fecha_aprobacion->format('d/m/Y H:i') }}</span>
-                </div>
+            <div class="d-flex justify-content-between gap-3 mb-2">
+                <span class="text-muted">Fecha de aprobación</span>
+                <span class="text-end">{{ $orden->fecha_aprobacion->format('d/m/Y H:i') }}</span>
+            </div>
             @endif
 
             @if ($orden->fecha_envio)
-                <div class="d-flex justify-content-between gap-3 mb-2">
-                    <span class="text-muted">Enviado</span>
-                    <span class="text-end">{{ $orden->fecha_envio->format('d/m/Y H:i') }}</span>
-                </div>
+            <div class="d-flex justify-content-between gap-3 mb-2">
+                <span class="text-muted">Enviado</span>
+                <span class="text-end">{{ $orden->fecha_envio->format('d/m/Y H:i') }}</span>
+            </div>
             @endif
 
             @if ($orden->fecha_entrega_estimada)
-                <div class="d-flex justify-content-between gap-3 mb-2">
-                    <span class="text-muted">Entrega estimada</span>
-                    <span class="text-end">{{ $orden->fecha_entrega_estimada->format('d/m/Y') }}</span>
-                </div>
+            <div class="d-flex justify-content-between gap-3 mb-2">
+                <span class="text-muted">Entrega estimada</span>
+                <span class="text-end">{{ $orden->fecha_entrega_estimada->format('d/m/Y') }}</span>
+            </div>
             @endif
 
             @if ($orden->unidadesRecibidas() > 0)
-                <div class="d-flex justify-content-between gap-3">
-                    <span class="text-muted">Unidades recibidas</span>
-                    <span class="text-end">
-                        {{ $orden->unidadesRecibidas() }}
+            <div class="d-flex justify-content-between gap-3">
+                <span class="text-muted">Unidades recibidas</span>
+                <span class="text-end">
+                    {{ $orden->unidadesRecibidas() }}
 
-                        @if ($orden->unidadesPendientes() > 0)
-                            <span class="text-warning">
-                                (faltan {{ $orden->unidadesPendientes() }})
-                            </span>
-                        @endif
+                    @if ($orden->unidadesPendientes() > 0)
+                    <span class="text-warning">
+                        (faltan {{ $orden->unidadesPendientes() }})
                     </span>
-                </div>
+                    @endif
+                </span>
+            </div>
             @endif
 
         </section>
@@ -481,9 +532,9 @@
             </p>
 
             @if ($orden->proveedor->contacto)
-                <p class="text-muted mb-2">
-                    {{ $orden->proveedor->contacto }}
-                </p>
+            <p class="text-muted mb-2">
+                {{ $orden->proveedor->contacto }}
+            </p>
             @endif
 
             <p class="mb-2">
@@ -491,33 +542,33 @@
             </p>
 
             @if ($orden->proveedor->telefono)
-                <p class="text-muted mb-0">
-                    {{ $orden->proveedor->telefono }}
-                </p>
+            <p class="text-muted mb-0">
+                {{ $orden->proveedor->telefono }}
+            </p>
             @endif
 
         </section>
 
         {{-- Observaciones --}}
         @if (filled($orden->observaciones))
-            <section class="p-4 rounded-4 bg-light shadow-sm border">
+        <section class="p-4 rounded-4 bg-light shadow-sm border">
 
-                <h2 class="h6 fw-bold mb-3">
-                    Observaciones
-                </h2>
+            <h2 class="h6 fw-bold mb-3">
+                Observaciones
+            </h2>
 
-                <div style="white-space: pre-line;">
-                    {{ $orden->observaciones }}
-                </div>
+            <div style="white-space: pre-line;">
+                {{ $orden->observaciones }}
+            </div>
 
-            </section>
+        </section>
         @endif
 
     </div>
 </div>
 
 {{-- Modal de cierre con faltante --}}
-@can('cerrar', $orden)
+@if ($puede['cerrar'])
 <div class="modal fade" id="cerrarPedido" tabindex="-1" aria-hidden="true">
 
     <div class="modal-dialog">
@@ -576,9 +627,9 @@
                     required></textarea>
 
                 @error('motivo')
-                    <div class="invalid-feedback">
-                        {{ $message }}
-                    </div>
+                <div class="invalid-feedback">
+                    {{ $message }}
+                </div>
                 @enderror
 
             </div>
@@ -587,7 +638,7 @@
 
                 <button
                     type="button"
-                    class="btn-outline-secondary btn"
+                    class="btn btn-outline-secondary"
                     data-bs-dismiss="modal">
                     Volver
                 </button>
@@ -605,10 +656,10 @@
     </div>
 
 </div>
-@endcan
+@endif
 
 {{-- Modal de cancelación --}}
-@can('cancelar', $orden)
+@if ($puede['cancelar'])
 <div class="modal fade" id="cancelarPedido" tabindex="-1" aria-hidden="true">
 
     <div class="modal-dialog">
@@ -661,9 +712,9 @@
                     required></textarea>
 
                 @error('motivo')
-                    <div class="invalid-feedback">
-                        {{ $message }}
-                    </div>
+                <div class="invalid-feedback">
+                    {{ $message }}
+                </div>
                 @enderror
 
             </div>
@@ -672,7 +723,7 @@
 
                 <button
                     type="button"
-                    class="btn-outline-secondary btn"
+                    class="btn btn-outline-secondary"
                     data-bs-dismiss="modal">
                     Volver
                 </button>
@@ -690,6 +741,6 @@
     </div>
 
 </div>
-@endcan
+@endif
 
 @endsection

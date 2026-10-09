@@ -34,7 +34,7 @@ class ProductoController extends Controller
     public function __construct(private readonly StockService $stock)
     {
         // Descomentar cuando exista el login:
-        // $this->authorizeResource(Producto::class, 'producto');
+        $this->authorizeResource(Producto::class, 'producto');
     }
 
     /**
@@ -211,37 +211,37 @@ class ProductoController extends Controller
      * Un ajuste negativo mayor al saldo lo rechaza el servicio: si falta mas de
      * lo que hay, el error esta en un movimiento anterior, no en el ajuste.
      */
-    public function ajustarStock(AjusteStockRequest $request, Producto $producto): RedirectResponse
-    {
-        try {
-            $movimiento = $this->stock->ajustar(
-                $producto,
-                (int) $request->validated('cantidad'),
-                $request->validated('motivo'),
-            );
-        } catch (StockInsuficienteException $e) {
-            return back()->with('error', $e->getMessage())->withInput();
-        }
+    // public function ajustarStock(AjusteStockRequest $request, Producto $producto): RedirectResponse
+    // {
+    //     try {
+    //         $movimiento = $this->stock->ajustar(
+    //             $producto,
+    //             (int) $request->validated('cantidad'),
+    //             $request->validated('motivo'),
+    //         );
+    //     } catch (StockInsuficienteException $e) {
+    //         return back()->with('error', $e->getMessage())->withInput();
+    //     }
 
-        return back()->with('exito', sprintf(
-            'Stock ajustado. «%s» queda con %d en depósito y %d disponibles.',
-            $producto->nombre,
-            $movimiento->stock_fisico_resultante,
-            $producto->refresh()->stock_disponible,
-        ));
-    }
+    //     return back()->with('exito', sprintf(
+    //         'Stock ajustado. «%s» queda con %d en depósito y %d disponibles.',
+    //         $producto->nombre,
+    //         $movimiento->stock_fisico_resultante,
+    //         $producto->refresh()->stock_disponible,
+    //     ));
+    // }
 
-    /** Historial de movimientos del producto: explica cada cambio de saldo. */
-    public function movimientos(Producto $producto): View
-    {
-        return view('gestion.item.movimientos', [
-            'producto'    => $producto,
-            'movimientos' => $producto->movimientosStock()
-                ->with('usuario:id,nombres,apellido')
-                ->latest('created_at')
-                ->paginate(30),
-        ]);
-    }
+    // /** Historial de movimientos del producto: explica cada cambio de saldo. */
+    // public function movimientos(Producto $producto): View
+    // {
+    //     return view('gestion.item.movimientos', [
+    //         'producto'    => $producto,
+    //         'movimientos' => $producto->movimientosStock()
+    //             ->with('usuario:id,nombres,apellido')
+    //             ->latest('created_at')
+    //             ->paginate(30),
+    //     ]);
+    // }
 
     /** @return array<string, mixed> */
     private function opcionesDeFormulario(): array

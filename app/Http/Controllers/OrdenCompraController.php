@@ -42,7 +42,7 @@ class OrdenCompraController extends Controller
         private readonly OrdenCompraService $ordenes,
     ) {
         // Descomentar junto con el resto de los authorizeResource del proyecto:
-        // $this->authorizeResource(OrdenCompra::class, 'orden');
+        $this->authorizeResource(OrdenCompra::class, 'orden');
     }
 
     public function index(Request $request): View

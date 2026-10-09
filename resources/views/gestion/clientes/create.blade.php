@@ -17,14 +17,14 @@
 @include('gestion.partials.alertas')
 
 {{-- Formulario --}}
-<section class="mb-4">
+<!-- <section class="mb-4"> -->
 
-    @include('gestion.clientes.partials.formulario', [
+    <!-- @'i'n'clude('gestion.clientes.partials.formulario', [
         'accion'  => route('gestion.clientes.store'),
         'metodo'  => 'POST',
         'cliente' => null,
-    ])
+    ]) -->
 
-</section>
+<!-- </section> -->
 
 @endsection

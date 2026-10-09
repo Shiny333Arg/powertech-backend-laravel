@@ -27,7 +27,7 @@ class ProveedorController extends Controller
     public function __construct()
     {
         // Descomentar cuando exista el login:
-        // $this->authorizeResource(Proveedor::class, 'proveedor');
+        $this->authorizeResource(Proveedor::class, 'proveedor');
     }
 
     public function index(Request $request): View

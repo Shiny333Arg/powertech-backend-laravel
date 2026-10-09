@@ -59,7 +59,7 @@
         class="row g-3 align-items-end shadow-sm p-3 rounded bg-light"
         autocomplete="off">
 
-        <div class="col-12 col-md-3">
+        <!-- <div class="col-12 col-md-3">
 
             <label for="producto_id" class="form-label fw-semibold">Producto (id)</label>
 
@@ -71,7 +71,7 @@
                 value="{{ $filtros['producto_id'] ?? '' }}"
                 min="1">
 
-        </div>
+        </div> -->
 
         <div class="col-12 col-md-3">
 
@@ -106,6 +106,14 @@
             <label for="hasta" class="form-label fw-semibold">Hasta</label>
 
             <input type="date" class="form-control" id="hasta" name="hasta" value="{{ $filtros['hasta'] ?? '' }}">
+
+        </div>
+
+        <div class="col-12 col-md-3">
+
+            <label for="producto_id" class="form-label fw-semibold"></label>
+
+            
 
         </div>
 

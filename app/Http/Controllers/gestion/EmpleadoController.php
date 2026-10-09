@@ -37,7 +37,7 @@ class EmpleadoController extends Controller
     public function __construct()
     {
         // Descomentar cuando exista el login:
-        // $this->authorizeResource(Empleado::class, 'empleado');
+        $this->authorizeResource(Empleado::class, 'empleado');
     }
 
     public function index(Request $request): View

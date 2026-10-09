@@ -103,6 +103,15 @@ Route::middleware(['auth', 'ambito:tienda'])
 //
 // Ninguna venta, comprobante, pago, movimiento de stock ni orden de compra
 // tiene ruta DELETE. No es un olvido: no se eliminan.
+//
+// COBROS Y ENTREGAS YA NO SON SECCIONES PROPIAS. El circuito completo de la
+// venta —cobrar, preparar, despachar, entregar, devolver— se opera desde el
+// detalle de la venta, y las colas de trabajo son filtros sobre el listado:
+//   pendientes de cobro    -> gestion.ventas.index?estado=confirmada
+//   pendientes de entrega  -> gestion.ventas.index?estado=pagada
+// Los nombres de ruta cobros.* y entregas.* se conservan a proposito: lo unico
+// que cambio son las URLs, asi que todo route('gestion.cobros.store', $venta)
+// que ya exista en las vistas sigue funcionando sin tocarse.
 
 Route::prefix('gestion')
     ->name('gestion.')
@@ -115,6 +124,9 @@ Route::prefix('gestion')
         // ========================================================
         // Un solo tablero: arma los bloques de administrativo, vendedor
         // y cajero segun los permisos de quien entra.
+        //
+        // Con cobros fuera del menu, el bloque del cajero pasa a ser el
+        // unico historial propio de cobros del sistema.
 
         Route::get('/', [DashboardController::class, 'index'])
             ->name('home');
@@ -212,9 +224,10 @@ Route::prefix('gestion')
         // ========================================================
         // VENTAS
         // ========================================================
-        // Sin destroy: la venta no se elimina ni se da de baja. Lo que en
-        // otro CRUD seria la D es 'cancelar', que libera el stock
-        // comprometido y conserva el numero y el historial.
+        // La unica puerta del circuito comercial. Sin destroy: la venta no se
+        // elimina ni se da de baja. Lo que en otro CRUD seria la D es
+        // 'cancelar', que libera el stock comprometido y conserva el numero y
+        // el historial.
         //
         // /create va antes de /{venta} para que no lo capture el wildcard.
 
@@ -253,69 +266,75 @@ Route::prefix('gestion')
 
 
         // ========================================================
-        // DEVOLUCIONES
+        // ACCIONES DEL CIRCUITO (cuelgan de la venta)
         // ========================================================
-        // Cuelgan de la venta porque no existen sin ella. Emiten nota de
-        // credito y reingresan el stock fisico.
+        // Cobro, entrega y devolucion no son recursos: son transiciones de una
+        // venta concreta. Por eso viven bajo sale/{venta} y no tienen listado
+        // propio. Cada una conserva su VentaPolicy —cobrar, entregar,
+        // devolver— asi que el permiso que las habilita no cambia.
 
-        Route::prefix('sale/{venta}/return')
-            ->name('devoluciones.')
+        Route::prefix('sale/{venta}')
             ->group(function () {
 
-                Route::get('/', [DevolucionController::class, 'create'])
-                    ->name('create');
 
-                Route::post('/', [DevolucionController::class, 'store'])
-                    ->name('store');
-            });
+                // ------------------------------------------------
+                // COBRO
+                // ------------------------------------------------
+                // La caja. Un pago no se edita ni se borra: si se cobro de
+                // menos se agrega otro pago, si se cobro de mas se devuelve
+                // con nota de credito. Por eso solo hay alta.
+                //
+                // El historial de caja del cajero queda en su bloque del
+                // dashboard; las ventas por cobrar, en el listado filtrado
+                // por estado=confirmada.
 
+                Route::name('cobros.')
+                    ->group(function () {
 
-        // ========================================================
-        // COBROS
-        // ========================================================
-        // La caja. Un pago no se edita ni se borra: si se cobro de menos se
-        // agrega otro pago, si se cobro de mas se devuelve con nota de
-        // credito. Por eso solo hay lectura y alta.
+                        Route::get('/payment', [PagoController::class, 'create'])
+                            ->name('create');
 
-        Route::prefix('payment')
-            ->name('cobros.')
-            ->group(function () {
-
-                Route::get('/', [PagoController::class, 'index'])
-                    ->name('index');
-
-                Route::get('/pending', [PagoController::class, 'pendientes'])
-                    ->name('pendientes');
-
-                Route::get('/{venta}/create', [PagoController::class, 'create'])
-                    ->name('create');
-
-                Route::post('/{venta}', [PagoController::class, 'store'])
-                    ->name('store');
-            });
+                        Route::post('/payment', [PagoController::class, 'store'])
+                            ->name('store');
+                    });
 
 
-        // ========================================================
-        // ENTREGAS
-        // ========================================================
-        // El deposito. Es el unico lugar del sistema donde baja el stock
-        // fisico, y baja cuando la mercaderia sale, no cuando se cobra.
+                // ------------------------------------------------
+                // ENTREGA
+                // ------------------------------------------------
+                // El deposito. Es el unico lugar del sistema donde baja el
+                // stock fisico, y baja cuando la mercaderia sale, no cuando
+                // se cobra.
 
-        Route::prefix('delivery')
-            ->name('entregas.')
-            ->group(function () {
+                Route::name('entregas.')
+                    ->group(function () {
 
-                Route::get('/', [EntregaController::class, 'index'])
-                    ->name('index');
+                        Route::post('/lista-retiro', [EntregaController::class, 'listaRetiro'])
+                            ->name('lista-retiro');
 
-                Route::post('/{venta}/lista-retiro', [EntregaController::class, 'listaRetiro'])
-                    ->name('lista-retiro');
+                        Route::post('/despachar', [EntregaController::class, 'despachar'])
+                            ->name('despachar');
 
-                Route::post('/{venta}/despachar', [EntregaController::class, 'despachar'])
-                    ->name('despachar');
+                        Route::post('/entregar', [EntregaController::class, 'entregar'])
+                            ->name('entregar');
+                    });
 
-                Route::post('/{venta}/entregar', [EntregaController::class, 'entregar'])
-                    ->name('entregar');
+
+                // ------------------------------------------------
+                // DEVOLUCION
+                // ------------------------------------------------
+                // Emite nota de credito y reingresa el stock fisico.
+
+                Route::prefix('return')
+                    ->name('devoluciones.')
+                    ->group(function () {
+
+                        Route::get('/', [DevolucionController::class, 'create'])
+                            ->name('create');
+
+                        Route::post('/', [DevolucionController::class, 'store'])
+                            ->name('store');
+                    });
             });
 
 
@@ -325,6 +344,11 @@ Route::prefix('gestion')
         // Solo lectura y reintento. No hay alta manual —el comprobante nace
         // de acreditar un pago o de una devolucion— ni edicion ni borrado:
         // es inmutable una vez que tiene CAE.
+        //
+        // El acceso habitual es desde el detalle de la venta. El listado se
+        // conserva porque es el unico lugar donde se ve el estado ante ARCA
+        // de todos los comprobantes a la vez: un rechazo no deja rastro en la
+        // venta, que queda cobrada y entregada igual.
 
         Route::prefix('invoice')
             ->name('comprobantes.')
@@ -491,6 +515,7 @@ Route::prefix('gestion')
 
                 Route::post('/{orden}/cancelar', [OrdenCompraController::class, 'cancelar'])
                     ->name('cancelar');
+
                 // La entrada de mercadería. GET arma el formulario, POST registra la entrega.
                 // No es un PUT sobre la orden: lo que se crea es un movimiento de stock.
                 Route::get('/{orden}/recibir', [RecepcionController::class, 'create'])

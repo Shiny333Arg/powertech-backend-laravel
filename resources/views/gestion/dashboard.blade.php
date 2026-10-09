@@ -17,6 +17,18 @@ $usuario = auth()->user();
         </h5>
     </div>
 
+    <p>tareas pendientes:</p>
+    <ul>
+        <li>gestion/cliente/crear: falta el formulario</li>
+        <li>facturación con arca</li>
+        <li>mercado pago</li>
+        <li>carrito de compras</li>
+        <li>tracking</li>
+        <li>ver productos, lado cliente</li>
+        <li>buscador de productos, lado cliente</li>
+        <li>ver detalles de una promoción, lado cliente</li>
+    </ul>
+
 
     {{-- Avisos --}}
     @if (session('success'))
@@ -383,7 +395,7 @@ $usuario = auth()->user();
 
 
             {{-- Comprobantes --}}
-            <div class="col-12 col-sm-6 col-lg-3">
+            <!-- <div class="col-12 col-sm-6 col-lg-3">
                 <div class="card h-100 shadow-sm {{ $gestion['comprobantesConProblema'] > 0 ? 'border-danger' : '' }}">
 
                     <div class="card-body">
@@ -404,19 +416,10 @@ $usuario = auth()->user();
 
                     </div>
                 </div>
-            </div>
-
-        </div>
+            </div> -->
 
 
-        {{-- Compras y reposición --}}
-        <div class="row g-3 mb-3">
 
-            {{--
-                Pedidos por aprobar. Es lo único accionable de este tablero:
-                el sistema arma el borrador, pero no sale sin que un
-                administrativo lo mire.
-            --}}
             <div class="col-12 col-sm-6 col-lg-3">
                 <div class="card h-100 shadow-sm
                     {{ $gestion['ordenesPendientes'] > 0 ? 'border-warning' : '' }}">
@@ -446,6 +449,52 @@ $usuario = auth()->user();
                     </div>
                 </div>
             </div>
+
+        </div>
+
+
+
+
+
+
+
+        {{-- Compras y reposición --}}
+        <div class="row g-3 mb-3">
+
+            {{--
+                Pedidos por aprobar. Es lo único accionable de este tablero:
+                el sistema arma el borrador, pero no sale sin que un
+                administrativo lo mire.
+            --}}
+            <!-- <div class="col-12 col-sm-6 col-lg-3">
+                <div class="card h-100 shadow-sm
+                    {{ $gestion['ordenesPendientes'] > 0 ? 'border-warning' : '' }}">
+
+                    <div class="card-body">
+
+                        <p class="small text-muted mb-1">
+                            Pedidos por aprobar
+                        </p>
+
+                        <p class="h3 fw-semibold mb-1
+                            {{ $gestion['ordenesPendientes'] > 0 ? 'text-warning' : '' }}">
+                            {{ $gestion['ordenesPendientes'] }}
+                        </p>
+
+                        @if ($gestion['ordenesPendientes'] > 0)
+                        <a href="{{ route('gestion.compras.index', ['estado' => 'borrador']) }}"
+                            class="small">
+                            Revisar
+                        </a>
+                        @else
+                        <p class="small text-muted mb-0">
+                            Ningún pedido esperando aprobación.
+                        </p>
+                        @endif
+
+                    </div>
+                </div>
+            </div> -->
 
 
             {{--

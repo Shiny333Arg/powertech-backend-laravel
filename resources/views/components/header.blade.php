@@ -1,7 +1,7 @@
 {{--
   Barra de la aplicación de gestión.
 
-  Cada sección se muestra solo si el cargo del empleado tiene permiso para
+  Cada sección se muestra solo si el rol del empleado tiene permiso para
   verla (@can contra las policies, que consultan rol_permiso).
 
   Productos funciona como un menú desplegable que contiene:
@@ -13,12 +13,15 @@
   - Empleados
   - Clientes
 
-  Pedidos contiene:
-  - Compras
+  Compras contiene:
+  - Pedidos
   - Proveedores
 
-  Ojo: esconder el enlace no protege la pantalla. Eso lo hacen las policies en
-  los controladores (authorizeResource), que todavía están comentadas.
+  ESCONDER EL ENLACE NO PROTEGE LA PANTALLA. Lo que la protege es el
+  middleware 'can:' / 'permiso:' de routes/web.php. Este archivo existe para
+  que nadie choque contra un 403 de casualidad, no para controlar accesos: si
+  un menú quedara mal, lo peor que pasa es que se vea un link de más y el
+  empleado reciba el 403 al hacer clic.
 --}}
 
 @php
@@ -26,10 +29,14 @@ $usuario = auth()->user();
 
 // [texto, ruta, patrón para marcar la sección activa, modelo de la policy
 // (null = sin restricción)]
+//
+// Inicio es el tablero: lo ve cualquier empleado y se arma solo con los
+// bloques que sus permisos habilitan, así que no lleva modelo.
+//
+// Ventas, comprobantes y promociones se agrupan en un único menú.
+// Cada entrada conserva su propia comprobación de permisos.
 $secciones = [
 ['Inicio', 'gestion.home', 'gestion.home', null],
-['Ventas', 'gestion.ventas.index', 'gestion.ventas.*', null],
-['Promociones', 'gestion.promociones.index', 'gestion.promociones.*', \App\Models\Promocion::class],
 ];
 @endphp
 
@@ -99,6 +106,170 @@ $secciones = [
 
 
                     {{-- ==================================================
+                         VENTAS
+                         ================================================== --}}
+
+                    @php
+                    $ventasActivas =
+                    request()->routeIs('gestion.ventas.*') ||
+                    request()->routeIs('gestion.comprobantes.*') ||
+                    request()->routeIs('gestion.promociones.*');
+                    @endphp
+
+                    @if (
+                    $usuario->can('viewAny', \App\Models\Venta::class) ||
+                    $usuario->can('viewAny', \App\Models\Comprobante::class) ||
+                    $usuario->can('viewAny', \App\Models\Promocion::class)
+                    )
+
+                    <li class="nav-item dropdown px-2">
+
+                        <a class="nav-link rounded dropdown-toggle fw-bold text-white
+                                @if ($ventasActivas) active @endif"
+                            href="#"
+                            id="ventasDropdown"
+                            role="button"
+                            data-bs-toggle="dropdown"
+                            aria-expanded="false">
+
+                            Ventas
+
+                        </a>
+
+                        <ul class="dropdown-menu dropdown-menu-end bg-primary"
+                            aria-labelledby="ventasDropdown">
+
+                            {{-- Historial --}}
+                            @can('viewAny', \App\Models\Venta::class)
+
+                            <li>
+                                <a class="dropdown-item fw-bold text-white
+                                            @if (request()->routeIs('gestion.ventas.*')) active @endif"
+                                    href="{{ route('gestion.ventas.index') }}">
+
+                                    Pedidos
+
+                                </a>
+                            </li>
+
+                            @endcan
+
+                            {{-- Comprobantes --}}
+                            @can('viewAny', \App\Models\Comprobante::class)
+
+                            <li>
+                                <a class="dropdown-item fw-bold text-white
+                                            @if (request()->routeIs('gestion.comprobantes.*')) active @endif"
+                                    href="{{ route('gestion.comprobantes.index') }}">
+
+                                    Comprobantes
+
+                                </a>
+                            </li>
+
+                            @endcan
+
+                            {{-- Promociones --}}
+                            @can('viewAny', \App\Models\Promocion::class)
+
+                            <li>
+                                <a class="dropdown-item fw-bold text-white
+                                            @if (request()->routeIs('gestion.promociones.*')) active @endif"
+                                    href="{{ route('gestion.promociones.index') }}">
+
+                                    Promociones
+
+                                </a>
+                            </li>
+
+                            @endcan
+
+                        </ul>
+
+                    </li>
+
+                    @endif
+
+
+
+
+
+
+
+
+
+                    {{-- ==================================================
+                         COMPRAS
+                         ================================================== --}}
+
+                    @php
+                    $comprasActivos =
+                    request()->routeIs('gestion.compras.*') ||
+                    request()->routeIs('gestion.proveedores.*');
+                    @endphp
+
+                    @if (
+                    $usuario->can('viewAny', \App\Models\OrdenCompra::class) ||
+                    $usuario->can('viewAny', \App\Models\Proveedor::class)
+                    )
+
+                    <li class="nav-item dropdown px-2">
+
+                        <a class="nav-link rounded dropdown-toggle fw-bold text-white
+                                @if ($comprasActivos) active @endif"
+                            href="#"
+                            id="comprasDropdown"
+                            role="button"
+                            data-bs-toggle="dropdown"
+                            aria-expanded="false">
+
+                            Compras
+
+                        </a>
+
+
+                        <ul class="dropdown-menu dropdown-menu-end bg-primary"
+                            aria-labelledby="comprasDropdown">
+
+                            {{-- Pedidos --}}
+                            @can('viewAny', \App\Models\OrdenCompra::class)
+
+                            <li>
+                                <a class="dropdown-item fw-bold text-white
+                                            @if (request()->routeIs('gestion.compras.*')) active @endif"
+                                    href="{{ route('gestion.compras.index') }}">
+
+                                    Pedidos
+
+                                </a>
+                            </li>
+
+                            @endcan
+
+
+                            {{-- Proveedores --}}
+                            @can('viewAny', \App\Models\Proveedor::class)
+
+                            <li>
+                                <a class="dropdown-item fw-bold text-white
+                                            @if (request()->routeIs('gestion.proveedores.*')) active @endif"
+                                    href="{{ route('gestion.proveedores.index') }}">
+
+                                    Proveedores
+
+                                </a>
+                            </li>
+
+                            @endcan
+
+                        </ul>
+
+                    </li>
+
+                    @endif
+
+
+                    {{-- ==================================================
                          PRODUCTOS
                          ================================================== --}}
 
@@ -109,9 +280,12 @@ $secciones = [
                     request()->routeIs('gestion.stock.*');
                     @endphp
 
+                    {{-- El desplegable aparece si al menos una de las tres
+                         entradas es visible; adentro, cada una decide sola. --}}
                     @if (
                     $usuario->can('viewAny', \App\Models\Producto::class) ||
-                    $usuario->can('viewAny', \App\Models\Categoria::class)
+                    $usuario->can('viewAny', \App\Models\Categoria::class) ||
+                    $usuario->tienePermiso('stock.ver')
                     )
 
                     <li class="nav-item dropdown px-2">
@@ -165,6 +339,12 @@ $secciones = [
 
 
                             {{-- Movimientos de stock --}}
+                            {{-- No hay policy para el kardex: no cuelga de un
+                                 modelo, igual que su ruta. Se consulta la
+                                 clave directamente, que es lo mismo que hace
+                                 'permiso:stock.ver' en web.php. --}}
+                            @if ($usuario->tienePermiso('stock.ver'))
+
                             <li>
                                 <a class="dropdown-item fw-bold text-white
                                         @if (request()->routeIs('gestion.stock.*')) active @endif"
@@ -174,6 +354,8 @@ $secciones = [
 
                                 </a>
                             </li>
+
+                            @endif
 
                         </ul>
 
@@ -192,8 +374,13 @@ $secciones = [
                     request()->routeIs('gestion.clientes.*');
                     @endphp
 
+                    {{-- Antes esto pedía las DOS condiciones con && y tenía un
+                         @else que mostraba "Clientes" sin verificar nada: un
+                         rol sin 'cliente.ver' igual recibía el enlace. Ahora
+                         es || como los otros dos desplegables, y cada entrada
+                         de adentro se verifica sola. --}}
                     @if (
-                    $usuario->can('viewAny', \App\Models\Empleado::class) &&
+                    $usuario->can('viewAny', \App\Models\Empleado::class) ||
                     $usuario->can('viewAny', \App\Models\Cliente::class)
                     )
 
@@ -250,88 +437,10 @@ $secciones = [
 
                     </li>
 
-                    @else
-                    <li class="nav-item px-2">
-                        <a class="dropdown-item fw-bold text-white nav-link rounded fw-bold text-white
-                            @if (request()->routeIs('gestion.clientes.*')) active @endif"
-                            href="{{ route('gestion.clientes.index') }}">
-
-                            Clientes
-
-                        </a>
-                    </li>
                     @endif
 
 
-                    {{-- ==================================================
-                         PEDIDOS
-                         ================================================== --}}
 
-                    @php
-                    $pedidosActivos =
-                    request()->routeIs('gestion.compras.*') ||
-                    request()->routeIs('gestion.proveedores.*');
-                    @endphp
-
-                    @if (
-                    $usuario->can('viewAny', \App\Models\OrdenCompra::class) ||
-                    $usuario->can('viewAny', \App\Models\Proveedor::class)
-                    )
-
-                    <li class="nav-item dropdown px-2">
-
-                        <a class="nav-link rounded dropdown-toggle fw-bold text-white
-                                @if ($pedidosActivos) active @endif"
-                            href="#"
-                            id="pedidosDropdown"
-                            role="button"
-                            data-bs-toggle="dropdown"
-                            aria-expanded="false">
-
-                            Pedidos
-
-                        </a>
-
-
-                        <ul class="dropdown-menu dropdown-menu-end bg-primary"
-                            aria-labelledby="pedidosDropdown">
-
-                            {{-- Compras --}}
-                            @can('viewAny', \App\Models\OrdenCompra::class)
-
-                            <li>
-                                <a class="dropdown-item fw-bold text-white
-                                            @if (request()->routeIs('gestion.compras.*')) active @endif"
-                                    href="{{ route('gestion.compras.index') }}">
-
-                                    Compras
-
-                                </a>
-                            </li>
-
-                            @endcan
-
-
-                            {{-- Proveedores --}}
-                            @can('viewAny', \App\Models\Proveedor::class)
-
-                            <li>
-                                <a class="dropdown-item fw-bold text-white
-                                            @if (request()->routeIs('gestion.proveedores.*')) active @endif"
-                                    href="{{ route('gestion.proveedores.index') }}">
-
-                                    Proveedores
-
-                                </a>
-                            </li>
-
-                            @endcan
-
-                        </ul>
-
-                    </li>
-
-                    @endif
 
 
                     {{-- ==================================================

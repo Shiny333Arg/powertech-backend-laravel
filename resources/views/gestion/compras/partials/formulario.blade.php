@@ -6,6 +6,10 @@
     eso) y en la edición no se cambia, porque cambiar de destinatario es otro
     pedido, no una corrección de este.
 
+    El costo unitario tampoco se edita: sale del catálogo (producto->costo). Se
+    muestra para que el encargado vea cuánto pesa cada renglón, pero el dato
+    tiene un solo dueño, que es la ficha del producto.
+
     Espera:
       $orden     OrdenCompra (nueva o existente)
       $proveedor Proveedor
@@ -30,7 +34,7 @@
             <div>
                 <h2 class="h5 fw-bold mb-1">Productos a pedir</h2>
                 <p class="text-muted small mb-0">
-                    Agregá los productos, cantidades y costos estimados que formarán parte del pedido.
+                    Agregá los productos y las cantidades. El costo lo toma del catálogo.
                 </p>
             </div>
 
@@ -61,7 +65,8 @@
                     <tr>
                         <th class="text-nowrap">Producto</th>
                         <th class="text-nowrap" style="width: 12rem;">Cantidad</th>
-                        <th class="text-nowrap" style="width: 10rem;">Costo estimado</th>
+                        <th class="text-nowrap" style="width: 10rem;">Costo unitario</th>
+                        <th class="text-nowrap" style="width: 10rem;">Subtotal</th>
                         <th class="text-nowrap" style="width: 5rem;">Quitar</th>
                     </tr>
 
@@ -78,10 +83,20 @@
                             'costo_unitario'  => $linea->costo_unitario,
                         ])->all());
 
-                        $renglones = $renglones ?: [['producto_id' => '', 'cantidad_pedida' => 1, 'costo_unitario' => '']];
+                        $renglones = $renglones ?: [['producto_id' => '', 'cantidad_pedida' => 1]];
                     @endphp
 
                     @foreach ($renglones as $i => $renglon)
+                        @php
+                            // El costo sale del producto. El guardado en la linea
+                            // queda solo de red para el caso raro de un producto
+                            // que ya no figura entre los del proveedor.
+                            $elegido  = $productos->firstWhere('id', (int) ($renglon['producto_id'] ?? 0));
+                            $costo    = $elegido?->costo ?? ($renglon['costo_unitario'] ?? null);
+                            $cantidad = (int) ($renglon['cantidad_pedida'] ?? 1);
+                            $subtotal = $costo === null ? null : (float) $costo * max($cantidad, 0);
+                        @endphp
+
                         <tr>
                             <td>
                                 <select name="lineas[{{ $i }}][producto_id]"
@@ -114,11 +129,20 @@
                                 @enderror
                             </td>
 
-                            <td>
-                                <input type="number" name="lineas[{{ $i }}][costo_unitario]"
-                                       value="{{ $renglon['costo_unitario'] ?? '' }}"
-                                       step="0.01" min="0" placeholder="del catálogo"
-                                       class="form-control rounded-3 text-end">
+                            {{-- Solo lectura: el valor viaja en el hidden, que la pantalla no deja tocar. --}}
+                            <td class="text-end text-nowrap">
+                                <span data-costo-texto>
+                                    {{ $costo === null ? '—' : '$ ' . number_format((float) $costo, 2, ',', '.') }}
+                                </span>
+
+                                <input type="hidden"
+                                       name="lineas[{{ $i }}][costo_unitario]"
+                                       value="{{ $costo }}"
+                                       data-costo-campo>
+                            </td>
+
+                            <td class="text-end text-nowrap fw-semibold" data-subtotal>
+                                {{ $subtotal === null ? '—' : '$ ' . number_format($subtotal, 2, ',', '.') }}
                             </td>
 
                             <td class="text-center">
@@ -142,12 +166,21 @@
                         </tr>
                     @endforeach
                 </tbody>
+
+                <tfoot class="table-light">
+                    <tr>
+                        <td colspan="3" class="text-end fw-semibold">Total estimado</td>
+                        <td class="text-end fw-bold text-nowrap" data-total>—</td>
+                        <td></td>
+                    </tr>
+                </tfoot>
             </table>
         </div>
 
         <div class="form-text mt-2">
-            El costo es una estimación para dimensionar el pedido. Si se deja vacío se toma el del
-            catálogo, y en ningún caso se le informa al proveedor.
+            El costo es el del catálogo y acá no se edita: para cambiarlo, andá a la ficha del
+            producto. Los importes son una estimación para dimensionar el pedido, y en ningún caso
+            se le informan al proveedor.
         </div>
     </section>
 
@@ -183,12 +216,75 @@
             const cuerpo = document.querySelector('[data-renglones]');
             if (!cuerpo) return;
 
+            const celdaTotal = document.querySelector('[data-total]');
+
+            // Mismo formato que el resto de la pantalla: 1.234,56.
+            const formato = new Intl.NumberFormat('es-AR', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+            });
+
+            const pesos = (numero) => '$ ' + formato.format(numero);
+
             const reindexar = () => {
                 cuerpo.querySelectorAll('tr').forEach((fila, i) => {
                     fila.querySelectorAll('[name]').forEach((campo) => {
                         campo.name = campo.name.replace(/lineas\[\d+\]/, `lineas[${i}]`);
                     });
                 });
+            };
+
+            // El costo lo manda el catalogo, no el usuario: se lee del
+            // data-costo de la opcion elegida y se escribe en el hidden, que es
+            // lo unico que viaja al servidor.
+            const recalcularFila = (fila) => {
+                const select   = fila.querySelector('select');
+                const cantidad = parseInt(fila.querySelector('input[name*="cantidad_pedida"]')?.value, 10);
+                const costo    = parseFloat(select?.selectedOptions[0]?.dataset.costo ?? '');
+
+                const texto    = fila.querySelector('[data-costo-texto]');
+                const campo    = fila.querySelector('[data-costo-campo]');
+                const subtotal = fila.querySelector('[data-subtotal]');
+
+                if (Number.isNaN(costo)) {
+                    if (texto) texto.textContent = '—';
+                    if (campo) campo.value = '';
+                    if (subtotal) subtotal.textContent = '—';
+                    return;
+                }
+
+                if (texto) texto.textContent = pesos(costo);
+                if (campo) campo.value = costo;
+
+                if (subtotal) {
+                    subtotal.textContent = Number.isNaN(cantidad) || cantidad < 1
+                        ? '—'
+                        : pesos(costo * cantidad);
+                }
+            };
+
+            const recalcularTotal = () => {
+                if (!celdaTotal) return;
+
+                let total = 0;
+                let hayAlguno = false;
+
+                cuerpo.querySelectorAll('tr').forEach((fila) => {
+                    const costo    = parseFloat(fila.querySelector('[data-costo-campo]')?.value ?? '');
+                    const cantidad = parseInt(fila.querySelector('input[name*="cantidad_pedida"]')?.value, 10);
+
+                    if (Number.isNaN(costo) || Number.isNaN(cantidad) || cantidad < 1) return;
+
+                    total += costo * cantidad;
+                    hayAlguno = true;
+                });
+
+                celdaTotal.textContent = hayAlguno ? pesos(total) : '—';
+            };
+
+            const recalcularTodo = () => {
+                cuerpo.querySelectorAll('tr').forEach(recalcularFila);
+                recalcularTotal();
             };
 
             document.querySelector('[data-agregar-renglon]')?.addEventListener('click', () => {
@@ -203,6 +299,8 @@
 
                 cuerpo.appendChild(nueva);
                 reindexar();
+                recalcularFila(nueva);
+                recalcularTotal();
             });
 
             cuerpo.addEventListener('click', (evento) => {
@@ -214,21 +312,22 @@
 
                 evento.target.closest('tr').remove();
                 reindexar();
+                recalcularTotal();
             });
 
-            // Al elegir producto, se precarga su costo de catalogo si el campo
-            // esta vacio. Es una sugerencia, no una imposicion.
-            cuerpo.addEventListener('change', (evento) => {
-                const select = evento.target.closest('select');
-                if (!select) return;
+            // Cambia el producto (otro costo) o la cantidad (otro subtotal).
+            const alEditar = (evento) => {
+                const fila = evento.target.closest('tr');
+                if (!fila) return;
 
-                const costo = select.selectedOptions[0]?.dataset.costo;
-                const campo = select.closest('tr').querySelector('input[name*="costo_unitario"]');
+                recalcularFila(fila);
+                recalcularTotal();
+            };
 
-                if (costo && campo && campo.value === '') {
-                    campo.value = costo;
-                }
-            });
+            cuerpo.addEventListener('change', alEditar);
+            cuerpo.addEventListener('input', alEditar);
+
+            recalcularTodo();
         })();
     </script>
 @endpush

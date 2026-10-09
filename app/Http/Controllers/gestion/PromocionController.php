@@ -35,7 +35,7 @@ class PromocionController extends Controller
     public function __construct()
     {
         // Descomentar cuando exista el login:
-        // $this->authorizeResource(Promocion::class, 'promocion');
+        $this->authorizeResource(Promocion::class, 'promocion');
     }
 
     public function index(Request $request): View

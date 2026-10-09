@@ -2,6 +2,7 @@
 
 use App\Http\Middleware\VerificarAmbito;
 use App\Http\Middleware\VerificarCuentaActiva;
+use App\Http\Middleware\VerificarPermiso;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -20,9 +21,17 @@ return Application::configure(basePath: dirname(__DIR__))
             VerificarCuentaActiva::class,
         ]);
 
-        // Uso en rutas: ->middleware(['auth', 'ambito:gestion'])
+        // Uso en rutas:
+        //   ->middleware(['auth', 'ambito:gestion'])   separa las dos apps
+        //   ->middleware('can:update,producto')        policy + estado
+        //   ->middleware('permiso:stock.ajustar')      clave suelta
+        //
+        // 'ambito' decide a que aplicacion entra cada rol; 'can' y 'permiso'
+        // deciden que puede hacer adentro. Son capas distintas: un cajero
+        // pertenece al ambito gestion y aun asi no abre /gestion/empleado.
         $middleware->alias([
-            'ambito' => VerificarAmbito::class,
+            'ambito'  => VerificarAmbito::class,
+            'permiso' => VerificarPermiso::class,
         ]);
 
         // Un invitado que pide una pagina protegida va al login (hay uno solo).
@@ -33,5 +42,9 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->redirectUsersTo(fn (Request $request) => route($request->user()->rutaInicio()));
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        //
+        // Nada que configurar: una AuthorizationException ya sale como 403 y
+        // Laravel busca sola resources/views/errors/403.blade.php, que es
+        // donde conviene poner el layout de gestion y un enlace de vuelta al
+        // tablero. Sin esa vista, el empleado que pega una URL que no le toca
+        // ve la pantalla pelada del framework.
     })->create();

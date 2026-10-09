@@ -159,7 +159,7 @@
 
     @can('devolver', $venta)
 
-    <a href="{{ route('gestion.devoluciones.create', $venta) }}" class="btn btn-outline-warning fw-semibold">
+    <a href="{{ route('gestion.devoluciones.create', $venta) }}" class="btn btn-warning fw-semibold">
         Devolver
     </a>
 
