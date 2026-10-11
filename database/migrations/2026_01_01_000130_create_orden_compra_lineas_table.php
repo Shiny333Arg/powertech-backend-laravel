@@ -10,19 +10,13 @@ return new class extends Migration
     {
         Schema::create('orden_compra_lineas', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('orden_compra_id')
-                ->constrained('ordenes_compra')
-                ->cascadeOnDelete();
-            $table->foreignId('producto_id')
-                ->constrained('productos')
-                ->restrictOnDelete();
+            $table->foreignId('orden_compra_id')->constrained('ordenes_compra')->cascadeOnDelete();
+            $table->foreignId('producto_id')->constrained('productos');
             $table->integer('cantidad_pedida');
+            // Se va sumando en cada recepcion parcial
             $table->integer('cantidad_recibida')->default(0);
             $table->decimal('costo_unitario', 12, 2);
             $table->timestamps();
-
-            // busqueda de ordenes abiertas por producto (antes de crear una automatica)
-            $table->index('producto_id');
         });
     }
 

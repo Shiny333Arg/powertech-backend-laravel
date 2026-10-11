@@ -10,15 +10,9 @@ return new class extends Migration
     {
         Schema::create('promociones_aplicadas', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('venta_id')
-                ->constrained('ventas')
-                ->restrictOnDelete();
-            $table->foreignId('venta_linea_id')
-                ->constrained('venta_lineas')
-                ->restrictOnDelete();
-            $table->foreignId('promocion_id')
-                ->constrained('promociones')
-                ->restrictOnDelete();
+            $table->foreignId('venta_id')->constrained('ventas');
+            $table->foreignId('venta_linea_id')->constrained('venta_lineas');
+            $table->foreignId('promocion_id')->constrained('promociones');
             $table->decimal('importe_descuento', 12, 2);
             $table->timestamp('created_at')->useCurrent();
         });

@@ -10,6 +10,7 @@ return new class extends Migration
     {
         Schema::create('condiciones_iva', function (Blueprint $table) {
             $table->id();
+            // 1 RI, 4 Exento, 5 Consumidor Final, 6 Monotributo
             $table->smallInteger('codigo_afip')->unique();
             $table->string('nombre', 60);
             $table->timestamps();

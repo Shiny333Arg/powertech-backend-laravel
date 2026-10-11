@@ -10,16 +10,12 @@ return new class extends Migration
     {
         Schema::create('carrito_lineas', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('carrito_id')
-                ->constrained('carritos')
-                ->cascadeOnDelete(); // el carrito si puede desaparecer fisicamente
-            $table->foreignId('producto_id')
-                ->constrained('productos')
-                ->restrictOnDelete();
+            $table->foreignId('carrito_id')->constrained('carritos')->cascadeOnDelete();
+            $table->foreignId('producto_id')->constrained('productos');
             $table->integer('cantidad');
             $table->timestamps();
 
-            // agregar dos veces el mismo producto suma cantidad, no crea otra fila
+            // Un producto una sola vez por carrito: se suma la cantidad
             $table->unique(['carrito_id', 'producto_id']);
         });
     }

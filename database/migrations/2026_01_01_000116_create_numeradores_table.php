@@ -10,10 +10,11 @@ return new class extends Migration
     {
         Schema::create('numeradores', function (Blueprint $table) {
             $table->id();
-            $table->string('serie', 30)->unique(); // 'venta' | 'orden_compra'
+            // 'venta', 'orden_compra', ...
+            $table->string('serie', 30)->unique();
             $table->string('prefijo', 10)->nullable();
+            // Se incrementa con lockForUpdate() dentro de la transaccion
             $table->unsignedInteger('ultimo_numero')->default(0);
-            // Sin created_at: la fila la crea el seeder y solo se actualiza.
             $table->timestamp('updated_at')->nullable();
         });
     }

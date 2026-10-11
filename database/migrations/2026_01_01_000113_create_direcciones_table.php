@@ -10,7 +10,7 @@ return new class extends Migration
     {
         Schema::create('direcciones', function (Blueprint $table) {
             $table->id();
-            // Polimorfica: empleados | clientes | proveedores. Sin FK, por definicion.
+            // Polimorfica: Empleado, Cliente o Proveedor
             $table->string('direccionable_type', 100);
             $table->unsignedBigInteger('direccionable_id');
             $table->enum('tipo', ['fiscal', 'envio', 'particular']);

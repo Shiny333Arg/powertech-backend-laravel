@@ -9,12 +9,8 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('promocion_productos', function (Blueprint $table) {
-            $table->foreignId('promocion_id')
-                ->constrained('promociones')
-                ->restrictOnDelete();
-            $table->foreignId('producto_id')
-                ->constrained('productos')
-                ->restrictOnDelete();
+            $table->foreignId('promocion_id')->constrained('promociones');
+            $table->foreignId('producto_id')->constrained('productos');
 
             $table->primary(['promocion_id', 'producto_id']);
         });

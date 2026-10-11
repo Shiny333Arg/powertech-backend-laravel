@@ -10,16 +10,13 @@ return new class extends Migration
     {
         Schema::create('carritos', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('user_id')
-                ->nullable()
-                ->constrained('users')
-                ->restrictOnDelete();
-            $table->string('session_token', 64)->nullable(); // carrito anonimo
+            // Nullable para permitir carrito de invitado identificado por token
+            $table->foreignId('user_id')->nullable()->constrained('users');
+            $table->string('session_token', 64)->nullable()->index();
             $table->enum('estado', ['activo', 'en_checkout', 'convertido', 'abandonado'])
                 ->default('activo');
             $table->timestamps();
 
-            $table->index('session_token');
             $table->index(['user_id', 'estado']);
         });
     }

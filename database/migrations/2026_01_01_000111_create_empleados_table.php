@@ -10,14 +10,9 @@ return new class extends Migration
     {
         Schema::create('empleados', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('user_id')
-                ->unique()
-                ->constrained('users')
-                ->restrictOnDelete();
+            $table->foreignId('user_id')->unique()->constrained('users');
             $table->string('legajo', 20)->unique();
-            $table->foreignId('tipo_documento_id')
-                ->constrained('tipos_documento')
-                ->restrictOnDelete();
+            $table->foreignId('tipo_documento_id')->constrained('tipos_documento');
             $table->string('nro_doc', 20);
             $table->string('cuil', 13);
             $table->date('fecha_nacimiento')->nullable();

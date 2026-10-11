@@ -10,20 +10,12 @@ return new class extends Migration
     {
         Schema::create('clientes', function (Blueprint $table) {
             $table->id();
-            // nullable: el cliente de mostrador existe sin tener cuenta.
-            $table->foreignId('user_id')
-                ->nullable()
-                ->unique()
-                ->constrained('users')
-                ->restrictOnDelete();
+            // Nullable: un cliente de mostrador puede no tener cuenta en la app
+            $table->foreignId('user_id')->nullable()->unique()->constrained('users');
             $table->string('razon_social', 150);
-            $table->foreignId('tipo_documento_id')
-                ->constrained('tipos_documento')
-                ->restrictOnDelete();
+            $table->foreignId('tipo_documento_id')->constrained('tipos_documento');
             $table->string('nro_doc', 20);
-            $table->foreignId('condicion_iva_id')
-                ->constrained('condiciones_iva')
-                ->restrictOnDelete();
+            $table->foreignId('condicion_iva_id')->constrained('condiciones_iva');
             $table->string('telefono', 30)->nullable();
             $table->boolean('activo')->default(true);
             $table->timestamps();

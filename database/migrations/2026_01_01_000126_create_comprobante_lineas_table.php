@@ -10,12 +10,8 @@ return new class extends Migration
     {
         Schema::create('comprobante_lineas', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('comprobante_id')
-                ->constrained('comprobantes')
-                ->restrictOnDelete();
-            $table->foreignId('producto_id')
-                ->constrained('productos')
-                ->restrictOnDelete();
+            $table->foreignId('comprobante_id')->constrained('comprobantes');
+            $table->foreignId('producto_id')->constrained('productos');
             $table->string('descripcion', 150);
             $table->integer('cantidad');
             $table->decimal('precio_unitario', 12, 2);
