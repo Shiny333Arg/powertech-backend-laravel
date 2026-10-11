@@ -7,16 +7,12 @@ use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 /**
- * Sirve al alta y a la edicion. La diferencia entre las dos es una sola:
- * al editar hay que ignorar la propia fila en las reglas de unicidad, o la
- * categoria chocaria contra si misma.
+ * Sirve al alta y a la edicion.
  */
 class CategoriaRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        // La autorizacion real vive en CategoriaPolicy. Se activa cuando exista
-        // el login (ver nota en el controlador).
         return true;
     }
 

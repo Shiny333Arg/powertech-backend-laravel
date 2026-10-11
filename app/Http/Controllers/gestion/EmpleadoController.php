@@ -18,25 +18,12 @@ use Illuminate\View\View;
 use Throwable;
 
 /**
- * CRUD de empleados. Escribe sobre TRES tablas: users (credenciales),
- * empleados (datos personales y fiscales) y direcciones (domicilio).
- *
- * No existe un CRUD de 'users' suelto, a proposito: una fila de users sin su
- * ficha es una cuenta sin dueno, y el catalogo de permisos no tiene ninguna
- * clave 'usuario.*'. Los clientes se dan de alta solos en la tienda y tienen
- * su propio modulo.
- *
- * SIN destroy: un usuario no se elimina nunca.
- *
- * La contraseña no pasa nunca por este controlador. El empleado nace sin
- * ella y recibe por correo un enlace para elegirla (InvitacionEmpleado). Si
- * despues la olvida, usa "¿Olvidaste tu contraseña?" como cualquier usuario.
+ * CRUD de empleados.
  */
 class EmpleadoController extends Controller
 {
     public function __construct()
     {
-        // Descomentar cuando exista el login:
         $this->authorizeResource(Empleado::class, 'empleado');
     }
 
@@ -93,15 +80,9 @@ class EmpleadoController extends Controller
     /**
      * Alta.
      *
-     * Las tres filas en una transaccion: un user sin su empleado es una cuenta
-     * que puede entrar al sistema sin que nadie sepa de quien es.
-     *
      * Nace SIN contraseña: no puede ingresar hasta que abra el enlace de la
      * invitacion y elija la suya. Asi nadie mas que el la conoce, y completar
      * el enlace demuestra que el correo que cargo el administrativo es real.
-     *
-     * El mail se manda DESPUES de la transaccion: si el envio falla, el alta
-     * queda hecha y la invitacion se puede reenviar desde la ficha.
      */
     public function store(EmpleadoRequest $request): RedirectResponse
     {

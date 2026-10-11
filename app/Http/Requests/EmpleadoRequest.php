@@ -10,18 +10,6 @@ use Illuminate\Validation\Rule;
 
 /**
  * Alta y edicion de empleados.
- *
- * Un empleado son TRES filas: credenciales en users, datos personales y
- * fiscales en empleados, y domicilio en direcciones. El formulario es uno solo
- * y el controlador las escribe en una transaccion.
- *
- * La contraseña NO viaja en este formulario, ni en el alta ni en la edicion.
- * El empleado la elige el mismo desde el enlace de invitacion que recibe por
- * correo (ver EmpleadoController::store), y despues la cambia desde "Mi
- * cuenta" o con "¿Olvidaste tu contraseña?". Nadie mas la conoce nunca.
- *
- * El correo es obligatorio porque es su credencial y el unico canal para
- * recuperar el acceso.
  */
 class EmpleadoRequest extends FormRequest
 {
@@ -33,11 +21,8 @@ class EmpleadoRequest extends FormRequest
     protected function prepareForValidation(): void
     {
         $this->merge([
-            // Igual que el CUIT del proveedor: se guarda en 11 digitos para que
-            // el mismo CUIL escrito de dos formas no pase dos veces.
             'cuil'  => preg_replace('/\D/', '', (string) $this->input('cuil')),
-            // Es la credencial: "Juan@PowerTech.com " y "juan@powertech.com"
-            // tienen que ser la misma cuenta.
+
             'email' => Str::lower(trim((string) $this->input('email'))),
         ]);
     }

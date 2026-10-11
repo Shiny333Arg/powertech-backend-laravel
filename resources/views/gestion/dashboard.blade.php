@@ -20,6 +20,16 @@ $usuario = auth()->user();
     <p>tareas pendientes:</p>
     <ul>
         <li>gestion/cliente/crear: falta el formulario</li>
+        <li>gestion/compra/crear: cambiar el select por un buscador</li>
+        <li>gestion/compra/crear: autoreposición</li>
+        <li>gestion/venta/crear: corregir la tabla, "precio unitario" "importe"</li>
+        <li>gestion/venta/crear: mostrar impuestos</li>
+        <li>hardcodear los correos para los proveedores</li>
+        <li>remito para el manejo de stock, obligatorio</li>
+        <li>no puedo tener stock negativo</li>
+        <li>cuando hago una venta, la promoción no debe ser autompática, debe ser seleccionable</li>
+        <li>for update en el cobro de ventas, para asegurarse de que hay stock</li>
+        <li>iva, ingresos brutos, investigar para las ventas</li>
         <li>facturación con arca</li>
         <li>mercado pago</li>
         <li>carrito de compras</li>

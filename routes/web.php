@@ -41,9 +41,6 @@ require __DIR__ . '/auth.php';
 // HOME
 // ========================================================
 
-// Route::get('/', function () {
-//     return view('home.index');
-// })->name('cliente.home');
 Route::get('/', [HomeController::class, 'index'])
     ->name('cliente.home');
 
@@ -64,9 +61,6 @@ Route::prefix('help')
 // ============================================================
 // TIENDA - CLIENTE LOGUEADO
 // ============================================================
-//
-// Cuando exista el checkout, sus rutas llevan ademas 'verified':
-// no se compra con un correo sin confirmar.
 
 Route::middleware(['auth', 'ambito:tienda'])
     ->group(function () {
@@ -74,8 +68,6 @@ Route::middleware(['auth', 'ambito:tienda'])
         // ========================================================
         // PERFIL (datos personales y fiscales)
         // ========================================================
-        // Los nombres profile.* son los de Breeze. La contraseña se
-        // cambia con password.update (routes/auth.php).
 
         Route::get('/perfil', [ProfileController::class, 'edit'])
             ->name('profile.edit');
@@ -83,9 +75,6 @@ Route::middleware(['auth', 'ambito:tienda'])
         Route::patch('/perfil', [ProfileController::class, 'update'])
             ->name('profile.update');
 
-
-        // Route::get('/ver/{item}', [ProductoController::class, 'show'])
-        //             ->name('show');
     });
 
 
@@ -94,24 +83,6 @@ Route::middleware(['auth', 'ambito:tienda'])
 // ============================================================
 //
 // Solo empleados logueados. Un cliente que abre /gestion vuelve a la tienda.
-//
-// Criterio de verbos, el mismo que ya usaba este archivo:
-//   PATCH  modifica el recurso        -> baja, reactivar, publicar
-//   POST   dispara una accion         -> validar, cobrar, entregar, devolver
-// Las transiciones del circuito de venta son acciones: generan movimientos de
-// stock y comprobantes, no editan la fila.
-//
-// Ninguna venta, comprobante, pago, movimiento de stock ni orden de compra
-// tiene ruta DELETE. No es un olvido: no se eliminan.
-//
-// COBROS Y ENTREGAS YA NO SON SECCIONES PROPIAS. El circuito completo de la
-// venta —cobrar, preparar, despachar, entregar, devolver— se opera desde el
-// detalle de la venta, y las colas de trabajo son filtros sobre el listado:
-//   pendientes de cobro    -> gestion.ventas.index?estado=confirmada
-//   pendientes de entrega  -> gestion.ventas.index?estado=pagada
-// Los nombres de ruta cobros.* y entregas.* se conservan a proposito: lo unico
-// que cambio son las URLs, asi que todo route('gestion.cobros.store', $venta)
-// que ya exista en las vistas sigue funcionando sin tocarse.
 
 Route::prefix('gestion')
     ->name('gestion.')
@@ -122,11 +93,6 @@ Route::prefix('gestion')
         // ========================================================
         // HOME
         // ========================================================
-        // Un solo tablero: arma los bloques de administrativo, vendedor
-        // y cajero segun los permisos de quien entra.
-        //
-        // Con cobros fuera del menu, el bloque del cajero pasa a ser el
-        // unico historial propio de cobros del sistema.
 
         Route::get('/', [DashboardController::class, 'index'])
             ->name('home');
@@ -135,8 +101,7 @@ Route::prefix('gestion')
         // ========================================================
         // MI CUENTA
         // ========================================================
-        // El empleado solo puede cambiar su contraseña: el formulario
-        // de esta vista envia a password.update (routes/auth.php).
+        // El empleado solo puede cambiar su contraseña
 
         Route::view('/mi-cuenta', 'gestion.user.my-account')
             ->name('mi-cuenta');
