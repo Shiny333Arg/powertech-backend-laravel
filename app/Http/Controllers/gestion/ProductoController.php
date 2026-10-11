@@ -34,7 +34,7 @@ class ProductoController extends Controller
     public function __construct(private readonly StockService $stock)
     {
         // Descomentar cuando exista el login:
-        // $this->authorizeResource(Producto::class, 'producto');
+        $this->authorizeResource(Producto::class, 'producto');
     }
 
     /**
@@ -65,7 +65,7 @@ class ProductoController extends Controller
             ->when($request->query('stock') === 'reponer', fn ($query) => $query->bajoPuntoReposicion())
             ->when($request->query('stock') === 'preventa', fn ($query) => $query->where('stock_disponible', '<', 0))
             ->orderBy('nombre')
-            ->paginate(20)
+            ->paginate(10)
             ->withQueryString();
 
         return view('gestion.item.index', [
@@ -144,14 +144,14 @@ class ProductoController extends Controller
             $producto->update($datos);
             $this->borrarImagen($imagenAnterior); // recien despues de guardar la nueva
 
-            return redirect()->route('productos.index')
+            return redirect()->route('gestion.items.index')
                 ->with('exito', "Se guardaron los cambios en «{$producto->nombre}».");
         }
 
         $producto->update($datos);
 
         return redirect()
-            ->route('gestion.productos.index')
+            ->route('gestion.items.index')
             ->with('exito', "Se guardaron los cambios en «{$producto->nombre}».");
     }
 
@@ -174,6 +174,11 @@ class ProductoController extends Controller
         $producto->reactivar();
 
         return back()->with('exito', "«{$producto->nombre}» vuelve a estar en operación.");
+    }
+
+    /** Situacion de stock de un producto y su historico. */
+    public function show(Request $request, Producto $producto): View
+    {
     }
 
     /**
@@ -206,37 +211,37 @@ class ProductoController extends Controller
      * Un ajuste negativo mayor al saldo lo rechaza el servicio: si falta mas de
      * lo que hay, el error esta en un movimiento anterior, no en el ajuste.
      */
-    public function ajustarStock(AjusteStockRequest $request, Producto $producto): RedirectResponse
-    {
-        try {
-            $movimiento = $this->stock->ajustar(
-                $producto,
-                (int) $request->validated('cantidad'),
-                $request->validated('motivo'),
-            );
-        } catch (StockInsuficienteException $e) {
-            return back()->with('error', $e->getMessage())->withInput();
-        }
+    // public function ajustarStock(AjusteStockRequest $request, Producto $producto): RedirectResponse
+    // {
+    //     try {
+    //         $movimiento = $this->stock->ajustar(
+    //             $producto,
+    //             (int) $request->validated('cantidad'),
+    //             $request->validated('motivo'),
+    //         );
+    //     } catch (StockInsuficienteException $e) {
+    //         return back()->with('error', $e->getMessage())->withInput();
+    //     }
 
-        return back()->with('exito', sprintf(
-            'Stock ajustado. «%s» queda con %d en depósito y %d disponibles.',
-            $producto->nombre,
-            $movimiento->stock_fisico_resultante,
-            $producto->refresh()->stock_disponible,
-        ));
-    }
+    //     return back()->with('exito', sprintf(
+    //         'Stock ajustado. «%s» queda con %d en depósito y %d disponibles.',
+    //         $producto->nombre,
+    //         $movimiento->stock_fisico_resultante,
+    //         $producto->refresh()->stock_disponible,
+    //     ));
+    // }
 
-    /** Historial de movimientos del producto: explica cada cambio de saldo. */
-    public function movimientos(Producto $producto): View
-    {
-        return view('gestion.item.movimientos', [
-            'producto'    => $producto,
-            'movimientos' => $producto->movimientosStock()
-                ->with('usuario:id,nombres,apellido')
-                ->latest('created_at')
-                ->paginate(30),
-        ]);
-    }
+    // /** Historial de movimientos del producto: explica cada cambio de saldo. */
+    // public function movimientos(Producto $producto): View
+    // {
+    //     return view('gestion.item.movimientos', [
+    //         'producto'    => $producto,
+    //         'movimientos' => $producto->movimientosStock()
+    //             ->with('usuario:id,nombres,apellido')
+    //             ->latest('created_at')
+    //             ->paginate(30),
+    //     ]);
+    // }
 
     /** @return array<string, mixed> */
     private function opcionesDeFormulario(): array

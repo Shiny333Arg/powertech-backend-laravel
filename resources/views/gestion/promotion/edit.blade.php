@@ -1,12 +1,51 @@
-@extends('layouts.app')
+@extends('layouts.gestion')
 
 @section('title', 'PowerTech')
 
 @section('content')
 
+@php
+    // Catalogo de referencia para dibujar las filas ya elegidas al abrir.
+    // $productos solo trae activos: si la promocion alcanza un producto que
+    // despues se dio de baja, no esta aca. Ese caso se dibuja igual, marcado,
+    // para que conserve su input oculto —si la fila desapareciera, el sync()
+    // del update lo sacaria de la promocion sin que nadie lo decida.
+    $catalogo = $productos->keyBy('id');
+
+    $idsSeleccionados = collect(old('productos', $seleccionados))
+        ->map(fn ($id) => (int) $id)
+        ->all();
+
+    $productosIniciales = collect($idsSeleccionados)
+        ->map(function (int $id) use ($catalogo) {
+            $producto = $catalogo->get($id);
+
+            if (! $producto) {
+                return [
+                    'id'        => $id,
+                    'codigo'    => '—',
+                    'nombre'    => "Producto #{$id} (dado de baja)",
+                    'precio'    => null,
+                    'categoria' => null,
+                    'inactivo'  => true,
+                ];
+            }
+
+            return [
+                'id'        => $producto->id,
+                'codigo'    => $producto->codigo,
+                'nombre'    => $producto->nombre,
+                'precio'    => (float) $producto->precio,
+                'categoria' => $producto->categoria?->nombre,
+                'inactivo'  => false,
+            ];
+        })
+        ->values();
+@endphp
+
 <div class="container py-4">
 
-    
+
     {{-- Título --}}
     <section class="mb-4">
         <h1 class="h3 fw-bold mb-2">Editar promoción</h1>
@@ -17,6 +56,23 @@
 
     {{-- Formulario de edición --}}
     <section class="mb-4">
+
+        {{-- Errores generales de validación --}}
+        @if ($errors->any())
+
+        <div class="alert alert-danger">
+
+            <strong>Revisá estos campos:</strong>
+
+            <ul class="mb-0 mt-2">
+                @foreach ($errors->all() as $error)
+                <li>{{ $error }}</li>
+                @endforeach
+            </ul>
+
+        </div>
+
+        @endif
 
         <form
             id="editarPromocionForm"
@@ -302,55 +358,77 @@
                     @enderror
                 </div>
 
-                {{-- Productos --}}
+                {{-- Productos alcanzados --}}
                 <div class="col-12">
 
-                    <label for="productos" class="form-label fw-semibold">
+                    <label for="buscadorProducto" class="form-label fw-semibold">
                         Productos alcanzados
                     </label>
 
-                    <select
-                        id="productos"
-                        name="productos[]"
-                        class="form-select rounded-3 @error('productos') is-invalid @enderror"
-                        multiple
-                        required
-                        disabled
-                        size="8">
-
-                        @foreach($productos as $producto)
-                        <option
-                            value="{{ $producto->id }}"
-                            @selected(in_array(
-                            $producto->id,
-                            old('productos', $seleccionados)
-                            ))>
-
-                            {{ $producto->codigo }} - {{ $producto->nombre }}
-                            @if($producto->categoria)
-                            ({{ $producto->categoria->nombre }})
-                            @endif
-
-                        </option>
-                        @endforeach
-
-                    </select>
-
-                    <div class="form-text">
-                        Mantenga presionada la tecla Ctrl para seleccionar varios productos.
+                    <div class="form-text mb-3">
+                        Buscá por código, nombre o marca para agregar productos a la promoción.
                     </div>
 
                     @error('productos')
-                    <div class="invalid-feedback">
+                    <div class="text-danger small mb-2">
                         {{ $message }}
                     </div>
                     @enderror
 
                     @error('productos.*')
-                    <div class="text-danger small mt-2">
+                    <div class="text-danger small mb-2">
                         {{ $message }}
                     </div>
                     @enderror
+
+                    {{-- Buscador. data-no-bloquear: lo habilita y deshabilita el
+                         modulo de productos, no el bloqueo generico del form. --}}
+                    <div class="position-relative mb-3">
+
+                        <input
+                            type="text"
+                            class="form-control rounded-3"
+                            id="buscadorProducto"
+                            placeholder="Ej: RTX 3070"
+                            maxlength="150"
+                            data-no-bloquear
+                            disabled>
+
+                        <div
+                            class="list-group position-absolute w-100 shadow d-none"
+                            id="resultadosProducto"
+                            style="z-index: 1050; max-height: 18rem; overflow-y: auto;">
+                        </div>
+
+                    </div>
+
+                    {{-- Seleccionados --}}
+                    <div class="table-responsive">
+
+                        <table class="table table-bordered align-middle text-center mb-0" id="tablaProductos">
+
+                            <thead class="table-dark">
+
+                                <tr>
+                                    <th class="text-nowrap">Producto</th>
+                                    <th class="text-nowrap" style="width: 12rem;">Categoría</th>
+                                    <th class="text-nowrap" style="width: 10rem;">Precio</th>
+                                    <th class="text-nowrap" style="width: 5rem;">Quitar</th>
+                                </tr>
+
+                            </thead>
+
+                            <tbody id="cuerpoProductos">
+                                {{-- Lo dibuja el script del pie --}}
+                            </tbody>
+
+                        </table>
+
+                    </div>
+
+                    <div class="form-text mt-2">
+                        Productos seleccionados: <span class="fw-semibold" id="totalProductos">0</span>
+                    </div>
 
                 </div>
 
@@ -513,7 +591,7 @@
             @else
 
             <form
-                action="{{ route('promociones.reactivar', $promocion) }}"
+                action="{{ route('gestion.promociones.reactivar', $promocion) }}"
                 method="POST"
                 class="d-inline">
 
@@ -535,9 +613,14 @@
         </div>
 
     </section>
-    
+
 
 </div>
+
+{{-- Datos iniciales para el script, sin ensuciar atributos HTML --}}
+<script type="application/json" id="datosProductos">
+    @json($productosIniciales)
+</script>
 
 @endsection
 
@@ -546,6 +629,238 @@
 <script>
     document.addEventListener('DOMContentLoaded', function() {
 
+        // ==========================================================
+        // PRODUCTOS ALCANZADOS
+        // ==========================================================
+        // Expone bloquear/desbloquear/restaurar para que el bloqueo
+        // generico del formulario lo maneje como a un campo mas.
+
+        var productos = (function() {
+            'use strict';
+
+            var urlProductos = @json(route('gestion.buscar.productos'));
+
+            var iniciales = JSON.parse(document.getElementById('datosProductos').textContent) || [];
+            var elegidos = iniciales.slice();
+            var bloqueado = true;
+
+            var cuerpo = document.getElementById('cuerpoProductos');
+            var buscador = document.getElementById('buscadorProducto');
+            var resultados = document.getElementById('resultadosProducto');
+            var total = document.getElementById('totalProductos');
+
+            function pesos(n) {
+                if (n === null || n === undefined) return '—';
+
+                return '$ ' + Number(n).toLocaleString('es-AR', {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2
+                });
+            }
+
+            function debounce(fn, ms) {
+                var t;
+                return function() {
+                    var args = arguments;
+                    clearTimeout(t);
+                    t = setTimeout(function() {
+                        fn.apply(null, args);
+                    }, ms);
+                };
+            }
+
+            function escapar(texto) {
+                var div = document.createElement('div');
+                div.textContent = texto == null ? '' : texto;
+                return div.innerHTML;
+            }
+
+            function ocultar(caja) {
+                caja.classList.add('d-none');
+                caja.innerHTML = '';
+            }
+
+            function dibujar() {
+                cuerpo.innerHTML = '';
+
+                if (!elegidos.length) {
+                    cuerpo.innerHTML =
+                        '<tr><td colspan="4" class="text-center py-4 text-muted">' +
+                        'La promoción no tiene productos. Buscá uno arriba para agregarlo.' +
+                        '</td></tr>';
+                }
+
+                elegidos.forEach(function(p, i) {
+                    var fila = document.createElement('tr');
+
+                    fila.innerHTML =
+                        '<td class="text-start">' +
+                        '<div class="fw-semibold">' + escapar(p.nombre) + '</div>' +
+                        '<div class="text-muted small">Código: ' + escapar(p.codigo) + '</div>' +
+                        (p.inactivo ?
+                            '<div class="text-danger small">Este producto está dado de baja. ' +
+                            'Si lo quitás, sale de la promoción.</div>' :
+                            '') +
+                        '<input type="hidden" name="productos[]" value="' + p.id + '">' +
+                        '</td>' +
+                        '<td class="text-muted small">' + (p.categoria ? escapar(p.categoria) : '—') + '</td>' +
+                        '<td class="text-nowrap">' + pesos(p.precio) + '</td>' +
+                        '<td>' +
+                        '<button type="button" class="btn btn-sm btn-outline-danger" ' +
+                        'data-quitar="' + i + '" title="Quitar"' +
+                        (bloqueado ? ' disabled' : '') + '>&times;</button>' +
+                        '</td>';
+
+                    cuerpo.appendChild(fila);
+                });
+
+                total.textContent = elegidos.length;
+            }
+
+            function agregar(p) {
+                var yaEsta = elegidos.some(function(e) {
+                    return e.id === p.id;
+                });
+
+                if (!yaEsta) {
+                    elegidos.push({
+                        id: p.id,
+                        codigo: p.codigo,
+                        nombre: p.nombre,
+                        precio: p.precio,
+                        categoria: p.categoria || null,
+                        inactivo: false
+                    });
+                }
+
+                buscador.value = '';
+                ocultar(resultados);
+                dibujar();
+            }
+
+            cuerpo.addEventListener('click', function(e) {
+                if (bloqueado) return;
+
+                var boton = e.target.closest('[data-quitar]');
+                if (!boton) return;
+
+                elegidos.splice(Number(boton.dataset.quitar), 1);
+                dibujar();
+            });
+
+            function buscar(texto, alRecibir) {
+                if (texto.trim().length < 2) return alRecibir([]);
+
+                fetch(urlProductos + '?q=' + encodeURIComponent(texto), {
+                        headers: {
+                            'Accept': 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest'
+                        },
+                        credentials: 'same-origin'
+                    })
+                    .then(function(r) {
+                        if (!r.ok) {
+                            return r.text().then(function(cuerpo) {
+                                console.error('Búsqueda de productos → HTTP ' + r.status, cuerpo.slice(0, 800));
+                                return [];
+                            });
+                        }
+
+                        var tipo = r.headers.get('content-type') || '';
+
+                        if (tipo.indexOf('application/json') === -1) {
+                            return r.text().then(function(cuerpo) {
+                                console.error('Búsqueda de productos → no devolvió JSON (¿redirect de middleware?)', cuerpo.slice(0, 800));
+                                return [];
+                            });
+                        }
+
+                        return r.json();
+                    })
+                    .then(alRecibir)
+                    .catch(function(e) {
+                        console.error('Búsqueda de productos falló', e);
+                        alRecibir([]);
+                    });
+            }
+
+            buscador.addEventListener('input', debounce(function() {
+                if (bloqueado) return;
+
+                buscar(buscador.value, function(items) {
+                    if (!items.length) return ocultar(resultados);
+
+                    resultados.innerHTML = '';
+
+                    items.forEach(function(p) {
+                        var yaEsta = elegidos.some(function(e) {
+                            return e.id === p.id;
+                        });
+
+                        var boton = document.createElement('button');
+                        boton.type = 'button';
+                        boton.className = 'list-group-item list-group-item-action d-flex justify-content-between align-items-center gap-3';
+                        boton.disabled = yaEsta;
+
+                        boton.innerHTML =
+                            '<span class="text-start">' +
+                            '<span class="fw-semibold">' + escapar(p.nombre) + '</span>' +
+                            '<span class="text-muted small ms-2">' + escapar(p.codigo) + '</span>' +
+                            '</span>' +
+                            '<span class="text-nowrap">' +
+                            (yaEsta ? '<span class="badge text-bg-secondary me-2">ya agregado</span>' : '') +
+                            pesos(p.precio) +
+                            '</span>';
+
+                        boton.addEventListener('click', function() {
+                            agregar(p);
+                        });
+
+                        resultados.appendChild(boton);
+                    });
+
+                    resultados.classList.remove('d-none');
+                });
+            }, 300));
+
+            document.addEventListener('click', function(e) {
+                if (!e.target.closest('#resultadosProducto') && e.target !== buscador) {
+                    ocultar(resultados);
+                }
+            });
+
+            // El buscador no es un campo del form: Enter no debe enviarlo.
+            buscador.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') e.preventDefault();
+            });
+
+            dibujar();
+
+            return {
+                bloquear: function() {
+                    bloqueado = true;
+                    buscador.disabled = true;
+                    buscador.value = '';
+                    ocultar(resultados);
+                    dibujar();
+                },
+                desbloquear: function() {
+                    bloqueado = false;
+                    buscador.disabled = false;
+                    dibujar();
+                },
+                restaurar: function() {
+                    elegidos = iniciales.slice();
+                    dibujar();
+                }
+            };
+        })();
+
+
+        // ==========================================================
+        // BLOQUEO DEL FORMULARIO
+        // ==========================================================
+
         const form = document.getElementById('editarPromocionForm');
 
         const btnEditar = document.getElementById('btnEditar');
@@ -553,7 +868,7 @@
         const btnCancelar = document.getElementById('btnCancelar');
 
         const campos = form.querySelectorAll(
-            'input:not([type="hidden"]), select, textarea'
+            'input:not([type="hidden"]):not([data-no-bloquear]), select, textarea'
         );
 
         // Guardamos los valores originales para poder cancelar.
@@ -567,16 +882,7 @@
 
             } else if (campo.type !== 'file') {
 
-                if (campo.multiple) {
-
-                    valoresOriginales[campo.id] =
-                        Array.from(campo.selectedOptions).map(option => option.value);
-
-                } else {
-
-                    valoresOriginales[campo.id] = campo.value;
-
-                }
+                valoresOriginales[campo.id] = campo.value;
 
             }
 
@@ -591,6 +897,8 @@
                 }
 
             });
+
+            productos.desbloquear();
 
             btnEditar.disabled = true;
             btnActualizar.disabled = false;
@@ -614,14 +922,6 @@
 
                     campo.checked = valoresOriginales[campo.id];
 
-                } else if (campo.multiple) {
-
-                    const valores = valoresOriginales[campo.id] || [];
-
-                    Array.from(campo.options).forEach(option => {
-                        option.selected = valores.includes(option.value);
-                    });
-
                 } else {
 
                     campo.value = valoresOriginales[campo.id];
@@ -632,6 +932,9 @@
 
             });
 
+            productos.restaurar();
+            productos.bloquear();
+
             btnEditar.disabled = false;
             btnActualizar.disabled = true;
             btnCancelar.disabled = true;
@@ -641,6 +944,13 @@
         btnEditar.addEventListener('click', activarEdicion);
 
         btnCancelar.addEventListener('click', cancelarEdicion);
+
+        // Si la validación rechazó el envío, los datos que se ven son los que
+        // el operador tipeó. Dejar el formulario bloqueado lo obligaría a
+        // apretar "Editar" para corregir algo que ya estaba corrigiendo.
+        @if ($errors->any())
+        activarEdicion();
+        @endif
 
     });
 </script>

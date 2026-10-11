@@ -3,9 +3,11 @@
 namespace App\Services;
 
 use App\Enums\TipoMovimientoStock;
+use App\Events\MovimientoStockRegistrado;
 use App\Exceptions\StockInsuficienteException;
 use App\Models\MovimientoStock;
 use App\Models\Producto;
+use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
@@ -25,6 +27,22 @@ use InvalidArgumentException;
  *
  * 3. stock_disponible no se toca jamas: es una columna generada y la recalcula
  *    el motor.
+ *
+ * Desde la reposicion automatica hay una cuarta:
+ *
+ * 4. Todo movimiento emite MovimientoStockRegistrado. Es el unico enganche del
+ *    restock con el resto del sistema: este servicio no sabe que existen las
+ *    ordenes de compra, y no tiene por que saberlo.
+ *
+ * <b>Sobre el parametro $usuario de los metodos de conveniencia.</b> Antes se
+ * omitia y el autor del movimiento salia de auth()->id(). Funciona mientras
+ * todo se dispara desde una pantalla, y falla callado en cuanto algo corre en
+ * cola o en un comando programado: ahi no hay sesion y el movimiento queda sin
+ * firmar. Como VentaService y EntregaService ya pasaban el usuario explicito
+ * —PHP descartaba el cuarto argumento sin chistar—, recibirlo no cambia a
+ * ningun llamador existente; solo deja de perderlo. Sigue siendo nullable
+ * porque hay movimientos que efectivamente no tienen autor: los que registra
+ * el sistema.
  */
 class StockService
 {
@@ -47,7 +65,7 @@ class StockService
         $deltaFisico       = $tipo->signoFisico() * $cantidad;
         $deltaComprometido = $tipo->signoComprometido() * $cantidad;
 
-        return DB::transaction(function () use ($producto, $tipo, $deltaFisico, $deltaComprometido, $opciones) {
+        $movimiento = DB::transaction(function () use ($producto, $tipo, $deltaFisico, $deltaComprometido, $opciones) {
 
             $columnas = [];
 
@@ -100,48 +118,95 @@ class StockService
                 'motivo'                        => $opciones['motivo'] ?? null,
             ]);
         });
+
+        // FUERA de la transaccion a proposito, y ademas el listener esta marcado
+        // afterCommit. Si esto corriera adentro y la venta que engloba a este
+        // movimiento hiciera rollback, quedaria una orden de compra emitida por
+        // un faltante que nunca existio. El evento anuncia hechos consumados.
+        //
+        // El producto viaja ya refrescado: quien escuche lee el saldo real sin
+        // volver a consultar.
+        $movimiento->setRelation('producto', $producto);
+
+        MovimientoStockRegistrado::dispatch($movimiento);
+
+        return $movimiento;
     }
 
     /** Conteo de puesta en marcha. El comprometido arranca en cero. */
-    public function cargaInicial(Producto $producto, int $cantidad): MovimientoStock
+    public function cargaInicial(Producto $producto, int $cantidad, ?User $usuario = null): MovimientoStock
     {
-        return $this->registrar($producto, TipoMovimientoStock::Inicial, $cantidad);
+        return $this->registrar($producto, TipoMovimientoStock::Inicial, $cantidad, [
+            'usuario_id' => $usuario?->getKey(),
+        ]);
     }
 
     /** Diferencias de conteo, roturas, mermas. Motivo obligatorio. */
-    public function ajustar(Producto $producto, int $cantidad, string $motivo): MovimientoStock
+    public function ajustar(Producto $producto, int $cantidad, string $motivo, ?User $usuario = null): MovimientoStock
     {
-        return $this->registrar($producto, TipoMovimientoStock::Ajuste, $cantidad, ['motivo' => $motivo]);
+        return $this->registrar($producto, TipoMovimientoStock::Ajuste, $cantidad, [
+            'motivo'     => $motivo,
+            'usuario_id' => $usuario?->getKey(),
+        ]);
     }
 
-    /** Recepcion de una orden de compra, total o parcial. Suma solo al fisico. */
-    public function recibirCompra(Producto $producto, int $cantidad, Model $ordenCompra): MovimientoStock
-    {
-        return $this->registrar($producto, TipoMovimientoStock::Compra, $cantidad, ['origen' => $ordenCompra]);
+    /**
+     * Recepcion de una orden de compra, total o parcial. Suma solo al fisico.
+     *
+     * <b>El $motivo lleva el remito del proveedor.</b> El modelo de datos
+     * decidio no tener tabla de recepciones: cada entrada ES este movimiento.
+     * Entonces el numero de remito tiene que vivir donde esta la entrada
+     * concreta, y no en la orden, porque una orden puede recibir tres remitos
+     * distintos y en observaciones no habria forma de saber cual trajo que.
+     */
+    public function recibirCompra(
+        Producto $producto,
+        int $cantidad,
+        Model $ordenCompra,
+        ?User $usuario = null,
+        ?string $motivo = null,
+    ): MovimientoStock {
+        return $this->registrar($producto, TipoMovimientoStock::Compra, $cantidad, [
+            'origen'     => $ordenCompra,
+            'usuario_id' => $usuario?->getKey(),
+            'motivo'     => $motivo,
+        ]);
     }
 
     /** Venta confirmada. Nunca se rechaza: sin stock, es preventa. */
-    public function comprometer(Producto $producto, int $cantidad, Model $venta): MovimientoStock
+    public function comprometer(Producto $producto, int $cantidad, Model $venta, ?User $usuario = null): MovimientoStock
     {
-        return $this->registrar($producto, TipoMovimientoStock::Reserva, $cantidad, ['origen' => $venta]);
+        return $this->registrar($producto, TipoMovimientoStock::Reserva, $cantidad, [
+            'origen'     => $venta,
+            'usuario_id' => $usuario?->getKey(),
+        ]);
     }
 
     /** Salida real del deposito: despacho o retiro. Exige fisico suficiente. */
-    public function entregar(Producto $producto, int $cantidad, Model $venta): MovimientoStock
+    public function entregar(Producto $producto, int $cantidad, Model $venta, ?User $usuario = null): MovimientoStock
     {
-        return $this->registrar($producto, TipoMovimientoStock::Entrega, $cantidad, ['origen' => $venta]);
+        return $this->registrar($producto, TipoMovimientoStock::Entrega, $cantidad, [
+            'origen'     => $venta,
+            'usuario_id' => $usuario?->getKey(),
+        ]);
     }
 
     /** Venta cancelada o presupuesto vencido antes de la entrega. */
-    public function liberar(Producto $producto, int $cantidad, Model $venta): MovimientoStock
+    public function liberar(Producto $producto, int $cantidad, Model $venta, ?User $usuario = null): MovimientoStock
     {
-        return $this->registrar($producto, TipoMovimientoStock::Liberacion, $cantidad, ['origen' => $venta]);
+        return $this->registrar($producto, TipoMovimientoStock::Liberacion, $cantidad, [
+            'origen'     => $venta,
+            'usuario_id' => $usuario?->getKey(),
+        ]);
     }
 
     /** Nota de credito: reingresa unidades al fisico. */
-    public function devolver(Producto $producto, int $cantidad, Model $comprobante): MovimientoStock
+    public function devolver(Producto $producto, int $cantidad, Model $comprobante, ?User $usuario = null): MovimientoStock
     {
-        return $this->registrar($producto, TipoMovimientoStock::Devolucion, $cantidad, ['origen' => $comprobante]);
+        return $this->registrar($producto, TipoMovimientoStock::Devolucion, $cantidad, [
+            'origen'     => $comprobante,
+            'usuario_id' => $usuario?->getKey(),
+        ]);
     }
 
     private function validar(TipoMovimientoStock $tipo, int $cantidad, array $opciones): void

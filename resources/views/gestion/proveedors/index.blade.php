@@ -1,6 +1,8 @@
-@extends('layouts.app')
+@extends('layouts.gestion')
 
 @section('title', 'Proveedores - PowerTech')
+
+@vite('resources/css/gestion/proveedors/index.css')
 
 @section('content')
 
@@ -515,7 +517,7 @@
                         <!-- Reactivar -->
 
                         <form
-                            action="{{ route('proveedors.reactivar', $proveedor) }}"
+                            action="{{ route('gestion.proveedores.reactivar', $proveedor) }}"
                             method="POST"
                             class="d-inline">
 
@@ -586,7 +588,7 @@
 
 <div class="mt-4 d-flex justify-content-center">
 
-    {{ $proveedores->links() }}
+    {{ $proveedores->onEachSide(2)->links() }}
 
 </div>
 

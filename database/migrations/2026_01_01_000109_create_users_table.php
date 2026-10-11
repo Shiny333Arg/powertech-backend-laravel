@@ -14,10 +14,13 @@ return new class extends Migration
                 ->constrained('roles')
                 ->restrictOnDelete();
 
-            // Dos vias de acceso: el empleado entra con usuario, el cliente con email o Google.
-            $table->string('usuario', 30)->nullable()->unique();
-            $table->string('email', 150)->nullable()->unique();
-            $table->string('password', 255)->nullable(); // null con proveedor_auth = google
+            // Empleados y clientes entran igual: correo + contraseña. El cliente
+            // puede usar ademas su cuenta de Google.
+            $table->string('email', 150)->unique();
+
+            // null en dos casos: empleado con la invitacion todavia sin aceptar,
+            // y cliente que solo entra con Google.
+            $table->string('password', 255)->nullable();
 
             $table->string('nombres', 80);
             $table->string('apellido', 80);
@@ -25,11 +28,15 @@ return new class extends Migration
             $table->enum('proveedor_auth', ['local', 'google'])->default('local');
             $table->string('google_id', 50)->nullable()->unique();
 
-            $table->boolean('forzar_cambio_password')->default(false);
             $table->boolean('activo')->default(true);
 
             $table->timestamp('email_verified_at')->nullable();
             $table->timestamp('ultimo_acceso_at')->nullable();
+
+            // "Recordarme" del login. Ademas, restablecer la contraseña lo
+            // regenera, y eso invalida las sesiones recordadas en otros equipos.
+            $table->rememberToken();
+
             $table->timestamps();
         });
     }

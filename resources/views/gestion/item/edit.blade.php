@@ -1,4 +1,4 @@
-@extends('layouts.app')
+@extends('layouts.gestion')
 
 @section('title', 'PowerTech')
 
@@ -7,465 +7,523 @@
 <div class="container py-4">
 
 
-{{-- Título --}}
-<section class="mb-4">
-    <h1 class="h3 fw-bold mb-2">Editar producto</h1>
-    <p class="text-muted">
-        Los campos están bloqueados por defecto. Presione "Editar" para modificar los datos.
-    </p>
-</section>
+    {{-- Título --}}
+    <section class="mb-4">
+        <h1 class="h3 fw-bold mb-2">Editar producto</h1>
+        <p class="text-muted">
+            Los campos están bloqueados por defecto. Presione "Editar" para modificar los datos.
+        </p>
+    </section>
 
-{{-- Formulario de edición --}}
-<section class="mb-4">
+    {{-- Formulario de edición --}}
+    <section class="mb-4">
 
-    <form
-        id="editarProductoForm"
-        action="{{ route('gestion.items.update', $producto) }}"
-        method="POST"
-        enctype="multipart/form-data"
-        autocomplete="off"
-        class="p-4 rounded-4 bg-light shadow-sm border">
+        <form
+            id="editarProductoForm"
+            action="{{ route('gestion.items.update', $producto) }}"
+            method="POST"
+            enctype="multipart/form-data"
+            autocomplete="off"
+            class="p-4 rounded-4 bg-light shadow-sm border">
 
-        @csrf
-        @method('PUT')
+            @csrf
+            @method('PUT')
 
-        <div class="row g-4">
+            <div class="row g-4">
 
-            {{-- Código --}}
-            <div class="col-md-4">
-                <label for="codigo" class="form-label fw-semibold">
-                    Código
-                </label>
+                {{-- Código --}}
+                <div class="col-md-4">
+                    <label for="codigo" class="form-label fw-semibold">
+                        Código
+                    </label>
 
-                <input
-                    type="text"
-                    class="form-control rounded-3 @error('codigo') is-invalid @enderror"
-                    id="codigo"
-                    name="codigo"
-                    value="{{ old('codigo', $producto->codigo) }}"
-                    maxlength="30"
-                    required
-                    disabled>
+                    <input
+                        type="text"
+                        class="form-control rounded-3 @error('codigo') is-invalid @enderror"
+                        id="codigo"
+                        name="codigo"
+                        value="{{ old('codigo', $producto->codigo) }}"
+                        maxlength="30"
+                        required
+                        disabled>
 
-                @error('codigo')
+                    @error('codigo')
                     <div class="invalid-feedback">
                         {{ $message }}
                     </div>
-                @enderror
-            </div>
+                    @enderror
+                </div>
 
-            {{-- Nombre --}}
-            <div class="col-md-8">
-                <label for="nombre" class="form-label fw-semibold">
-                    Nombre del producto
-                </label>
+                {{-- Nombre --}}
+                <div class="col-md-8">
+                    <label for="nombre" class="form-label fw-semibold">
+                        Nombre del producto
+                    </label>
 
-                <input
-                    type="text"
-                    class="form-control rounded-3 @error('nombre') is-invalid @enderror"
-                    id="nombre"
-                    name="nombre"
-                    value="{{ old('nombre', $producto->nombre) }}"
-                    maxlength="150"
-                    required
-                    disabled>
+                    <input
+                        type="text"
+                        class="form-control rounded-3 @error('nombre') is-invalid @enderror"
+                        id="nombre"
+                        name="nombre"
+                        value="{{ old('nombre', $producto->nombre) }}"
+                        maxlength="150"
+                        required
+                        disabled>
 
-                @error('nombre')
+                    @error('nombre')
                     <div class="invalid-feedback">
                         {{ $message }}
                     </div>
-                @enderror
-            </div>
+                    @enderror
+                </div>
 
-            {{-- Marca --}}
-            <div class="col-md-6">
-                <label for="marca" class="form-label fw-semibold">
-                    Marca
-                </label>
+                {{-- Marca --}}
+                <div class="col-md-6">
+                    <label for="marca" class="form-label fw-semibold">
+                        Marca
+                    </label>
 
-                <input
-                    type="text"
-                    class="form-control rounded-3 @error('marca') is-invalid @enderror"
-                    id="marca"
-                    name="marca"
-                    value="{{ old('marca', $producto->marca) }}"
-                    maxlength="80"
-                    disabled>
+                    <input
+                        type="text"
+                        class="form-control rounded-3 @error('marca') is-invalid @enderror"
+                        id="marca"
+                        name="marca"
+                        value="{{ old('marca', $producto->marca) }}"
+                        maxlength="80"
+                        disabled>
 
-                @error('marca')
+                    @error('marca')
                     <div class="invalid-feedback">
                         {{ $message }}
                     </div>
-                @enderror
-            </div>
+                    @enderror
+                </div>
 
-            {{-- Categoría --}}
-            <div class="col-md-6">
-                <label for="categoria_id" class="form-label fw-semibold">
-                    Categoría
-                </label>
+                {{-- Categoría --}}
+                <div class="col-md-6">
+                    <label for="categoria_id" class="form-label fw-semibold">
+                        Categoría
+                    </label>
 
-                <select
-                    id="categoria_id"
-                    name="categoria_id"
-                    class="form-select rounded-3 @error('categoria_id') is-invalid @enderror"
-                    required
-                    disabled>
+                    <select
+                        id="categoria_id"
+                        name="categoria_id"
+                        class="form-select rounded-3 @error('categoria_id') is-invalid @enderror"
+                        required
+                        disabled>
 
-                    <option value="">Seleccione una categoría</option>
+                        <option value="">Seleccione una categoría</option>
 
-                    @foreach($categorias as $categoria)
+                        @foreach($categorias as $categoria)
                         <option
                             value="{{ $categoria->id }}"
                             @selected(old('categoria_id', $producto->categoria_id) == $categoria->id)>
                             {{ $categoria->nombre }}
                         </option>
-                    @endforeach
+                        @endforeach
 
-                </select>
+                    </select>
 
-                @error('categoria_id')
+                    @error('categoria_id')
                     <div class="invalid-feedback">
                         {{ $message }}
                     </div>
-                @enderror
-            </div>
+                    @enderror
+                </div>
 
-            {{-- Descripción --}}
-            <div class="col-12">
-                <label for="descripcion" class="form-label fw-semibold">
-                    Descripción
-                </label>
+                {{-- Descripción --}}
+                <div class="col-12">
+                    <label for="descripcion" class="form-label fw-semibold">
+                        Descripción
+                    </label>
 
-                <textarea
-                    class="form-control rounded-3 @error('descripcion') is-invalid @enderror"
-                    id="descripcion"
-                    name="descripcion"
-                    rows="4"
-                    style="resize: none"
-                    disabled>{{ old('descripcion', $producto->descripcion) }}</textarea>
+                    <textarea
+                        class="form-control rounded-3 @error('descripcion') is-invalid @enderror"
+                        id="descripcion"
+                        name="descripcion"
+                        rows="4"
+                        style="resize: none"
+                        disabled>{{ old('descripcion', $producto->descripcion) }}</textarea>
 
-                @error('descripcion')
+                    @error('descripcion')
                     <div class="invalid-feedback">
                         {{ $message }}
                     </div>
-                @enderror
-            </div>
+                    @enderror
+                </div>
 
-            {{-- Precio --}}
-            <div class="col-md-4">
-                <label for="precio" class="form-label fw-semibold">
-                    Precio
-                </label>
+                {{-- Precio --}}
+                <div class="col-md-4">
+                    <label for="precio" class="form-label fw-semibold">
+                        Precio
+                    </label>
 
-                <input
-                    type="number"
-                    class="form-control rounded-3 @error('precio') is-invalid @enderror"
-                    id="precio"
-                    name="precio"
-                    value="{{ old('precio', $producto->precio) }}"
-                    min="0"
-                    step="0.01"
-                    required
-                    disabled>
+                    <input
+                        type="number"
+                        class="form-control rounded-3 @error('precio') is-invalid @enderror"
+                        id="precio"
+                        name="precio"
+                        value="{{ old('precio', $producto->precio) }}"
+                        min="0"
+                        step="0.01"
+                        required
+                        disabled>
 
-                @error('precio')
+                    @error('precio')
                     <div class="invalid-feedback">
                         {{ $message }}
                     </div>
-                @enderror
-            </div>
+                    @enderror
+                </div>
 
-            {{-- Costo --}}
-            <div class="col-md-4">
-                <label for="costo" class="form-label fw-semibold">
-                    Costo
-                </label>
+                {{-- Costo --}}
+                <div class="col-md-4">
+                    <label for="costo" class="form-label fw-semibold">
+                        Costo
+                    </label>
 
-                <input
-                    type="number"
-                    class="form-control rounded-3 @error('costo') is-invalid @enderror"
-                    id="costo"
-                    name="costo"
-                    value="{{ old('costo', $producto->costo) }}"
-                    min="0"
-                    step="0.01"
-                    disabled>
+                    <input
+                        type="number"
+                        class="form-control rounded-3 @error('costo') is-invalid @enderror"
+                        id="costo"
+                        name="costo"
+                        value="{{ old('costo', $producto->costo) }}"
+                        min="0"
+                        step="0.01"
+                        disabled>
 
-                @error('costo')
+                    @error('costo')
                     <div class="invalid-feedback">
                         {{ $message }}
                     </div>
-                @enderror
-            </div>
+                    @enderror
+                </div>
 
-            {{-- IVA --}}
-            <div class="col-md-4">
-                <label for="alicuota_iva_id" class="form-label fw-semibold">
-                    Alícuota de IVA
-                </label>
+                {{-- IVA --}}
+                <div class="col-md-4">
+                    <label for="alicuota_iva_id" class="form-label fw-semibold">
+                        Alícuota de IVA
+                    </label>
 
-                <select
-                    id="alicuota_iva_id"
-                    name="alicuota_iva_id"
-                    class="form-select rounded-3 @error('alicuota_iva_id') is-invalid @enderror"
-                    required
-                    disabled>
+                    <select
+                        id="alicuota_iva_id"
+                        name="alicuota_iva_id"
+                        class="form-select rounded-3 @error('alicuota_iva_id') is-invalid @enderror"
+                        required
+                        disabled>
 
-                    <option value="">Seleccione IVA</option>
+                        <option value="">Seleccione IVA</option>
 
-                    @foreach($alicuotas as $alicuota)
+                        @foreach($alicuotas as $alicuota)
                         <option
                             value="{{ $alicuota->id }}"
                             @selected(old('alicuota_iva_id', $producto->alicuota_iva_id) == $alicuota->id)>
                             {{ $alicuota->nombre }} ({{ $alicuota->porcentaje }}%)
                         </option>
-                    @endforeach
+                        @endforeach
 
-                </select>
+                    </select>
 
-                @error('alicuota_iva_id')
+                    @error('alicuota_iva_id')
                     <div class="invalid-feedback">
                         {{ $message }}
                     </div>
-                @enderror
-            </div>
+                    @enderror
+                </div>
 
-            {{-- Proveedor --}}
-            <div class="col-md-6">
-                <label for="proveedor_id" class="form-label fw-semibold">
-                    Proveedor
-                </label>
+                {{-- Proveedor --}}
+                <div class="col-md-6">
+                    <label for="proveedor_id" class="form-label fw-semibold">
+                        Proveedor
+                    </label>
 
-                <select
-                    id="proveedor_id"
-                    name="proveedor_id"
-                    class="form-select rounded-3 @error('proveedor_id') is-invalid @enderror"
-                    disabled>
+                    <select
+                        id="proveedor_id"
+                        name="proveedor_id"
+                        class="form-select rounded-3 @error('proveedor_id') is-invalid @enderror"
+                        disabled>
 
-                    <option value="">Sin proveedor</option>
+                        <option value="">Sin proveedor</option>
 
-                    @foreach($proveedores as $proveedor)
+                        @foreach($proveedores as $proveedor)
                         <option
                             value="{{ $proveedor->id }}"
                             @selected(old('proveedor_id', $producto->proveedor_id) == $proveedor->id)>
                             {{ $proveedor->razon_social }}
                         </option>
-                    @endforeach
+                        @endforeach
 
-                </select>
+                    </select>
 
-                @error('proveedor_id')
+                    @error('proveedor_id')
                     <div class="invalid-feedback">
                         {{ $message }}
                     </div>
-                @enderror
-            </div>
+                    @enderror
+                </div>
 
-            {{-- Peso --}}
-            <div class="col-md-6">
-                <label for="peso_gramos" class="form-label fw-semibold">
-                    Peso (gramos)
-                </label>
-
-                <input
-                    type="number"
-                    class="form-control rounded-3 @error('peso_gramos') is-invalid @enderror"
-                    id="peso_gramos"
-                    name="peso_gramos"
-                    value="{{ old('peso_gramos', $producto->peso_gramos) }}"
-                    min="0"
-                    disabled>
-
-                @error('peso_gramos')
-                    <div class="invalid-feedback">
-                        {{ $message }}
-                    </div>
-                @enderror
-            </div>
-
-            {{-- Punto de reposición --}}
-            <div class="col-md-6">
-                <label for="punto_reposicion" class="form-label fw-semibold">
-                    Punto de reposición
-                </label>
-
-                <input
-                    type="number"
-                    class="form-control rounded-3 @error('punto_reposicion') is-invalid @enderror"
-                    id="punto_reposicion"
-                    name="punto_reposicion"
-                    value="{{ old('punto_reposicion', $producto->punto_reposicion) }}"
-                    min="0"
-                    required
-                    disabled>
-
-                @error('punto_reposicion')
-                    <div class="invalid-feedback">
-                        {{ $message }}
-                    </div>
-                @enderror
-            </div>
-
-            {{-- Cantidad de reposición --}}
-            <div class="col-md-6">
-                <label for="cantidad_reposicion" class="form-label fw-semibold">
-                    Cantidad de reposición
-                </label>
-
-                <input
-                    type="number"
-                    class="form-control rounded-3 @error('cantidad_reposicion') is-invalid @enderror"
-                    id="cantidad_reposicion"
-                    name="cantidad_reposicion"
-                    value="{{ old('cantidad_reposicion', $producto->cantidad_reposicion) }}"
-                    min="0"
-                    required
-                    disabled>
-
-                @error('cantidad_reposicion')
-                    <div class="invalid-feedback">
-                        {{ $message }}
-                    </div>
-                @enderror
-            </div>
-
-            {{-- Reposición automática --}}
-            <div class="col-md-6">
-                <div class="form-check form-switch mt-2">
-
-                    <input
-                        class="form-check-input"
-                        type="checkbox"
-                        role="switch"
-                        id="reposicion_automatica"
-                        name="reposicion_automatica"
-                        value="1"
-                        @checked(old('reposicion_automatica', $producto->reposicion_automatica))
-                        disabled>
-
-                    <label
-                        class="form-check-label fw-semibold"
-                        for="reposicion_automatica">
-                        Reposición automática
+                {{-- Peso --}}
+                <div class="col-md-6">
+                    <label for="peso_gramos" class="form-label fw-semibold">
+                        Peso (gramos)
                     </label>
 
+                    <input
+                        type="number"
+                        class="form-control rounded-3 @error('peso_gramos') is-invalid @enderror"
+                        id="peso_gramos"
+                        name="peso_gramos"
+                        value="{{ old('peso_gramos', $producto->peso_gramos) }}"
+                        min="0"
+                        disabled>
+
+                    @error('peso_gramos')
+                    <div class="invalid-feedback">
+                        {{ $message }}
+                    </div>
+                    @enderror
                 </div>
 
-                <div class="form-text">
-                    Requiere seleccionar un proveedor.
+                {{-- Punto de reposición --}}
+                <div class="col-md-6">
+                    <label for="punto_reposicion" class="form-label fw-semibold">
+                        Punto de reposición
+                    </label>
+
+                    <input
+                        type="number"
+                        class="form-control rounded-3 @error('punto_reposicion') is-invalid @enderror"
+                        id="punto_reposicion"
+                        name="punto_reposicion"
+                        value="{{ old('punto_reposicion', $producto->punto_reposicion) }}"
+                        min="0"
+                        required
+                        disabled>
+
+                    @error('punto_reposicion')
+                    <div class="invalid-feedback">
+                        {{ $message }}
+                    </div>
+                    @enderror
                 </div>
 
-                @error('reposicion_automatica')
+                {{-- Cantidad de reposición --}}
+                <div class="col-md-6">
+                    <label for="cantidad_reposicion" class="form-label fw-semibold">
+                        Cantidad de reposición
+                    </label>
+
+                    <input
+                        type="number"
+                        class="form-control rounded-3 @error('cantidad_reposicion') is-invalid @enderror"
+                        id="cantidad_reposicion"
+                        name="cantidad_reposicion"
+                        value="{{ old('cantidad_reposicion', $producto->cantidad_reposicion) }}"
+                        min="0"
+                        required
+                        disabled>
+
+                    @error('cantidad_reposicion')
+                    <div class="invalid-feedback">
+                        {{ $message }}
+                    </div>
+                    @enderror
+                </div>
+
+                {{-- Reposición automática --}}
+                <div class="col-md-6">
+                    <div class="form-check form-switch mt-2">
+
+                        <input
+                            class="form-check-input"
+                            type="checkbox"
+                            role="switch"
+                            id="reposicion_automatica"
+                            name="reposicion_automatica"
+                            value="1"
+                            @checked(old('reposicion_automatica', $producto->reposicion_automatica))
+                        disabled>
+
+                        <label
+                            class="form-check-label fw-semibold"
+                            for="reposicion_automatica">
+                            Reposición automática
+                        </label>
+
+                    </div>
+
+                    <div class="form-text">
+                        Requiere seleccionar un proveedor.
+                    </div>
+
+                    @error('reposicion_automatica')
                     <div class="text-danger small mt-2">
                         {{ $message }}
                     </div>
-                @enderror
-            </div>
+                    @enderror
+                </div>
 
-            {{-- Publicado en la aplicación --}}
-            <div class="col-md-6">
-                <div class="form-check form-switch mt-2">
+                {{-- Publicado en la aplicación --}}
+                <div class="col-md-6">
+                    <div class="form-check form-switch mt-2">
 
-                    <input
-                        class="form-check-input"
-                        type="checkbox"
-                        role="switch"
-                        id="publicado_app"
-                        name="publicado_app"
-                        value="1"
-                        @checked(old('publicado_app', $producto->publicado_app))
+                        <input
+                            class="form-check-input"
+                            type="checkbox"
+                            role="switch"
+                            id="publicado_app"
+                            name="publicado_app"
+                            value="1"
+                            @checked(old('publicado_app', $producto->publicado_app))
                         disabled>
 
-                    <label
-                        class="form-check-label fw-semibold"
-                        for="publicado_app">
-                        Publicado en la aplicación
+                        <label
+                            class="form-check-label fw-semibold"
+                            for="publicado_app">
+                            Publicado en la aplicación
+                        </label>
+
+                    </div>
+
+                    <div class="form-text">
+                        El producto podrá estar disponible para los clientes.
+                    </div>
+                </div>
+
+                <!-- {´{-- Imagen --}'}
+                <div class="col-12">
+                    <label for="imagen" class="form-label fw-semibold">
+                        Cambiar imagen
                     </label>
 
-                </div>
+                    <input
+                        type="file"
+                        class="form-control rounded-3 @'er'ror('imagen') is-invalid @'ende'rror"
+                        id="imagen"
+                        name="imagen"
+                        accept=".jpg,.jpeg,.png,.webp"
+                        disabled>
 
-                <div class="form-text">
-                    El producto podrá estar disponible para los clientes.
-                </div>
-            </div>
+                    @'error('imagen')
+                    <div class="invalid-feedback">
+                        {'{ $message }}
+                    </div>
+                    @'end'error
+                </div> -->
+                {{-- Imagen --}}
+                <div class="col-12">
+                    <label for="imagen" class="form-label fw-semibold">
+                        Imagen del producto
+                    </label>
 
-            {{-- Imagen --}}
-            <div class="col-12">
-                <label for="imagen" class="form-label fw-semibold">
-                    Cambiar imagen
-                </label>
+                    {{-- Imagen actual --}}
+                    <div class="mb-3">
+                        <p class="form-text mb-2">Imagen actual:</p>
 
-                <input
-                    type="file"
-                    class="form-control rounded-3 @error('imagen') is-invalid @enderror"
-                    id="imagen"
-                    name="imagen"
-                    accept=".jpg,.jpeg,.png,.webp"
-                    disabled>
+                        @if ($producto->imagen)
+                        <img
+                            id="imagenActual"
+                            src="{{ Storage::url($producto->imagen) }}"
+                            alt="Imagen actual de {{ $producto->nombre }}"
+                            class="img-thumbnail rounded-3"
+                            style="max-width: 220px; max-height: 220px; object-fit: contain;">
+                        @else
+                        <div
+                            id="sinImagen"
+                            class="text-muted border rounded-3 p-4 text-center"
+                            style="max-width: 220px;">
+                            Este producto no tiene una imagen cargada.
+                        </div>
+                        @endif
+                    </div>
 
-                @error('imagen')
+                    {{-- Nueva imagen --}}
+                    <label for="imagen" class="form-text mb-2">
+                        Seleccionar nueva imagen:
+                    </label>
+
+                    <input
+                        type="file"
+                        class="form-control rounded-3 @error('imagen') is-invalid @enderror"
+                        id="imagen"
+                        name="imagen"
+                        accept=".jpg,.jpeg,.png,.webp"
+                        disabled>
+
+                    @error('imagen')
                     <div class="invalid-feedback">
                         {{ $message }}
                     </div>
-                @enderror
+                    @enderror
+
+                    {{-- Previsualización de la nueva imagen --}}
+                    <div id="previewContainer" class="mt-3 d-none">
+                        <p class="form-text mb-2">Nueva imagen:</p>
+
+                        <img
+                            id="imagenPreview"
+                            src="#"
+                            alt="Vista previa de la nueva imagen"
+                            class="img-thumbnail rounded-3"
+                            style="max-width: 220px; max-height: 220px; object-fit: contain;">
+                    </div>
+                </div>
+
             </div>
 
-        </div>
+        </form>
 
-    </form>
+        {{-- ========================================================= --}}
+        {{-- BOTONES: TODOS FUERA DEL FORMULARIO --}}
+        {{-- ========================================================= --}}
 
-    {{-- ========================================================= --}}
-    {{-- BOTONES: TODOS FUERA DEL FORMULARIO --}}
-    {{-- ========================================================= --}}
+        <div class="mt-4 d-flex flex-wrap gap-3">
 
-    <div class="mt-4 d-flex flex-wrap gap-3">
+            {{-- Editar --}}
+            <button
+                type="button"
+                class="btn btn-warning px-4 fw-semibold shadow-sm"
+                id="btnEditar">
+                Editar
+            </button>
 
-        {{-- Editar --}}
-        <button
-            type="button"
-            class="btn btn-warning px-4 fw-semibold shadow-sm"
-            id="btnEditar">
-            Editar
-        </button>
+            {{-- Actualizar --}}
+            <button
+                type="submit"
+                form="editarProductoForm"
+                class="btn btn-success px-4 fw-semibold shadow-sm"
+                id="btnActualizar"
+                disabled>
+                Actualizar
+            </button>
 
-        {{-- Actualizar --}}
-        <button
-            type="submit"
-            form="editarProductoForm"
-            class="btn btn-success px-4 fw-semibold shadow-sm"
-            id="btnActualizar"
-            disabled>
-            Actualizar
-        </button>
+            {{-- Cancelar --}}
+            <button
+                type="button"
+                class="btn btn-secondary px-4 fw-semibold shadow-sm"
+                id="btnCancelar"
+                disabled>
+                Cancelar
+            </button>
 
-        {{-- Cancelar --}}
-        <button
-            type="button"
-            class="btn btn-secondary px-4 fw-semibold shadow-sm"
-            id="btnCancelar"
-            disabled>
-            Cancelar
-        </button>
+            {{-- Volver --}}
+            <a
+                href="{{ route('gestion.items.index') }}"
+                class="btn btn-outline-secondary px-4 fw-semibold shadow-sm">
+                Volver al listado
+            </a>
 
-        {{-- Volver --}}
-        <a
-            href="{{ route('gestion.items.index') }}"
-            class="btn btn-outline-secondary px-4 fw-semibold shadow-sm">
-            Volver al listado
-        </a>
+            {{-- Historial --}}
+            <a
+                href="{{ route('gestion.items.movimientos', $producto) }}"
+                class="btn btn-outline-primary px-4 fw-semibold shadow-sm">
+                Historial de stock
+            </a>
 
-        {{-- Historial --}}
-        <a
-            href="{{ route('gestion.items.movimientos', $producto) }}"
-            class="btn btn-outline-primary px-4 fw-semibold shadow-sm">
-            Historial de stock
-        </a>
-
-        @if($producto->activo)
+            @if($producto->activo)
 
             <form
-                action="{{ route('items.darDeBaja', ['producto' => $producto->id]) }}"
+                action="{{ route('gestion.items.darDeBaja', ['producto' => $producto->id]) }}"
                 method="POST"
                 class="d-inline">
 
@@ -481,7 +539,7 @@
 
             </form>
 
-        @else
+            @else
 
             <form
                 action="{{ route('gestion.items.reactivar', ['producto' => $producto->id]) }}"
@@ -500,11 +558,11 @@
 
             </form>
 
-        @endif
+            @endif
 
-    </div>
+        </div>
 
-</section>
+    </section>
 
 
 </div>
@@ -514,13 +572,15 @@
 @push('scripts')
 
 <script>
-
     document.addEventListener('DOMContentLoaded', function() {
 
         const form = document.getElementById('editarProductoForm');
         const btnEditar = document.getElementById('btnEditar');
         const btnActualizar = document.getElementById('btnActualizar');
         const btnCancelar = document.getElementById('btnCancelar');
+        const inputImagen = document.getElementById('imagen');
+        const previewContainer = document.getElementById('previewContainer');
+        const imagenPreview = document.getElementById('imagenPreview');
 
         const campos = form.querySelectorAll(
             'input:not([type="hidden"]), select, textarea'
@@ -591,9 +651,29 @@
 
         btnEditar.addEventListener('click', activarEdicion);
         btnCancelar.addEventListener('click', cancelarEdicion);
+        
+        inputImagen.addEventListener('change', function() {
+            const archivo = this.files[0];
+
+            if (!archivo) {
+                previewContainer.classList.add('d-none');
+                imagenPreview.src = '#';
+                return;
+            }
+
+            const lector = new FileReader();
+
+            lector.onload = function(evento) {
+                imagenPreview.src = evento.target.result;
+                previewContainer.classList.remove('d-none');
+            };
+
+            lector.readAsDataURL(archivo);
+        });
+
+        
 
     });
-
 </script>
 
 @endpush

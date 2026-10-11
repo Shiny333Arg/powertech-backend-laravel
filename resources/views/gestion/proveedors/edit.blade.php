@@ -1,5 +1,5 @@
 
-@extends('layouts.app')
+@extends('layouts.gestion')
 
 @section('title', 'PowerTech')
 
@@ -508,7 +508,7 @@
             @else
 
             <form
-                action="{{ route('gestion.proveedors.reactivar', ['proveedor' => $proveedor->id]) }}"
+                action="{{ route('gestion.proveedores.reactivar', ['proveedor' => $proveedor->id]) }}"
                 method="POST"
                 class="d-inline">
 

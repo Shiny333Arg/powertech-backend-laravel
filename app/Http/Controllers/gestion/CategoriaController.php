@@ -22,7 +22,7 @@ class CategoriaController extends Controller
         // Descomentar cuando exista el login. Mapea cada accion del recurso a
         // CategoriaPolicy; para las rutas propias (baja y reactivacion) la
         // autorizacion se pide a mano en cada metodo.
-        // $this->authorizeResource(Categoria::class, 'categoria');
+        $this->authorizeResource(Categoria::class, 'categoria');
     }
 
     /**
@@ -47,7 +47,9 @@ class CategoriaController extends Controller
             ->when($estado === 'inactivas', fn($query) => $query->inactivos())
             ->orderBy('orden')
             ->orderBy('nombre')
-            ->get();
+            // ->get();
+            ->paginate(10)
+            ->withQueryString();
 
         return view('gestion.category.index', compact('categorias', 'estado', 'nombre'));
     }

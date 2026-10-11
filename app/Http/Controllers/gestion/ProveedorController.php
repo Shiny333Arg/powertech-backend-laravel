@@ -27,7 +27,7 @@ class ProveedorController extends Controller
     public function __construct()
     {
         // Descomentar cuando exista el login:
-        // $this->authorizeResource(Proveedor::class, 'proveedor');
+        $this->authorizeResource(Proveedor::class, 'proveedor');
     }
 
     public function index(Request $request): View
@@ -59,7 +59,7 @@ class ProveedorController extends Controller
             ->when($request->query('estado') === 'activos', fn ($query) => $query->activos())
             ->when($request->query('estado') === 'inactivos', fn ($query) => $query->inactivos())
             ->orderBy('razon_social')
-            ->paginate(20)
+            ->paginate(10)
             ->withQueryString();
 
         return view('gestion.proveedors.index', [
@@ -97,7 +97,7 @@ class ProveedorController extends Controller
         });
 
         return redirect()
-            ->route('gestion.proveedors.index')
+            ->route('gestion.proveedores.index')
             ->with('exito', "Se creó el proveedor «{$proveedor->razon_social}».");
     }
 

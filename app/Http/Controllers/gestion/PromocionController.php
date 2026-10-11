@@ -35,7 +35,7 @@ class PromocionController extends Controller
     public function __construct()
     {
         // Descomentar cuando exista el login:
-        // $this->authorizeResource(Promocion::class, 'promocion');
+        $this->authorizeResource(Promocion::class, 'promocion');
     }
 
     public function index(Request $request): View
@@ -110,7 +110,7 @@ class PromocionController extends Controller
         });
 
         return redirect()
-            ->route('gestion.promotion.index')
+            ->route('gestion.promociones.index')
             ->with('exito', "Se creó la promoción «{$promocion->nombre}».")
             ->with('advertencia', $this->avisoDeConflictos($promocion));
     }

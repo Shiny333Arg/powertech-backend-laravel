@@ -1,6 +1,8 @@
-@extends('layouts.app')
+@extends('layouts.gestion')
 
 @section('title', 'PowerTech')
+
+@vite('resources/css/gestion/promotion/index.css')
 
 @section('content')
 
@@ -19,9 +21,14 @@
 
 <!-- Botones -->
 
-<section class="mb-4 d-flex flex-column flex-md-row justify-content-between align-items-stretch gap-3">
+<section class="mb-4 d-flex flex-column flex-md-row align-items-stretch gap-3
+    @can('create', App\Models\Promocion::class)
+        justify-content-between
+    @else
+        justify-content-end
+    @endcan">
 
-    <!-- Registrar promoción -->
+    @can('create', App\Models\Promocion::class)
 
     <a
         href="{{ route('gestion.promociones.create') }}"
@@ -46,6 +53,8 @@
         Registrar nueva promoción
 
     </a>
+
+    @endcan
 
     <!-- PDF -->
     <button
@@ -352,9 +361,11 @@
                         Estado
                     </th>
 
+                    @can('create', App\Models\Promocion::class)
                     <th class="text-nowrap">
                         Opciones
                     </th>
+                    @endcan
 
                 </tr>
 
@@ -602,6 +613,7 @@
                     </td>
 
 
+                    @can('create', App\Models\Promocion::class)
                     <!-- Opciones -->
 
                     <td>
@@ -668,7 +680,7 @@
                         <!-- Reactivar -->
 
                         <form
-                            action="{{ route('promociones.reactivar', $promocion) }}"
+                            action="{{ route('gestion.promociones.reactivar', $promocion) }}"
                             method="POST"
                             class="d-inline">
 
@@ -704,6 +716,7 @@
                         @endif
 
                     </td>
+                    @endcan
 
                 </tr>
 

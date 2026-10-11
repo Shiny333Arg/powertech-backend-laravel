@@ -5,18 +5,11 @@ namespace App\Http\Requests;
 use App\Enums\AmbitoRol;
 use App\Rules\Cuit;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 /**
  * Alta y edicion de empleados.
- *
- * Un empleado son TRES filas: credenciales en users, datos personales y
- * fiscales en empleados, y domicilio en direcciones. El formulario es uno solo
- * y el controlador las escribe en una transaccion.
- *
- * La contrasena NO se edita desde acá. Por requerimiento, el empleado es el
- * unico que puede cambiar la suya; lo que el administrativo puede hacer es
- * asignar una provisoria y forzar el cambio (ver EmpleadoController::resetearPassword).
  */
 class EmpleadoRequest extends FormRequest
 {
@@ -28,9 +21,9 @@ class EmpleadoRequest extends FormRequest
     protected function prepareForValidation(): void
     {
         $this->merge([
-            // Igual que el CUIT del proveedor: se guarda en 11 digitos para que
-            // el mismo CUIL escrito de dos formas no pase dos veces.
-            'cuil' => preg_replace('/\D/', '', (string) $this->input('cuil')),
+            'cuil'  => preg_replace('/\D/', '', (string) $this->input('cuil')),
+
+            'email' => Str::lower(trim((string) $this->input('email'))),
         ]);
     }
 
@@ -41,15 +34,10 @@ class EmpleadoRequest extends FormRequest
 
         return [
             // --- Credenciales (tabla users) ---
-            'usuario' => [
-                'required',
-                'string',
-                'max:30',
-                'alpha_dash',
-                Rule::unique('users', 'usuario')->ignore($userId),
-            ],
+            // Unico en TODA la tabla users: un empleado que ademas quiera
+            // comprar en la tienda necesita otro correo para su cuenta de cliente.
             'email' => [
-                'nullable',
+                'required',
                 'email',
                 'max:150',
                 Rule::unique('users', 'email')->ignore($userId),
@@ -70,9 +58,8 @@ class EmpleadoRequest extends FormRequest
                 }),
             ],
 
-            // Opcional en el alta: si no la escriben, se genera una provisoria.
-            // En la edicion no se acepta nunca.
-            'password' => [$this->esAlta() ? 'nullable' : 'prohibited', 'string', 'min:8', 'max:72'],
+            // Ni en el alta ni en la edicion: la elige el empleado.
+            'password' => ['prohibited'],
 
             // --- Datos personales y fiscales (tabla empleados) ---
             'legajo' => [
@@ -112,13 +99,13 @@ class EmpleadoRequest extends FormRequest
         return $this->route('empleado') === null;
     }
 
-    /** Columnas de users. La contrasena la resuelve el controlador. */
+    /** Columnas de users. */
     public function datosDelUsuario(): array
     {
         // 'activo' NO viaja en el formulario: dar de baja y reactivar son
         // acciones propias, con sus guardas. Si fuera un checkbox más, un
         // update podría desactivar al último administrador esquivándolas.
-        return $this->safe()->only(['usuario', 'email', 'nombres', 'apellido', 'rol_id']);
+        return $this->safe()->only(['email', 'nombres', 'apellido', 'rol_id']);
     }
 
     /** Columnas de empleados. */
@@ -146,14 +133,11 @@ class EmpleadoRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'usuario.required'   => 'Elegí un nombre de usuario. Es con lo que el empleado va a entrar al sistema.',
-            'usuario.alpha_dash' => 'El nombre de usuario admite letras, números, guiones y guiones bajos.',
-            'usuario.unique'     => 'Ese nombre de usuario ya está tomado.',
-            'email.unique'       => 'Ese correo ya está registrado en otra cuenta.',
+            'email.required'     => 'El correo es obligatorio: el empleado ingresa con él y ahí recibe la invitación.',
+            'email.unique'       => 'Ese correo ya está registrado en otra cuenta (puede ser de un cliente de la tienda).',
             'rol_id.required'    => 'Elegí el cargo del empleado.',
             'rol_id.exists'      => 'Ese cargo no existe o no habilita el acceso a la gestión.',
-            'password.prohibited' => 'La contraseña no se edita desde acá: usá "Restablecer contraseña".',
-            'password.min'       => 'La contraseña provisoria necesita al menos 8 caracteres.',
+            'password.prohibited' => 'La contraseña la elige el empleado desde el enlace que recibe por correo.',
             'legajo.required'    => 'Asigná un legajo.',
             'legajo.unique'      => 'Ese legajo ya está asignado a otro empleado.',
             'nro_doc.unique'     => 'Ya hay un empleado cargado con ese documento.',

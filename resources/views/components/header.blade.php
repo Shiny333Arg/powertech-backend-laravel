@@ -1,79 +1,554 @@
+{{--
+  Barra de la aplicación de gestión.
+
+  Cada sección se muestra solo si el rol del empleado tiene permiso para
+  verla (@can contra las policies, que consultan rol_permiso).
+
+  Productos funciona como un menú desplegable que contiene:
+  - Productos
+  - Categorías
+  - Movimientos de stock
+
+  Usuarios contiene:
+  - Empleados
+  - Clientes
+
+  Compras contiene:
+  - Pedidos
+  - Proveedores
+
+  ESCONDER EL ENLACE NO PROTEGE LA PANTALLA. Lo que la protege es el
+  middleware 'can:' / 'permiso:' de routes/web.php. Este archivo existe para
+  que nadie choque contra un 403 de casualidad, no para controlar accesos: si
+  un menú quedara mal, lo peor que pasa es que se vea un link de más y el
+  empleado reciba el 403 al hacer clic.
+--}}
+
+@php
+$usuario = auth()->user();
+
+// [texto, ruta, patrón para marcar la sección activa, modelo de la policy
+// (null = sin restricción)]
+//
+// Inicio es el tablero: lo ve cualquier empleado y se arma solo con los
+// bloques que sus permisos habilitan, así que no lleva modelo.
+//
+// Ventas, comprobantes y promociones se agrupan en un único menú.
+// Cada entrada conserva su propia comprobación de permisos.
+$secciones = [
+['Inicio', 'gestion.home', 'gestion.home', null],
+];
+@endphp
+
+
 <header>
-  <nav class="navbar navbar-expand-md navbar-dark bg-primary shadow-sm">
-    <div class="container">
-      <a class="navbar-brand d-flex align-items-center gap-2" routerLink="/">
-        <img src="{{ asset('images/Logo.png') }}" alt="Logo" height="40" class="rounded">
-        <span class="fw-bold fs-5">POWERTECH</span>
-      </a>
-      <!-- Botón hamburguesa -->
-      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNavDropdown"
-        aria-controls="navbarNavDropdown" aria-expanded="false" aria-label="Toggle navigation">
-        <span class="navbar-toggler-icon"></span>
-      </button>
-      <!-- Menú colapsable -->
-      <div class="collapse navbar-collapse" id="navbarNavDropdown">
-        <ul class="navbar-nav ms-auto gap-2" id="mainNavbar">
-          <li class="nav-item px-2">
-            <a class="nav-link rounded fw-bold text-white" href="/gestion">Inicio</a>
-          </li>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary shadow-sm">
+        <div class="container">
 
-          <li class="nav-item px-2" *ngIf="isAdmin() || isOperator()">
-            <a class="nav-link rounded fw-bold text-white" href="/gestion/promotion">Promociones</a>
-          </li>
+            <a class="navbar-brand d-flex align-items-center gap-2"
+                href="{{ route('gestion.home') }}">
 
-          <li class="nav-item px-2" *ngIf="isAdmin() || isOperator()">
-            <a class="nav-link rounded fw-bold text-white" href="/gestion/item">Productos</a>
-          </li>
+                <img src="{{ asset('images/Logo.png') }}"
+                    alt=""
+                    height="40"
+                    class="rounded">
 
-          <li class="nav-item px-2" *ngIf="isAdmin() || isOperator()">
-            <a class="nav-link rounded fw-bold text-white" href="/gestion/category">Categorías</a>
-          </li>
+                <span class="fw-bold fs-5">POWERTECH</span>
+            </a>
 
-          <li class="nav-item px-2" *ngIf="isAdmin() || isOperator()">
-            <a class="nav-link rounded fw-bold text-white" href="/gestion/proveedor">Proveedores</a>
-          </li>
 
-          <li class="nav-item px-2" *ngIf="isAdmin()">
-            <a class="nav-link rounded fw-bold text-white" href="/gestion/empleado" id="onlyAdmin">Empleados</a>
-          </li>
+            {{-- Botón hamburguesa --}}
+            <button class="navbar-toggler"
+                type="button"
+                data-bs-toggle="collapse"
+                data-bs-target="#navbarGestion"
+                aria-controls="navbarGestion"
+                aria-expanded="false"
+                aria-label="Abrir menú">
 
-          <li class="nav-item px-2" *ngIf="isAdmin()">
-            <a class="nav-link rounded fw-bold text-white" href="/" id="onlyAdmin">Clientes</a>
-          </li>
+                <span class="navbar-toggler-icon"></span>
+            </button>
 
-          <li class="nav-item px-2" *ngIf="isAdmin() || isSeller()">
-            <a class="nav-link rounded fw-bold text-white" href="/gestion/sale">Ventas</a>
-          </li>
 
-          <li class="nav-item dropdown px-2">
-            <a class="nav-link rounded dropdown-toggle fw-bold text-white" href="#" id="miCuentaDropdown" role="button"
-              data-bs-toggle="dropdown" aria-expanded="false">Mi cuenta</a>
+            {{-- Menú colapsable --}}
+            <div class="collapse navbar-collapse" id="navbarGestion">
 
-            <ul class="dropdown-menu dropdown-menu-end bg-primary" aria-labelledby="miCuentaDropdown">
-              <li>
-                <a class="dropdown-item fw-bold d-flex align-items-center gap-2 text-white"
-                  href="/gestion/user/my-account">
-                  <svg width="16" height="16" fill="currentColor" class="bi bi-person" viewBox="0 0 16 16">
-                    <path
-                      d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6m2-3a2 2 0 1 1-4 0 2 2 0 0 1 4 0m4 8c0 1-1 1-1 1H3s-1 0-1-1 1-4 6-4 6 3 6 4m-1-.004c-.001-.246-.154-.986-.832-1.664C11.516 10.68 10.289 10 8 10s-3.516.68-4.168 1.332c-.678.678-.83 1.418-.832 1.664z" />
-                  </svg>Mis datos
-                </a>
-              </li>
-              <li>
-                <a class="dropdown-item fw-bold d-flex align-items-center gap-2 text-white" href="/authentication/logout">
-                  <svg class="bi bi-box-arrow-right" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                    <path fill-rule="evenodd"
-                      d="M10 12.5a.5.5 0 0 1-.5.5h-8a.5.5 0 0 1-.5-.5v-9a.5.5 0 0 1 .5-.5h8a.5.5 0 0 1 .5.5v2a.5.5 0 0 0 1 0v-2A1.5 1.5 0 0 0 9.5 2h-8A1.5 1.5 0 0 0 0 3.5v9A1.5 1.5 0 0 0 1.5 14h8a1.5 1.5 0 0 0 1.5-1.5v-2a.5.5 0 0 0-1 0z" />
-                    <path fill-rule="evenodd"
-                      d="M15.854 8.354a.5.5 0 0 0 0-.708l-3-3a.5.5 0 0 0-.708.708L14.293 7.5H5.5a.5.5 0 0 0 0 1h8.793l-2.147 2.146a.5.5 0 0 0 .708.708z" />
-                  </svg>Cerrar sesión
-                </a>
-              </li>
-            </ul>
+                <ul class="navbar-nav ms-auto gap-lg-2">
 
-          </li>
-        </ul>
-      </div>
-    </div>
-  </nav>
+
+                    {{-- ==================================================
+                         SECCIONES PRINCIPALES
+                         ================================================== --}}
+
+                    @foreach ($secciones as [$texto, $ruta, $patron, $modelo])
+
+                    @if ($modelo === null || $usuario->can('viewAny', $modelo))
+
+                    @php
+                    $activa = request()->routeIs($patron);
+                    @endphp
+
+                    <li class="nav-item px-2">
+
+                        <a class="nav-link rounded fw-bold text-white @if ($activa) active @endif"
+                            href="{{ route($ruta) }}"
+                            @if ($activa) aria-current="page" @endif>
+
+                            {{ $texto }}
+
+                        </a>
+
+                    </li>
+
+                    @endif
+
+                    @endforeach
+
+
+                    {{-- ==================================================
+                         VENTAS
+                         ================================================== --}}
+
+                    @php
+                    $ventasActivas =
+                    request()->routeIs('gestion.ventas.*') ||
+                    request()->routeIs('gestion.comprobantes.*') ||
+                    request()->routeIs('gestion.promociones.*');
+                    @endphp
+
+                    @if (
+                    $usuario->can('viewAny', \App\Models\Venta::class) ||
+                    $usuario->can('viewAny', \App\Models\Comprobante::class) ||
+                    $usuario->can('viewAny', \App\Models\Promocion::class)
+                    )
+
+                    <li class="nav-item dropdown px-2">
+
+                        <a class="nav-link rounded dropdown-toggle fw-bold text-white
+                                @if ($ventasActivas) active @endif"
+                            href="#"
+                            id="ventasDropdown"
+                            role="button"
+                            data-bs-toggle="dropdown"
+                            aria-expanded="false">
+
+                            Ventas
+
+                        </a>
+
+                        <ul class="dropdown-menu dropdown-menu-end bg-primary"
+                            aria-labelledby="ventasDropdown">
+
+                            {{-- Historial --}}
+                            @can('viewAny', \App\Models\Venta::class)
+
+                            <li>
+                                <a class="dropdown-item fw-bold text-white
+                                            @if (request()->routeIs('gestion.ventas.*')) active @endif"
+                                    href="{{ route('gestion.ventas.index') }}">
+
+                                    Pedidos
+
+                                </a>
+                            </li>
+
+                            @endcan
+
+                            {{-- Comprobantes --}}
+                            @can('viewAny', \App\Models\Comprobante::class)
+
+                            <li>
+                                <a class="dropdown-item fw-bold text-white
+                                            @if (request()->routeIs('gestion.comprobantes.*')) active @endif"
+                                    href="{{ route('gestion.comprobantes.index') }}">
+
+                                    Comprobantes
+
+                                </a>
+                            </li>
+
+                            @endcan
+
+                            {{-- Promociones --}}
+                            @can('viewAny', \App\Models\Promocion::class)
+
+                            <li>
+                                <a class="dropdown-item fw-bold text-white
+                                            @if (request()->routeIs('gestion.promociones.*')) active @endif"
+                                    href="{{ route('gestion.promociones.index') }}">
+
+                                    Promociones
+
+                                </a>
+                            </li>
+
+                            @endcan
+
+                        </ul>
+
+                    </li>
+
+                    @endif
+
+
+
+
+
+
+
+
+
+                    {{-- ==================================================
+                         COMPRAS
+                         ================================================== --}}
+
+                    @php
+                    $comprasActivos =
+                    request()->routeIs('gestion.compras.*') ||
+                    request()->routeIs('gestion.proveedores.*');
+                    @endphp
+
+                    @if (
+                    $usuario->can('viewAny', \App\Models\OrdenCompra::class) ||
+                    $usuario->can('viewAny', \App\Models\Proveedor::class)
+                    )
+
+                    <li class="nav-item dropdown px-2">
+
+                        <a class="nav-link rounded dropdown-toggle fw-bold text-white
+                                @if ($comprasActivos) active @endif"
+                            href="#"
+                            id="comprasDropdown"
+                            role="button"
+                            data-bs-toggle="dropdown"
+                            aria-expanded="false">
+
+                            Compras
+
+                        </a>
+
+
+                        <ul class="dropdown-menu dropdown-menu-end bg-primary"
+                            aria-labelledby="comprasDropdown">
+
+                            {{-- Pedidos --}}
+                            @can('viewAny', \App\Models\OrdenCompra::class)
+
+                            <li>
+                                <a class="dropdown-item fw-bold text-white
+                                            @if (request()->routeIs('gestion.compras.*')) active @endif"
+                                    href="{{ route('gestion.compras.index') }}">
+
+                                    Pedidos
+
+                                </a>
+                            </li>
+
+                            @endcan
+
+
+                            {{-- Proveedores --}}
+                            @can('viewAny', \App\Models\Proveedor::class)
+
+                            <li>
+                                <a class="dropdown-item fw-bold text-white
+                                            @if (request()->routeIs('gestion.proveedores.*')) active @endif"
+                                    href="{{ route('gestion.proveedores.index') }}">
+
+                                    Proveedores
+
+                                </a>
+                            </li>
+
+                            @endcan
+
+                        </ul>
+
+                    </li>
+
+                    @endif
+
+
+                    {{-- ==================================================
+                         PRODUCTOS
+                         ================================================== --}}
+
+                    @php
+                    $productosActivos =
+                    request()->routeIs('gestion.items.*') ||
+                    request()->routeIs('gestion.categorias.*') ||
+                    request()->routeIs('gestion.stock.*');
+                    @endphp
+
+                    {{-- El desplegable aparece si al menos una de las tres
+                         entradas es visible; adentro, cada una decide sola. --}}
+                    @if (
+                    $usuario->can('viewAny', \App\Models\Producto::class) ||
+                    $usuario->can('viewAny', \App\Models\Categoria::class) ||
+                    $usuario->tienePermiso('stock.ver')
+                    )
+
+                    <li class="nav-item dropdown px-2">
+
+                        <a class="nav-link rounded dropdown-toggle fw-bold text-white
+                                @if ($productosActivos) active @endif"
+                            href="#"
+                            id="productosDropdown"
+                            role="button"
+                            data-bs-toggle="dropdown"
+                            aria-expanded="false">
+
+                            Productos
+
+                        </a>
+
+
+                        <ul class="dropdown-menu dropdown-menu-end bg-primary"
+                            aria-labelledby="productosDropdown">
+
+                            {{-- Productos --}}
+                            @can('viewAny', \App\Models\Producto::class)
+
+                            <li>
+                                <a class="dropdown-item fw-bold text-white
+                                            @if (request()->routeIs('gestion.items.*')) active @endif"
+                                    href="{{ route('gestion.items.index') }}">
+
+                                    Stock
+
+                                </a>
+                            </li>
+
+                            @endcan
+
+
+                            {{-- Categorías --}}
+                            @can('viewAny', \App\Models\Categoria::class)
+
+                            <li>
+                                <a class="dropdown-item fw-bold text-white
+                                            @if (request()->routeIs('gestion.categorias.*')) active @endif"
+                                    href="{{ route('gestion.categorias.index') }}">
+
+                                    Categorías
+
+                                </a>
+                            </li>
+
+                            @endcan
+
+
+                            {{-- Movimientos de stock --}}
+                            {{-- No hay policy para el kardex: no cuelga de un
+                                 modelo, igual que su ruta. Se consulta la
+                                 clave directamente, que es lo mismo que hace
+                                 'permiso:stock.ver' en web.php. --}}
+                            @if ($usuario->tienePermiso('stock.ver'))
+
+                            <li>
+                                <a class="dropdown-item fw-bold text-white
+                                        @if (request()->routeIs('gestion.stock.*')) active @endif"
+                                    href="{{ route('gestion.stock.index') }}">
+
+                                    Movimientos
+
+                                </a>
+                            </li>
+
+                            @endif
+
+                        </ul>
+
+                    </li>
+
+                    @endif
+
+
+                    {{-- ==================================================
+                         USUARIOS
+                         ================================================== --}}
+
+                    @php
+                    $usuariosActivos =
+                    request()->routeIs('gestion.empleados.*') ||
+                    request()->routeIs('gestion.clientes.*');
+                    @endphp
+
+                    {{-- Antes esto pedía las DOS condiciones con && y tenía un
+                         @else que mostraba "Clientes" sin verificar nada: un
+                         rol sin 'cliente.ver' igual recibía el enlace. Ahora
+                         es || como los otros dos desplegables, y cada entrada
+                         de adentro se verifica sola. --}}
+                    @if (
+                    $usuario->can('viewAny', \App\Models\Empleado::class) ||
+                    $usuario->can('viewAny', \App\Models\Cliente::class)
+                    )
+
+                    <li class="nav-item dropdown px-2">
+
+                        <a class="nav-link rounded dropdown-toggle fw-bold text-white
+                                @if ($usuariosActivos) active @endif"
+                            href="#"
+                            id="usuariosDropdown"
+                            role="button"
+                            data-bs-toggle="dropdown"
+                            aria-expanded="false">
+
+                            Usuarios
+
+                        </a>
+
+
+                        <ul class="dropdown-menu dropdown-menu-end bg-primary"
+                            aria-labelledby="usuariosDropdown">
+
+                            {{-- Empleados --}}
+                            @can('viewAny', \App\Models\Empleado::class)
+
+                            <li>
+                                <a class="dropdown-item fw-bold text-white
+                                            @if (request()->routeIs('gestion.empleados.*')) active @endif"
+                                    href="{{ route('gestion.empleados.index') }}">
+
+                                    Empleados
+
+                                </a>
+                            </li>
+
+                            @endcan
+
+
+                            {{-- Clientes --}}
+                            @can('viewAny', \App\Models\Cliente::class)
+
+                            <li>
+                                <a class="dropdown-item fw-bold text-white
+                                            @if (request()->routeIs('gestion.clientes.*')) active @endif"
+                                    href="{{ route('gestion.clientes.index') }}">
+
+                                    Clientes
+
+                                </a>
+                            </li>
+
+                            @endcan
+
+                        </ul>
+
+                    </li>
+
+                    @endif
+
+
+
+
+
+                    {{-- ==================================================
+                         MI PERFIL
+                         ================================================== --}}
+
+                    <li class="nav-item dropdown px-2">
+
+                        <a class="nav-link rounded dropdown-toggle fw-bold text-white
+                            @if (request()->routeIs('gestion.mi-cuenta')) active @endif"
+                            href="#"
+                            id="miCuentaDropdown"
+                            role="button"
+                            data-bs-toggle="dropdown"
+                            aria-expanded="false">
+
+                            Mi perfil
+
+                        </a>
+
+
+                        <ul class="dropdown-menu dropdown-menu-end bg-primary"
+                            aria-labelledby="miCuentaDropdown">
+
+                            <li class="px-3 py-2 text-white">
+
+                                <div class="fw-bold">
+                                    {{ $usuario->nombre_completo }}
+                                </div>
+
+                                <div class="small opacity-75">
+                                    {{ ucfirst($usuario->rol->nombre) }}
+                                </div>
+
+                            </li>
+
+
+                            <li>
+                                <hr class="dropdown-divider border-light opacity-25">
+                            </li>
+
+
+                            <li>
+
+                                <a class="dropdown-item fw-bold d-flex align-items-center gap-2 text-white"
+                                    href="{{ route('gestion.mi-cuenta') }}">
+
+                                    <svg width="16"
+                                        height="16"
+                                        fill="currentColor"
+                                        viewBox="0 0 16 16"
+                                        aria-hidden="true">
+
+                                        <path
+                                            d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6m2-3a2 2 0 1 1-4 0 2 2 0 0 1 4 0m4 8c0 1-1 1-1 1H3s-1 0-1-1 1-4 6-4 6 3 6 4m-1-.004c-.001-.246-.154-.986-.832-1.664C11.516 10.68 10.289 10 8 10s-3.516.68-4.168 1.332c-.678.678-.83 1.418-.832 1.664z" />
+
+                                    </svg>
+
+                                    Mis datos
+
+                                </a>
+
+                            </li>
+
+
+                            <li>
+
+                                {{-- El logout es POST: un enlace GET permitiría
+                                     cerrar la sesión de alguien con una imagen o un link. --}}
+
+                                <form method="POST"
+                                    action="{{ route('logout') }}">
+
+                                    @csrf
+
+                                    <button type="submit"
+                                        class="dropdown-item fw-bold d-flex align-items-center gap-2 text-white">
+
+                                        <svg width="16"
+                                            height="16"
+                                            fill="currentColor"
+                                            viewBox="0 0 16 16"
+                                            aria-hidden="true">
+
+                                            <path fill-rule="evenodd"
+                                                d="M10 12.5a.5.5 0 0 1-.5.5h-8a.5.5 0 0 1-.5-.5v-9a.5.5 0 0 1 .5-.5h8a.5.5 0 0 0 1 0v-2A1.5 1.5 0 0 0 9.5 2h-8A1.5 1.5 0 0 0 0 3.5v9A1.5 1.5 0 0 0 1.5 14h8a1.5 1.5 0 0 0 1.5-1.5v-2a.5.5 0 0 0-1 0z" />
+
+                                            <path fill-rule="evenodd"
+                                                d="M15.854 8.354a.5.5 0 0 0 0-.708l-3-3a.5.5 0 0 0-.708.708L14.293 7.5H5.5a.5.5 0 0 0 0 1h8.793l-2.147 2.146a.5.5 0 0 0 .708.708z" />
+
+                                        </svg>
+
+                                        Cerrar sesión
+
+                                    </button>
+
+                                </form>
+
+                            </li>
+
+                        </ul>
+
+                    </li>
+
+                </ul>
+
+            </div>
+
+        </div>
+    </nav>
 </header>

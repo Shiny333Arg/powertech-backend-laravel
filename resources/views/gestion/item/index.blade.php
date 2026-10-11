@@ -1,8 +1,8 @@
-@extends('layouts.app')
+@extends('layouts.gestion')
 
 @section('title', 'PowerTech')
 
-@vite('resources/css/item/index.css')
+@vite('resources/css/gestion/item/index.css')
 
 @section('content')
 
@@ -15,8 +15,14 @@
 
 <!-- Botones -->
 
-<section class="mb-4 d-flex flex-column flex-md-row justify-content-between align-items-stretch gap-3">
+<section class="mb-4 d-flex flex-column flex-md-row align-items-stretch gap-3
+    @can('create', App\Models\Producto::class)
+        justify-content-between
+    @else
+        justify-content-end
+    @endcan">
 
+    @can('create', App\Models\Producto::class)
 
     <a href="{{ route('gestion.items.create') }}"
         class="btn btn-success text-white d-flex align-items-center justify-content-center gap-2 flex-fill flex-md-grow-0">
@@ -37,6 +43,7 @@
         Registrar nuevo producto
     </a>
 
+    @endcan
 
     <!-- PDF -->
     <button
@@ -232,14 +239,17 @@
             <thead class="table-dark">
 
                 <tr>
+                    <th class="text-nowrap" id="columnaFoto"></th>
                     <th class="text-nowrap" id="columnaCodigo">Código</th>
                     <th class="text-nowrap" id="columnaNombre">Nombre</th>
                     <th class="text-nowrap" id="columnaMarca">Marca</th>
                     <th class="text-nowrap" id="columnaCategoria">Categoría</th>
                     <th class="text-nowrap" id="columnaPrecio">Precio</th>
-                    <th class="text-nowrap" id="columnaStockDisponible">Stock disponible</th>
+                    <th class="text-nowrap" id="columnaStockDisponible">Stock</th>
                     <th class="text-nowrap" id="columnaEstado">Estado</th>
+                    @can('create', App\Models\Producto::class)
                     <th class="text-nowrap" id="columnaOpciones">Opciones</th>
+                    @endcan
                 </tr>
 
             </thead>
@@ -250,6 +260,29 @@
                 @forelse ($productos as $producto)
 
                 <tr>
+                    @if ($producto->imagen)
+
+                    <td>
+                        <img
+                            src="{{ asset('storage/'.$producto->imagen) }}"
+                            alt="{{ $producto->nombre }}"
+                            class="w-100 h-100"
+                            style="object-fit: contain;"
+                            loading="lazy">
+                    </td>
+
+                    @else
+
+                    <td>
+                        <img
+                            src="{{ asset('images/Sin_Imagen.png') }}"
+                            alt="Sin imagen"
+                            class="w-100 h-100"
+                            style="object-fit: contain;"
+                            loading="lazy">
+                    </td>
+
+                    @endif
 
                     <td>
                         {{ $producto->codigo }}
@@ -323,6 +356,7 @@
                     </td>
 
 
+                    @can('create', App\Models\Producto::class)
                     <td class="text-nowrap">
 
                         <!-- Editar -->
@@ -346,7 +380,7 @@
 
                         <!-- Historial de stock -->
                         <a
-                            href="{{ route('gestion.items.movimientos', $producto) }}"
+                            href="{{ route('gestion.stock.show', $producto) }}"
                             class="btn btn-sm btn-info text-white me-1"
                             title="Historial de stock">
 
@@ -431,6 +465,7 @@
                         @endif
 
                     </td>
+                    @endcan
 
                 </tr>
 
@@ -462,7 +497,7 @@
 
     <div class="d-flex justify-content-center mt-3">
 
-        {{ $productos->links() }}
+        {{ $productos->onEachSide(2)->links() }}
 
     </div>
 

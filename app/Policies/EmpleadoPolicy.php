@@ -6,9 +6,7 @@ use App\Models\Empleado;
 use App\Models\User;
 
 /**
- * Sin metodo delete: un usuario NO se elimina nunca. De esta tabla cuelga toda
- * la trazabilidad —ventas registradas, cobros tomados, movimientos de stock
- * firmados, ordenes aprobadas—. El guard del modelo User rechaza el delete().
+ * as
  */
 class EmpleadoPolicy
 {
@@ -37,9 +35,8 @@ class EmpleadoPolicy
         return $user->tienePermiso('empleado.baja');
     }
 
-    /** Clave provisoria + cambio forzado. Es el circuito de clave olvidada. */
-    public function resetearPassword(User $user, Empleado $empleado): bool
+    public function reenviarInvitacion(User $user, Empleado $empleado): bool
     {
-        return $user->tienePermiso('empleado.forzar_password');
+        return $user->tienePermiso('empleado.crear');
     }
 }
