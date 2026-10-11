@@ -10,37 +10,26 @@ return new class extends Migration
     {
         Schema::create('productos', function (Blueprint $table) {
             $table->id();
-
-            $table->foreignId('categoria_id')
-                ->constrained('categorias')
-                ->restrictOnDelete(); // implementa la regla de borrado de categorias
-            $table->foreignId('alicuota_iva_id')
-                ->constrained('alicuotas_iva')
-                ->restrictOnDelete();
-            $table->foreignId('proveedor_id')
-                ->nullable()
-                ->constrained('proveedores')
-                ->restrictOnDelete();
-
+            $table->foreignId('categoria_id')->constrained('categorias');
+            $table->foreignId('alicuota_iva_id')->constrained('alicuotas_iva');
+            // Proveedor habitual: se usa para armar la OC automatica de reposicion
+            $table->foreignId('proveedor_id')->nullable()->constrained('proveedores');
             $table->string('codigo', 30)->unique();
             $table->string('nombre', 150);
             $table->string('marca', 80)->nullable();
             $table->text('descripcion')->nullable();
             $table->string('imagen', 255)->nullable();
-
             $table->decimal('precio', 12, 2);
             $table->decimal('costo', 12, 2)->nullable();
 
-            // --- Stock: dos valores registrados + uno generado ---
+            // Stock: solo lo tocan los movimientos_stock, nunca se edita a mano
             $table->unsignedInteger('stock_fisico')->default(0);
             $table->unsignedInteger('stock_comprometido')->default(0);
-            // El CAST a SIGNED es obligatorio: la resta de dos UNSIGNED es UNSIGNED
-            // y falla por rango en el primer producto en preventa.
-            $table->integer('stock_disponible')->storedAs(
-                'CAST(stock_fisico AS SIGNED) - CAST(stock_comprometido AS SIGNED)'
-            );
+            // Columna generada STORED: disponible = fisico - comprometido
+            $table->integer('stock_disponible')
+                ->storedAs('CAST(stock_fisico AS SIGNED) - CAST(stock_comprometido AS SIGNED)');
 
-            // --- Reposicion ---
+            // Disparadores de la reposicion automatica
             $table->integer('punto_reposicion')->default(0);
             $table->integer('cantidad_reposicion')->default(0);
             $table->boolean('reposicion_automatica')->default(true);
@@ -52,8 +41,6 @@ return new class extends Migration
             $table->timestamps();
 
             $table->index('marca');
-            // vitrina (stock_disponible > 0) y dashboard de reposicion
-            // (stock_disponible < punto_reposicion)
             $table->index('stock_disponible');
         });
     }

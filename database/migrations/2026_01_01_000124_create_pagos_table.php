@@ -10,9 +10,7 @@ return new class extends Migration
     {
         Schema::create('pagos', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('venta_id')
-                ->constrained('ventas')
-                ->restrictOnDelete();
+            $table->foreignId('venta_id')->constrained('ventas');
             $table->enum('metodo', ['efectivo', 'tarjeta', 'transferencia']);
             $table->decimal('monto', 12, 2);
             $table->decimal('comision', 12, 2)->nullable();
@@ -21,22 +19,20 @@ return new class extends Migration
             $table->enum('estado', ['pendiente', 'acreditado', 'rechazado', 'devuelto'])
                 ->default('pendiente');
 
-            // Mercado Pago Checkout Pro
-            $table->string('mp_preference_id', 60)->nullable(); // NO unico: varios intentos por preferencia
-            $table->string('mp_payment_id', 30)->nullable()->unique(); // idempotencia del webhook
+            // Datos de Mercado Pago (null en cobros de mostrador)
+            $table->string('mp_preference_id', 60)->nullable();
+            $table->string('mp_payment_id', 30)->nullable()->unique();
             $table->string('mp_merchant_order_id', 30)->nullable();
             $table->string('mp_status', 30)->nullable();
             $table->string('mp_status_detail', 60)->nullable();
             $table->string('mp_payment_type', 30)->nullable();
 
-            $table->foreignId('usuario_id')  // null en la venta online: no hay cajero
-                ->nullable()
-                ->constrained('users')
-                ->restrictOnDelete();
+            // Cajero que registro el cobro
+            $table->foreignId('usuario_id')->nullable()->constrained('users');
             $table->dateTime('fecha');
             $table->timestamps();
 
-            $table->index(['usuario_id', 'fecha']); // historial de cobros del cajero
+            $table->index(['usuario_id', 'fecha']);
         });
     }
 

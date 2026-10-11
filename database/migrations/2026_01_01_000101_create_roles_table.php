@@ -12,7 +12,9 @@ return new class extends Migration
             $table->id();
             $table->string('nombre', 50)->unique();
             $table->string('descripcion', 255)->nullable();
+            // gestion = back office; tienda = clientes de la app/tienda online
             $table->enum('ambito', ['gestion', 'tienda']);
+            // Los roles de sistema no se pueden eliminar desde la UI
             $table->boolean('es_sistema')->default(false);
             $table->timestamps();
         });

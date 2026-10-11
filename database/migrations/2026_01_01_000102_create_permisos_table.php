@@ -11,11 +11,9 @@ return new class extends Migration
         Schema::create('permisos', function (Blueprint $table) {
             $table->id();
             $table->string('clave', 60)->unique();
-            $table->string('modulo', 40);
+            $table->string('modulo', 40)->index();
             $table->string('descripcion', 255)->nullable();
             $table->timestamps();
-
-            $table->index('modulo');
         });
     }
 

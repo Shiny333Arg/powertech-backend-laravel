@@ -12,6 +12,7 @@ return new class extends Migration
             $table->id();
             $table->smallInteger('numero')->unique();
             $table->string('nombre', 60);
+            // wsfe = factura electronica por web service; manual = talonario
             $table->enum('tipo_emision', ['wsfe', 'manual'])->default('wsfe');
             $table->boolean('activo')->default(true);
             $table->timestamps();

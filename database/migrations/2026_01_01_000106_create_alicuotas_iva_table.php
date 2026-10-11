@@ -10,6 +10,7 @@ return new class extends Migration
     {
         Schema::create('alicuotas_iva', function (Blueprint $table) {
             $table->id();
+            // 3 = 0%, 9 = 2,5%, 8 = 5%, 4 = 10,5%, 5 = 21%, 6 = 27%
             $table->smallInteger('codigo_afip')->unique();
             $table->decimal('porcentaje', 4, 2);
             $table->string('nombre', 30);

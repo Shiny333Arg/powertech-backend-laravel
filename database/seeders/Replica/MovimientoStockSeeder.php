@@ -1,0 +1,70 @@
+<?php
+
+namespace Database\Seeders\Replica;
+
+use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\DB;
+
+/**
+ * Libro mayor de stock completo (append-only).
+ *
+ * Va ultimo: los origen_type/origen_id apuntan a ventas, ordenes
+ * de compra y comprobantes ya sembrados.
+ *
+ * Por producto, el ultimo *_resultante coincide con el stock de
+ * productos, asi que el mayor cierra contra el catalogo.
+ */
+class MovimientoStockSeeder extends Seeder
+{
+    public function run(): void
+    {
+        DB::table('movimientos_stock')->upsert([
+            ['id' => 1, 'producto_id' => 1, 'tipo' => 'inicial', 'cantidad_fisico' => 10, 'cantidad_comprometido' => 0, 'stock_fisico_resultante' => 10, 'stock_comprometido_resultante' => 0, 'origen_type' => null, 'origen_id' => null, 'usuario_id' => 1, 'motivo' => null, 'created_at' => '2026-09-23 09:03:02'],
+            ['id' => 2, 'producto_id' => 2, 'tipo' => 'inicial', 'cantidad_fisico' => 5, 'cantidad_comprometido' => 0, 'stock_fisico_resultante' => 5, 'stock_comprometido_resultante' => 0, 'origen_type' => null, 'origen_id' => null, 'usuario_id' => 1, 'motivo' => null, 'created_at' => '2026-09-23 09:09:02'],
+            ['id' => 3, 'producto_id' => 3, 'tipo' => 'inicial', 'cantidad_fisico' => 3, 'cantidad_comprometido' => 0, 'stock_fisico_resultante' => 3, 'stock_comprometido_resultante' => 0, 'origen_type' => null, 'origen_id' => null, 'usuario_id' => 2, 'motivo' => null, 'created_at' => '2026-09-23 10:22:46'],
+            ['id' => 4, 'producto_id' => 4, 'tipo' => 'inicial', 'cantidad_fisico' => 20, 'cantidad_comprometido' => 0, 'stock_fisico_resultante' => 20, 'stock_comprometido_resultante' => 0, 'origen_type' => null, 'origen_id' => null, 'usuario_id' => 2, 'motivo' => null, 'created_at' => '2026-09-23 10:27:18'],
+            ['id' => 5, 'producto_id' => 5, 'tipo' => 'inicial', 'cantidad_fisico' => 8, 'cantidad_comprometido' => 0, 'stock_fisico_resultante' => 8, 'stock_comprometido_resultante' => 0, 'origen_type' => null, 'origen_id' => null, 'usuario_id' => 2, 'motivo' => null, 'created_at' => '2026-09-23 10:29:33'],
+            ['id' => 6, 'producto_id' => 7, 'tipo' => 'inicial', 'cantidad_fisico' => 20, 'cantidad_comprometido' => 0, 'stock_fisico_resultante' => 20, 'stock_comprometido_resultante' => 0, 'origen_type' => null, 'origen_id' => null, 'usuario_id' => 2, 'motivo' => null, 'created_at' => '2026-09-24 08:38:55'],
+            ['id' => 7, 'producto_id' => 5, 'tipo' => 'reserva', 'cantidad_fisico' => 0, 'cantidad_comprometido' => 1, 'stock_fisico_resultante' => 8, 'stock_comprometido_resultante' => 1, 'origen_type' => 'App\\Models\\Venta', 'origen_id' => 1, 'usuario_id' => 4, 'motivo' => null, 'created_at' => '2026-09-25 00:44:17'],
+            ['id' => 8, 'producto_id' => 6, 'tipo' => 'reserva', 'cantidad_fisico' => 0, 'cantidad_comprometido' => 1, 'stock_fisico_resultante' => 0, 'stock_comprometido_resultante' => 1, 'origen_type' => 'App\\Models\\Venta', 'origen_id' => 2, 'usuario_id' => 4, 'motivo' => null, 'created_at' => '2026-09-25 01:19:41'],
+            ['id' => 9, 'producto_id' => 2, 'tipo' => 'reserva', 'cantidad_fisico' => 0, 'cantidad_comprometido' => 1, 'stock_fisico_resultante' => 5, 'stock_comprometido_resultante' => 1, 'origen_type' => 'App\\Models\\Venta', 'origen_id' => 3, 'usuario_id' => 4, 'motivo' => null, 'created_at' => '2026-09-25 02:58:51'],
+            ['id' => 10, 'producto_id' => 5, 'tipo' => 'reserva', 'cantidad_fisico' => 0, 'cantidad_comprometido' => 1, 'stock_fisico_resultante' => 8, 'stock_comprometido_resultante' => 2, 'origen_type' => 'App\\Models\\Venta', 'origen_id' => 3, 'usuario_id' => 4, 'motivo' => null, 'created_at' => '2026-09-25 02:58:51'],
+            ['id' => 11, 'producto_id' => 3, 'tipo' => 'reserva', 'cantidad_fisico' => 0, 'cantidad_comprometido' => 5, 'stock_fisico_resultante' => 3, 'stock_comprometido_resultante' => 5, 'origen_type' => 'App\\Models\\Venta', 'origen_id' => 4, 'usuario_id' => 4, 'motivo' => null, 'created_at' => '2026-09-25 03:06:44'],
+            ['id' => 12, 'producto_id' => 8, 'tipo' => 'inicial', 'cantidad_fisico' => 2, 'cantidad_comprometido' => 0, 'stock_fisico_resultante' => 2, 'stock_comprometido_resultante' => 0, 'origen_type' => null, 'origen_id' => null, 'usuario_id' => 2, 'motivo' => null, 'created_at' => '2026-09-25 03:41:15'],
+            ['id' => 13, 'producto_id' => 9, 'tipo' => 'inicial', 'cantidad_fisico' => 10, 'cantidad_comprometido' => 0, 'stock_fisico_resultante' => 10, 'stock_comprometido_resultante' => 0, 'origen_type' => null, 'origen_id' => null, 'usuario_id' => 2, 'motivo' => null, 'created_at' => '2026-09-25 03:43:05'],
+            ['id' => 14, 'producto_id' => 10, 'tipo' => 'inicial', 'cantidad_fisico' => 3, 'cantidad_comprometido' => 0, 'stock_fisico_resultante' => 3, 'stock_comprometido_resultante' => 0, 'origen_type' => null, 'origen_id' => null, 'usuario_id' => 2, 'motivo' => null, 'created_at' => '2026-09-25 06:18:43'],
+            ['id' => 15, 'producto_id' => 11, 'tipo' => 'inicial', 'cantidad_fisico' => 2, 'cantidad_comprometido' => 0, 'stock_fisico_resultante' => 2, 'stock_comprometido_resultante' => 0, 'origen_type' => null, 'origen_id' => null, 'usuario_id' => 2, 'motivo' => null, 'created_at' => '2026-09-25 06:32:42'],
+            ['id' => 16, 'producto_id' => 11, 'tipo' => 'reserva', 'cantidad_fisico' => 0, 'cantidad_comprometido' => 2, 'stock_fisico_resultante' => 2, 'stock_comprometido_resultante' => 2, 'origen_type' => 'App\\Models\\Venta', 'origen_id' => 5, 'usuario_id' => 4, 'motivo' => null, 'created_at' => '2026-09-25 06:39:46'],
+            ['id' => 18, 'producto_id' => 7, 'tipo' => 'reserva', 'cantidad_fisico' => 0, 'cantidad_comprometido' => 1, 'stock_fisico_resultante' => 20, 'stock_comprometido_resultante' => 1, 'origen_type' => 'App\\Models\\Venta', 'origen_id' => 7, 'usuario_id' => 4, 'motivo' => null, 'created_at' => '2026-09-27 04:37:09'],
+            ['id' => 22, 'producto_id' => 9, 'tipo' => 'reserva', 'cantidad_fisico' => 0, 'cantidad_comprometido' => 1, 'stock_fisico_resultante' => 10, 'stock_comprometido_resultante' => 1, 'origen_type' => 'App\\Models\\Venta', 'origen_id' => 8, 'usuario_id' => 4, 'motivo' => null, 'created_at' => '2026-09-27 04:39:12'],
+            ['id' => 25, 'producto_id' => 9, 'tipo' => 'entrega', 'cantidad_fisico' => -1, 'cantidad_comprometido' => -1, 'stock_fisico_resultante' => 9, 'stock_comprometido_resultante' => 0, 'origen_type' => 'App\\Models\\Venta', 'origen_id' => 8, 'usuario_id' => 3, 'motivo' => null, 'created_at' => '2026-09-27 04:40:57'],
+            ['id' => 26, 'producto_id' => 8, 'tipo' => 'reserva', 'cantidad_fisico' => 0, 'cantidad_comprometido' => 2, 'stock_fisico_resultante' => 2, 'stock_comprometido_resultante' => 2, 'origen_type' => 'App\\Models\\Venta', 'origen_id' => 9, 'usuario_id' => 4, 'motivo' => null, 'created_at' => '2026-10-01 02:45:58'],
+            ['id' => 27, 'producto_id' => 8, 'tipo' => 'reserva', 'cantidad_fisico' => 0, 'cantidad_comprometido' => 4, 'stock_fisico_resultante' => 2, 'stock_comprometido_resultante' => 6, 'origen_type' => 'App\\Models\\Venta', 'origen_id' => 10, 'usuario_id' => 4, 'motivo' => null, 'created_at' => '2026-10-01 02:47:39'],
+            ['id' => 28, 'producto_id' => 8, 'tipo' => 'reserva', 'cantidad_fisico' => 0, 'cantidad_comprometido' => 2, 'stock_fisico_resultante' => 2, 'stock_comprometido_resultante' => 8, 'origen_type' => 'App\\Models\\Venta', 'origen_id' => 11, 'usuario_id' => 4, 'motivo' => null, 'created_at' => '2026-10-01 02:49:26'],
+            ['id' => 29, 'producto_id' => 8, 'tipo' => 'reserva', 'cantidad_fisico' => 0, 'cantidad_comprometido' => 1, 'stock_fisico_resultante' => 2, 'stock_comprometido_resultante' => 9, 'origen_type' => 'App\\Models\\Venta', 'origen_id' => 12, 'usuario_id' => 4, 'motivo' => null, 'created_at' => '2026-10-01 04:13:03'],
+            ['id' => 30, 'producto_id' => 8, 'tipo' => 'reserva', 'cantidad_fisico' => 0, 'cantidad_comprometido' => 1, 'stock_fisico_resultante' => 2, 'stock_comprometido_resultante' => 10, 'origen_type' => 'App\\Models\\Venta', 'origen_id' => 13, 'usuario_id' => 4, 'motivo' => null, 'created_at' => '2026-10-01 04:17:19'],
+            ['id' => 31, 'producto_id' => 8, 'tipo' => 'reserva', 'cantidad_fisico' => 0, 'cantidad_comprometido' => 1, 'stock_fisico_resultante' => 2, 'stock_comprometido_resultante' => 11, 'origen_type' => 'App\\Models\\Venta', 'origen_id' => 14, 'usuario_id' => 4, 'motivo' => null, 'created_at' => '2026-10-01 04:17:37'],
+            ['id' => 32, 'producto_id' => 4, 'tipo' => 'reserva', 'cantidad_fisico' => 0, 'cantidad_comprometido' => 1, 'stock_fisico_resultante' => 20, 'stock_comprometido_resultante' => 1, 'origen_type' => 'App\\Models\\Venta', 'origen_id' => 15, 'usuario_id' => 4, 'motivo' => null, 'created_at' => '2026-10-01 04:32:06'],
+            ['id' => 36, 'producto_id' => 8, 'tipo' => 'entrega', 'cantidad_fisico' => -1, 'cantidad_comprometido' => -1, 'stock_fisico_resultante' => 1, 'stock_comprometido_resultante' => 10, 'origen_type' => 'App\\Models\\Venta', 'origen_id' => 14, 'usuario_id' => 3, 'motivo' => null, 'created_at' => '2026-10-01 04:35:08'],
+            ['id' => 37, 'producto_id' => 8, 'tipo' => 'reserva', 'cantidad_fisico' => 0, 'cantidad_comprometido' => 1, 'stock_fisico_resultante' => 1, 'stock_comprometido_resultante' => 11, 'origen_type' => 'App\\Models\\Venta', 'origen_id' => 16, 'usuario_id' => 4, 'motivo' => null, 'created_at' => '2026-10-01 04:56:19'],
+            ['id' => 38, 'producto_id' => 8, 'tipo' => 'reserva', 'cantidad_fisico' => 0, 'cantidad_comprometido' => 1, 'stock_fisico_resultante' => 1, 'stock_comprometido_resultante' => 12, 'origen_type' => 'App\\Models\\Venta', 'origen_id' => 17, 'usuario_id' => 4, 'motivo' => null, 'created_at' => '2026-10-01 06:20:13'],
+            ['id' => 39, 'producto_id' => 8, 'tipo' => 'reserva', 'cantidad_fisico' => 0, 'cantidad_comprometido' => 2, 'stock_fisico_resultante' => 1, 'stock_comprometido_resultante' => 14, 'origen_type' => 'App\\Models\\Venta', 'origen_id' => 18, 'usuario_id' => 4, 'motivo' => null, 'created_at' => '2026-10-01 06:21:23'],
+            ['id' => 40, 'producto_id' => 11, 'tipo' => 'compra', 'cantidad_fisico' => 2, 'cantidad_comprometido' => 0, 'stock_fisico_resultante' => 4, 'stock_comprometido_resultante' => 2, 'origen_type' => 'App\\Models\\OrdenCompra', 'origen_id' => 4, 'usuario_id' => 2, 'motivo' => '0000000001', 'created_at' => '2026-10-03 04:36:11'],
+            ['id' => 41, 'producto_id' => 8, 'tipo' => 'compra', 'cantidad_fisico' => 10, 'cantidad_comprometido' => 0, 'stock_fisico_resultante' => 11, 'stock_comprometido_resultante' => 14, 'origen_type' => 'App\\Models\\OrdenCompra', 'origen_id' => 8, 'usuario_id' => 2, 'motivo' => '0000000002', 'created_at' => '2026-10-03 04:37:29'],
+            ['id' => 42, 'producto_id' => 8, 'tipo' => 'compra', 'cantidad_fisico' => 6, 'cantidad_comprometido' => 0, 'stock_fisico_resultante' => 17, 'stock_comprometido_resultante' => 14, 'origen_type' => 'App\\Models\\OrdenCompra', 'origen_id' => 9, 'usuario_id' => 2, 'motivo' => '0000000003', 'created_at' => '2026-10-03 04:42:41'],
+            ['id' => 43, 'producto_id' => 6, 'tipo' => 'compra', 'cantidad_fisico' => 10, 'cantidad_comprometido' => 0, 'stock_fisico_resultante' => 10, 'stock_comprometido_resultante' => 1, 'origen_type' => 'App\\Models\\OrdenCompra', 'origen_id' => 2, 'usuario_id' => 2, 'motivo' => '0000000004', 'created_at' => '2026-10-03 04:53:58'],
+            ['id' => 44, 'producto_id' => 3, 'tipo' => 'compra', 'cantidad_fisico' => 5, 'cantidad_comprometido' => 0, 'stock_fisico_resultante' => 8, 'stock_comprometido_resultante' => 5, 'origen_type' => 'App\\Models\\OrdenCompra', 'origen_id' => 1, 'usuario_id' => 2, 'motivo' => '0000000005', 'created_at' => '2026-10-03 05:37:48'],
+            ['id' => 46, 'producto_id' => 4, 'tipo' => 'entrega', 'cantidad_fisico' => -1, 'cantidad_comprometido' => -1, 'stock_fisico_resultante' => 19, 'stock_comprometido_resultante' => 0, 'origen_type' => 'App\\Models\\Venta', 'origen_id' => 15, 'usuario_id' => 3, 'motivo' => null, 'created_at' => '2026-10-05 09:15:07'],
+            ['id' => 47, 'producto_id' => 2, 'tipo' => 'reserva', 'cantidad_fisico' => 0, 'cantidad_comprometido' => 1, 'stock_fisico_resultante' => 5, 'stock_comprometido_resultante' => 2, 'origen_type' => 'App\\Models\\Venta', 'origen_id' => 19, 'usuario_id' => 4, 'motivo' => null, 'created_at' => '2026-10-07 03:18:11'],
+            ['id' => 48, 'producto_id' => 2, 'tipo' => 'liberacion', 'cantidad_fisico' => 0, 'cantidad_comprometido' => -1, 'stock_fisico_resultante' => 5, 'stock_comprometido_resultante' => 1, 'origen_type' => 'App\\Models\\Venta', 'origen_id' => 19, 'usuario_id' => 4, 'motivo' => null, 'created_at' => '2026-10-07 03:18:27'],
+            ['id' => 50, 'producto_id' => 8, 'tipo' => 'entrega', 'cantidad_fisico' => -2, 'cantidad_comprometido' => -2, 'stock_fisico_resultante' => 15, 'stock_comprometido_resultante' => 12, 'origen_type' => 'App\\Models\\Venta', 'origen_id' => 18, 'usuario_id' => 3, 'motivo' => null, 'created_at' => '2026-10-07 03:19:38'],
+            ['id' => 51, 'producto_id' => 8, 'tipo' => 'devolucion', 'cantidad_fisico' => 2, 'cantidad_comprometido' => 0, 'stock_fisico_resultante' => 17, 'stock_comprometido_resultante' => 12, 'origen_type' => 'App\\Models\\Comprobante', 'origen_id' => 15, 'usuario_id' => 4, 'motivo' => null, 'created_at' => '2026-10-07 03:20:26'],
+            ['id' => 52, 'producto_id' => 7, 'tipo' => 'entrega', 'cantidad_fisico' => -1, 'cantidad_comprometido' => -1, 'stock_fisico_resultante' => 19, 'stock_comprometido_resultante' => 0, 'origen_type' => 'App\\Models\\Venta', 'origen_id' => 7, 'usuario_id' => 2, 'motivo' => null, 'created_at' => '2026-10-08 01:54:51'],
+        ], ['id']);
+
+        // El dump tenia AUTO_INCREMENT=55 (movimientos_stock perdio ids por borrados).
+        if (DB::getDriverName() === 'mysql') {
+            DB::statement('ALTER TABLE movimientos_stock AUTO_INCREMENT = 55');
+        }
+    }
+}

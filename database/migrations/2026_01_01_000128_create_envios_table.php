@@ -10,13 +10,9 @@ return new class extends Migration
     {
         Schema::create('envios', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('venta_id')
-                ->unique()
-                ->constrained('ventas')
-                ->restrictOnDelete();
+            $table->foreignId('venta_id')->unique()->constrained('ventas');
 
-            // La direccion se COPIA, no se referencia: un envio despachado no
-            // cambia de destino porque el cliente edito su perfil.
+            // Direccion congelada: si el cliente cambia la suya, el envio no cambia
             $table->string('calle', 120);
             $table->string('numero', 10)->nullable();
             $table->string('piso_depto', 20)->nullable();
