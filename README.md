@@ -1,8 +1,8 @@
 # PowerTech
 
-Sistema de gestión comercial y tienda online para una empresa de venta de tecnología (responsable inscripto en Argentina). Reemplaza al sistema anterior —PHP a medida + Angular + MariaDB— por una aplicación Laravel única que cubre el circuito completo: catálogo, stock, ventas de mostrador y online, cobros, facturación electrónica, entregas y reposición automática de inventario.
+Sistema de gestión comercial y tienda online para una empresa de venta de tecnología. Reemplaza al sistema anterior —PHP a medida + Angular + MariaDB— por un sistema hecho con Laravel + Flutter + MariDB que cubre el circuito completo: catálogo, stock, ventas de mostrador y online, cobros, facturación electrónica, entregas y reposición automática de inventario.
 
-> **Estado del proyecto:** en desarrollo. El circuito de venta, stock, compras y reposición automática están implementados. La facturación electrónica corre hoy contra un autorizador simulado (`AutorizadorSimulado`); la integración real con los web services de ARCA/AFIP está pendiente. Ver [Estado y pendientes](#estado-y-pendientes).
+> **Estado del proyecto:** en desarrollo. El circuito de venta, stock, compras y reposición automática están implementados. La facturación electrónica corre hoy contra un autorizador simulado (`AutorizadorSimulado`); la integración real con los web services de ARCA/AFIP está pendiente.
 
 ---
 
@@ -122,7 +122,7 @@ Toda corrección se resuelve emitiendo una nota de crédito asociada. Cada inten
 | Lenguaje | PHP 8.2+ |
 | Base de datos | MariaDB / MySQL |
 | ORM | Eloquent |
-| Autenticación | Laravel Breeze (stack Blade) + login con Google |
+| Autenticación | Laravel Breeze (stack Blade) |
 | Vistas | Blade + Bootstrap 5 |
 | Build de assets | Vite |
 | Colas y caché | Driver `database` (requerido, ver abajo) |
@@ -167,7 +167,7 @@ Editar `.env` con los datos de la base y del correo. Ver [Variables de entorno c
 El esquema se crea íntegramente con migraciones, sobre una **base nueva y vacía**. No se importa el esquema ni los datos del sistema anterior.
 
 ```sql
-CREATE DATABASE powertech CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE DATABASE powertech_laravel CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 ```
 
 ### 4. Migrar y cargar los datos de configuración
