@@ -453,17 +453,6 @@ Las transiciones del circuito de venta son **acciones**, no ediciones: generan m
 - **Checkout de la tienda** con Mercado Pago Checkout Pro. Cuando exista, sus rutas llevan además el middleware `verified`: no se compra con un correo sin confirmar.
 - **Priorización por antigüedad al recibir mercadería.** Al entrar stock hay que recorrer las ventas en `pendiente_stock` de ese producto en orden de antigüedad y pasar a `en_preparacion` las que ya tengan cubiertas todas sus líneas. Sin ese orden explícito, dos preventas compiten por las unidades recién llegadas según lo que devuelva el motor, y quien pagó primero puede quedar esperando otro ciclo.
 
-### Deuda técnica conocida
-
-| Dónde | Qué |
-|---|---|
-| `routes/web.php` | `items.ajustarStock` e `items.movimientos` se superponen con `stock.ajustar` y `stock.show`. Hay que quedarse con un solo camino, o el ajuste termina existiendo en dos pantallas con dos validaciones distintas |
-| `ProveedorController::update()` | Redirige a `gestion.proveedors.index` (falta la **e**). Tira 404 al guardar |
-| `VentaService` | Llama a `$this->stock->comprometer(...)` con cuatro argumentos y el método recibe tres. PHP ignora el extra, así que el `usuario_id` sale de `auth()->id()`; en un job en cola no hay sesión y el movimiento queda sin firmar |
-| Claves de sesión | `ProveedorController` y `OrdenCompraController` usan `->with('exito', …)`, pero el bloque de avisos lee `session('success')`. Unificar según lo que lea `gestion/partials/alertas.blade.php` |
-| Vistas | `gestion/home/index.blade.php` y `gestion/dashboard.blade.php` coexisten; hay que revisar cuál está muerta |
-| Documentación | `Modelo_Datos_PowerTech_final.md` y `der_powertech_final.txt` dicen que el umbral de reposición se compara con `<`. El código usa `<=`, que es lo correcto: "quedan 5 y el punto de reposición es 5" ya es momento de pedir. Hay que corregir los documentos |
-
 ---
 
 ## Documentación de referencia
