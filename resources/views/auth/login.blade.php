@@ -52,10 +52,10 @@
 <div>
     <hr class="my-4">
     <p class="fw-semibold text-center my-4">Cuentas de prueba:</p>
-    <p class="fw-semibold">Desarrollador: Administrador PowerTech</p>
+    <!-- <p class="fw-semibold">Desarrollador: Administrador PowerTech</p>
     <p>admin@powertech.com.ar</p>
-    <p>Cambiar.Esta.Clave</p>
-    <hr class="my-4">
+    <p>Cambiar.Esta.Clave</p> -->
+    <!-- <hr class="my-4"> -->
     <p class="fw-semibold">Administrativo: Luis Alberto Spinetta</p>
     <p>flaco@mail.com</p>
     <p>Cambiar.Esta.Clave</p>
