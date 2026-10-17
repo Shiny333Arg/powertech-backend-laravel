@@ -185,6 +185,8 @@ class PermisoSeeder extends Seeder
             ['rol_id' => 3, 'permiso_id' => 62],
             ['rol_id' => 3, 'permiso_id' => 63],
             ['rol_id' => 4, 'permiso_id' => 24],
+            ['rol_id' => 4, 'permiso_id' => 25],   // cliente.crear
+            ['rol_id' => 4, 'permiso_id' => 26],   // cliente.editar
             ['rol_id' => 4, 'permiso_id' => 36],
             ['rol_id' => 4, 'permiso_id' => 42],
             ['rol_id' => 4, 'permiso_id' => 47],

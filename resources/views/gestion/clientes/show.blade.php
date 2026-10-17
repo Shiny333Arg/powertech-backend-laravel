@@ -379,33 +379,25 @@
 
             <h2 class="h6 fw-bold mb-2">Contacto</h2>
 
-            <p class="mb-0">{{ $cliente->telefono ?: 'Sin teléfono cargado' }}</p>
+            @if ($cliente->user)
+            <p class="mb-1">{{ $cliente->user->email }}</p>
+            @endif
+
+            <p class="mb-0 {{ $cliente->telefono ? '' : 'text-muted' }}">
+                {{ $cliente->telefono ?: 'Sin teléfono cargado' }}
+            </p>
 
         </section>
 
 
         <section class="p-4 rounded-4 bg-light shadow-sm border">
 
-            <h2 class="h6 fw-bold mb-2">Cuenta en la tienda</h2>
+            <h2 class="h6 fw-bold mb-3">Cuenta en la tienda</h2>
 
-            @if ($cliente->user)
-
-            <p class="mb-1">{{ $cliente->user->email }}</p>
-
-            <p class="text-muted small mb-0">
-                {{ $cliente->user->activo ? 'Puede iniciar sesión en la tienda.' : 'Acceso bloqueado.' }}
-            </p>
-
-            @else
-
-            <p class="mb-1">Cliente de mostrador, sin cuenta.</p>
-
-            <p class="text-muted small mb-0">
-                Si más adelante se registra, la cuenta se vincula a esta ficha
-                en lugar de duplicarla.
-            </p>
-
-            @endif
+            @include('gestion.clientes.partials.acceso', [
+                'cliente' => $cliente,
+                'detalle' => true,
+            ])
 
         </section>
 

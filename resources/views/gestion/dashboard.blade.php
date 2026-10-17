@@ -19,7 +19,6 @@ $usuario = auth()->user();
 
     <p>tareas pendientes:</p>
     <ul>
-        <li>gestion/cliente/crear: falta el formulario</li>
         <li>gestion/compra/crear: cambiar el select por un buscador</li>
         <li>gestion/compra/crear: autoreposición</li>
         <li>gestion/venta/crear: corregir la tabla, "precio unitario" "importe"</li>

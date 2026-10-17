@@ -74,7 +74,6 @@ Route::middleware(['auth', 'ambito:tienda'])
 
         Route::patch('/perfil', [ProfileController::class, 'update'])
             ->name('profile.update');
-
     });
 
 
@@ -363,6 +362,10 @@ Route::prefix('gestion')
 
                 Route::patch('/{cliente}/reactivar', [ClienteController::class, 'reactivar'])
                     ->name('reactivar');
+
+                // Envia un mail: es una accion, no una modificacion del recurso.
+                Route::post('/{cliente}/reenviar-invitacion', [ClienteController::class, 'reenviarInvitacion'])
+                    ->name('reenviarInvitacion');
             });
 
 
