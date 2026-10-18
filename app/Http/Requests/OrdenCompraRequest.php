@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Models\Producto;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -17,12 +18,21 @@ use Illuminate\Validation\Rule;
  *                       formulario lo mande permitiria disfrazar una manual de
  *                       automatica y arruinaria la unica medicion que dice si
  *                       los umbrales estan bien calibrados.
+ *   proveedor_id      : ya no se elige. Sale del detalle: si todos los
+ *                       renglones son del mismo proveedor la orden queda
+ *                       dirigida a el, y si hay varios el pedido se reparte al
+ *                       aprobarse. Aceptarlo del formulario permitiria emitirle
+ *                       a una empresa un pedido de productos que no vende.
+ *   costo_unitario    : sale del catalogo. Se muestra para que el
+ *                       administrativo vea cuanto pesa el pedido, pero el dato
+ *                       tiene un solo dueño, que es la ficha del producto.
  *   total_estimado    : se recalcula desde las lineas.
  *   usuario_aprobo_id / fecha_aprobacion : los escribe aprobar().
  *
- * <b>Todos los productos tienen que ser del proveedor de la orden.</b> Un
- * pedido es un documento dirigido a UNA empresa: si se cuela un producto de
- * otro proveedor, el remito le pide algo que no vende.
+ * <b>Lo que si se exige de cada producto: que tenga a quien pedirselo.</b> Es
+ * lo que reemplaza a la vieja regla de «todos del mismo proveedor». Aquella
+ * existia porque el documento era uno solo; ahora el documento se reparte, y
+ * lo unico que no tiene arreglo es un renglon que no es de nadie.
  */
 class OrdenCompraRequest extends FormRequest
 {
@@ -34,84 +44,90 @@ class OrdenCompraRequest extends FormRequest
     public function rules(): array
     {
         return [
-            // En la edicion el proveedor no cambia: cambiar de destinatario es
-            // otro pedido, no una correccion de este.
-            'proveedor_id' => [
-                $this->esAlta() ? 'required' : 'prohibited',
-                'integer',
-                Rule::exists('proveedores', 'id')->where('activo', true),
-            ],
-
             'observaciones' => ['nullable', 'string', 'max:65535'],
 
             'lineas'                   => ['required', 'array', 'min:1'],
-            'lineas.*.producto_id'     => ['required', 'integer', 'distinct', Rule::exists('productos', 'id')],
+            'lineas.*.producto_id'     => [
+                'required', 'integer', 'distinct',
+                Rule::exists('productos', 'id')->where('activo', true),
+            ],
             'lineas.*.cantidad_pedida' => ['required', 'integer', 'min:1', 'max:999999'],
-
-            // Opcional: si no lo escriben, el servicio toma el costo del
-            // catalogo. Es una estimacion en los dos casos.
-            'lineas.*.costo_unitario' => ['nullable', 'numeric', 'min:0', 'max:9999999999.99'],
         ];
     }
 
     /**
-     * La regla que cruza dos campos y por eso no entra en rules(): todos los
-     * productos del pedido tienen que ser del proveedor al que se le emite.
+     * La regla que necesita ir a la base y por eso no entra en rules(): cada
+     * producto del pedido tiene que tener un proveedor activo al que pedirselo.
+     *
+     * Son dos mensajes distintos porque son dos arreglos distintos: uno se
+     * resuelve en la ficha del producto y el otro en la del proveedor.
      */
     public function withValidator($validator): void
     {
         $validator->after(function ($validator) {
-            $proveedorId = $this->esAlta()
-                ? (int) $this->input('proveedor_id')
-                : (int) $this->route('orden')?->proveedor_id;
+            $ids = collect($this->input('lineas', []))
+                ->pluck('producto_id')
+                ->filter()
+                ->all();
 
-            if ($proveedorId === 0) {
+            if ($ids === []) {
                 return;
             }
 
-            $ajenos = \App\Models\Producto::query()
-                ->whereIn('id', collect($this->input('lineas', []))->pluck('producto_id')->filter()->all())
-                ->where(fn ($q) => $q->where('proveedor_id', '!=', $proveedorId)->orWhereNull('proveedor_id'))
+            $productos = Producto::with('proveedor:id,razon_social,activo')->findMany($ids);
+
+            $huerfanos = $productos
+                ->filter(fn (Producto $p) => $p->proveedor_id === null)
                 ->pluck('nombre');
 
-            if ($ajenos->isNotEmpty()) {
+            if ($huerfanos->isNotEmpty()) {
                 $validator->errors()->add(
                     'lineas',
-                    'Estos productos no son de este proveedor: '.$ajenos->implode(', ')
-                    .'. Un pedido va dirigido a una sola empresa.'
+                    'Estos productos no tienen proveedor asignado y no hay a quién pedírselos: '
+                    .$huerfanos->implode(', ')
+                    .'. Asignáselo desde la ficha de cada producto.'
+                );
+            }
+
+            $inactivos = $productos
+                ->filter(fn (Producto $p) => $p->proveedor !== null && ! $p->proveedor->activo)
+                ->map(fn (Producto $p) => "{$p->nombre} ({$p->proveedor->razon_social})");
+
+            if ($inactivos->isNotEmpty()) {
+                $validator->errors()->add(
+                    'lineas',
+                    'Estos renglones son de un proveedor dado de baja: '
+                    .$inactivos->implode(', ')
+                    .'. Reactivalo o cambiale el proveedor al producto.'
                 );
             }
         });
     }
 
-    /** @return list<array{producto_id:int, cantidad_pedida:int, costo_unitario:float|null}> */
+    /** @return list<array{producto_id:int, cantidad_pedida:int}> */
     public function lineas(): array
     {
         return collect($this->validated('lineas'))
             ->map(fn (array $linea) => [
                 'producto_id'     => (int) $linea['producto_id'],
                 'cantidad_pedida' => (int) $linea['cantidad_pedida'],
-                'costo_unitario'  => $linea['costo_unitario'] ?? null,
             ])
             ->values()
             ->all();
     }
 
-    private function esAlta(): bool
-    {
-        return $this->route('orden') === null;
-    }
-
     public function messages(): array
     {
         return [
-            'proveedor_id.required'   => 'Elegí a qué proveedor se le emite el pedido.',
-            'proveedor_id.prohibited' => 'El proveedor de una orden no se cambia: cancelala y emití otra.',
-            'lineas.required'         => 'El pedido necesita al menos un producto.',
-            'lineas.min'              => 'El pedido necesita al menos un producto.',
-            'lineas.*.producto_id.distinct'   => 'Hay un producto repetido: sumá las cantidades en un solo renglón.',
-            'lineas.*.cantidad_pedida.min'    => 'La cantidad a pedir tiene que ser al menos 1.',
+            'lineas.required' => 'El pedido necesita al menos un producto.',
+            'lineas.min'      => 'El pedido necesita al menos un producto.',
+
+            'lineas.*.producto_id.required' => 'Hay un renglón sin producto.',
+            'lineas.*.producto_id.distinct' => 'Hay un producto repetido: sumá las cantidades en un solo renglón.',
+            'lineas.*.producto_id.exists'   => 'Hay un renglón con un producto que ya no está activo.',
+
             'lineas.*.cantidad_pedida.required' => 'Indicá cuántas unidades pedir.',
+            'lineas.*.cantidad_pedida.min'      => 'La cantidad a pedir tiene que ser al menos 1.',
         ];
     }
 }

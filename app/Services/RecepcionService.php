@@ -40,6 +40,12 @@ use InvalidArgumentException;
  * OrdenCompraService es el armado del documento de compra y no sabe que existen
  * las ventas. Meterle la cola de preventas lo convertiria en el lugar donde
  * vive todo.
+ *
+ * <b>La recepcion siempre es contra UNA orden con destinatario.</b> Un pedido
+ * repartido entre varios proveedores no se recibe: lo que llega lo manda cada
+ * proveedor contra su propia orden, y cargarlo sobre el pedido entero no diria
+ * cual de los tres cumplio. Lo unico que el pedido necesita saber es en que
+ * quedo, y eso se lo cuenta sincronizarDesdeHijas() al final de cada entrega.
  */
 class RecepcionService
 {
@@ -133,6 +139,18 @@ class RecepcionService
 
         // ---- Ya commiteado: a partir de acá el fisico es un hecho firme ----
 
+        // Si esta orden es parte de un pedido repartido, el pedido tiene que
+        // enterarse de que uno de sus proveedores entrego. Va DESPUES del
+        // commit y no adentro: el resumen se calcula leyendo a las hermanas, y
+        // adentro de la transaccion la entrega que acaba de pasar todavia no
+        // existe para nadie mas.
+        //
+        // <b>No es cosmetico.</b> Mientras el pedido figure abierto, el restock
+        // cuenta sus productos como pedidos y no los vuelve a pedir. Un pedido
+        // que se quedara en «aprobada» con los tres proveedores ya entregados
+        // bloquearia la reposicion de esos productos para siempre.
+        $orden->padre?->sincronizarDesdeHijas();
+
         $liberadas = $this->liberarPreventas($tocados);
 
         if ($orden->estado === EstadoOrdenCompra::Recibida) {
@@ -170,6 +188,11 @@ class RecepcionService
      * Es el espejo exacto del problema que resuelve cancelar(), con la
      * diferencia de que acá parte de la mercaderia si entro, asi que cancelar
      * seria mentir sobre lo que paso.
+     *
+     * Solo se cierra una orden con destinatario: el que avisa que el resto no
+     * viene avisa por lo suyo, y esCerrable() ya deja afuera a un pedido
+     * repartido. Cerrar el pedido entero lo marcaria recibido con los demas
+     * proveedores todavia debiendo.
      */
     public function cerrar(OrdenCompra $orden, User $usuario, string $motivo): OrdenCompra
     {
@@ -196,6 +219,10 @@ class RecepcionService
 
             return $orden;
         });
+
+        // Igual que en registrar(): cerrar la orden de un proveedor puede ser
+        // lo que termina de cerrar el pedido entero.
+        $orden->padre?->sincronizarDesdeHijas();
 
         // Mismo motivo que en registrar(), y acá con mas razon: cerrar a mano
         // no mueve stock, asi que este evento es el UNICO aviso que va a
@@ -271,6 +298,15 @@ class RecepcionService
     {
         if ($orden->esRecibible()) {
             return;
+        }
+
+        // Un pedido repartido no falla por su estado sino por su forma, asi que
+        // el mensaje por estado no explicaria nada: puede estar perfectamente
+        // 'enviada' y aun asi no ser lo que se recibe.
+        if ($orden->esMadre()) {
+            throw TransicionNoPermitidaException::porque(
+                "El pedido {$orden->numero} va a varios proveedores: la mercadería se recibe en la orden de cada uno."
+            );
         }
 
         $mensaje = match ($orden->estado) {

@@ -184,6 +184,13 @@
 
     @else
 
+    {{--
+        El listado muestra pedidos, no repartos: un pedido a tres proveedores
+        emite tres órdenes, pero acá es una fila sola. Las órdenes de cada
+        proveedor se ven y se operan desde el detalle del pedido, que es donde
+        tiene sentido mirarlas juntas. Si cada una fuera una fila, el
+        administrativo no sabría cuál tiene que aprobar.
+    --}}
     <div class="table-responsive">
         <table class="table table-bordered table-hover align-middle text-center">
 
@@ -204,14 +211,35 @@
 
                 @foreach ($ordenes as $orden)
 
+                @php
+                $destinatarios = $orden->proveedoresInvolucrados();
+                @endphp
+
                 <tr>
 
                     <td class="fw-semibold text-nowrap">
                         {{ $orden->numero }}
                     </td>
 
-                    <td>
-                        {{ $orden->proveedor->razon_social }}
+                    <td class="text-start">
+                        @if ($destinatarios->isEmpty())
+                        <span class="text-muted">— sin proveedor —</span>
+
+                        @elseif ($destinatarios->count() === 1)
+                        {{ $destinatarios->first()->razon_social }}
+
+                        @else
+                        {{-- Un pedido repartido: se nombra al primero y se dice
+                             cuántos más, para que la columna no crezca. El
+                             detalle completo está en el pedido. --}}
+                        <span class="badge text-bg-dark mb-1">
+                            {{ $destinatarios->count() }} proveedores
+                        </span>
+
+                        <div class="small text-muted">
+                            {{ $destinatarios->take(2)->pluck('razon_social')->implode(', ') }}@if ($destinatarios->count() > 2) y {{ $destinatarios->count() - 2 }} más @endif
+                        </div>
+                        @endif
                     </td>
 
                     <td>

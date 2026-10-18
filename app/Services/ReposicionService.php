@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Enums\OrigenOrdenCompra;
 use App\Models\OrdenCompra;
 use App\Models\Producto;
+use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
@@ -59,71 +60,80 @@ class ReposicionService
      * mayoria de los movimientos de stock no dispara ninguna reposicion.
      *
      * <b>El lock no es opcional.</b> Dos ventas simultaneas del mismo producto
-     * emiten dos eventos, los toman dos workers, y los dos ven "no hay orden
+     * emiten dos eventos, los toman dos procesos, y los dos ven "no hay orden
      * abierta" antes de que ninguno la haya creado: sin el lock salen dos
-     * ordenes por el mismo faltante. Es exactamente la carrera que la tabla no
-     * puede impedir sola, porque no hay indice unico que exprese "un producto
-     * no puede estar en dos ordenes abiertas".
+     * ordenes por el mismo faltante, o peor, la segunda encuentra el borrador
+     * que la primera acaba de crear y cae en la rama acumuladora de
+     * agregarLinea(), duplicando la cantidad pedida. Es exactamente la carrera
+     * que la tabla no puede impedir sola, porque no hay indice unico que
+     * exprese "un producto no puede estar en dos ordenes abiertas".
+     *
+     * <b>Todo el cuerpo va DENTRO del closure de block(), a proposito.</b> El
+     * lock se sostiene mientras el closure corre y Laravel lo libera al salir.
+     * Dejar afuera la lectura de ordenAbiertaDe() —aunque el lock se hubiera
+     * tomado unas lineas antes— es lo mismo que no tener lock: la decision de
+     * pedir o ampliar se toma sobre un estado que otro proceso puede estar
+     * cambiando en ese mismo instante.
      */
     public function evaluarProducto(Producto $producto): ?OrdenCompra
     {
-        $lock = Cache::lock("reposicion:producto:{$producto->getKey()}", 30);
-
-        if (! $lock->block(self::ESPERA_LOCK_SEGUNDOS, fn () => true)) {
-            // Otra evaluacion del mismo producto esta corriendo. La nuestra es
-            // redundante por definicion: no hay nada que reintentar.
-            return null;
-        }
-
         try {
-            // Releido bajo el lock: entre que se emitio el evento y que el
-            // worker lo tomo pudo entrar una recepcion de compra y el faltante
-            // ya no existe. Decidir sobre el saldo del evento seria pedir de
-            // mas.
-            $producto->refresh();
+            return Cache::lock("reposicion:producto:{$producto->getKey()}", 30)
+                ->block(self::ESPERA_LOCK_SEGUNDOS, function () use ($producto) {
+                    // Releido bajo el lock: entre que se emitio el evento y que
+                    // este job se ejecuto pudo entrar una recepcion de compra y
+                    // el faltante ya no existe. Decidir sobre el saldo del
+                    // evento seria pedir de mas.
+                    $producto->refresh();
 
-            if (! $this->necesitaReposicion($producto)) {
-                return null;
-            }
+                    if (! $this->necesitaReposicion($producto)) {
+                        return null;
+                    }
 
-            $abierta = $this->ordenAbiertaDe($producto);
+                    $abierta = $this->ordenAbiertaDe($producto);
 
-            // Sin orden abierta: se pide de cero.
-            if ($abierta === null) {
-                return $this->ordenes->pedir(
-                    $producto,
-                    $this->cantidadSugerida($producto),
-                    OrigenOrdenCompra::Automatica,
-                );
-            }
+                    // Sin orden abierta: se pide de cero.
+                    if ($abierta === null) {
+                        return $this->ordenes->pedir(
+                            $producto,
+                            $this->cantidadSugerida($producto),
+                            OrigenOrdenCompra::Automatica,
+                        );
+                    }
 
-            // Hay una orden abierta, pero eso no significa que alcance.
-            //
-            // El faltante pudo CRECER despues de emitirla: varias ventas
-            // seguidas del mismo producto, cada una empujando el disponible mas
-            // abajo. Dar el faltante por cubierto solo porque existe un pedido
-            // deja al producto pedido de menos, y cuando la mercaderia llega no
-            // destraba las preventas que la esperaban.
-            //
-            // Mientras sea BORRADOR se amplia: nadie lo aprobo y nada salio,
-            // asi que no hay documento que respetar.
-            if ($abierta->esBorrador()) {
-                return $this->ordenes->ampliar(
-                    $abierta,
-                    $producto,
-                    $this->cantidadSugerida($producto),
-                );
-            }
+                    // Hay una orden abierta, pero eso no significa que alcance.
+                    //
+                    // El faltante pudo CRECER despues de emitirla: varias ventas
+                    // seguidas del mismo producto, cada una empujando el disponible
+                    // mas abajo. Dar el faltante por cubierto solo porque existe un
+                    // pedido deja al producto pedido de menos, y cuando la
+                    // mercaderia llega no destraba las preventas que la esperaban.
+                    //
+                    // Mientras sea BORRADOR se amplia: nadie lo aprobo y nada
+                    // salio, asi que no hay documento que respetar.
+                    if ($abierta->esBorrador()) {
+                        return $this->ordenes->ampliar(
+                            $abierta,
+                            $producto,
+                            $this->cantidadSugerida($producto),
+                        );
+                    }
 
-            // Aprobada, enviada o recibida parcial: el documento esta cerrado.
-            // Cambiarle la cantidad seria reescribir lo que el administrativo
-            // aprobo y lo que el proveedor ya recibio. Se deja como esta, y el
-            // faltante que quedo descubierto se avisa en la pantalla del pedido
-            // (OrdenCompraLinea::cubreElFaltante()). Lo que sobre se pide en el
-            // ciclo siguiente, cuando esta orden se cierre.
+                    // Aprobada, enviada o recibida parcial: el documento esta
+                    // cerrado. Cambiarle la cantidad seria reescribir lo que el
+                    // administrativo aprobo y lo que el proveedor ya recibio. Se
+                    // deja como esta, y el faltante que quedo descubierto se avisa
+                    // en la pantalla del pedido (OrdenCompraLinea::cubreElFaltante()).
+                    // Lo que sobre se pide en el ciclo siguiente, cuando esta orden
+                    // se cierre.
+                    return null;
+                });
+        } catch (LockTimeoutException) {
+            // Otra evaluacion del mismo producto esta corriendo. La nuestra es
+            // redundante por definicion: va a leer el mismo saldo y encontrar
+            // la orden que la otra acaba de crear. No hay nada que reintentar,
+            // asi que se devuelve null en vez de dejar fallar el job.
             return null;
-        } finally {
-            $lock->release();
         }
     }
 

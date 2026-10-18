@@ -6,13 +6,21 @@ use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-/** cantidad_recibida habilita recepciones parciales sin tabla de recepciones. */
+/**
+ * cantidad_recibida habilita recepciones parciales sin tabla de recepciones.
+ *
+ * proveedor_id es a quien se le pide ESTE renglon, y es un snapshot: se copia
+ * del producto al guardar y no vuelve a mirarse. Si manana al producto le
+ * cambian el proveedor, los pedidos viejos tienen que seguir diciendo a quien
+ * se le pidieron. Cuando un item pueda tener varios proveedores, esta columna
+ * pasa a ser la eleccion del operador sin que cambie nada mas.
+ */
 class OrdenCompraLinea extends Model
 {
     protected $table = 'orden_compra_lineas';
 
     protected $fillable = [
-        'orden_compra_id', 'producto_id', 'cantidad_pedida',
+        'orden_compra_id', 'producto_id', 'proveedor_id', 'cantidad_pedida',
         'cantidad_recibida', 'costo_unitario',
     ];
 
@@ -30,6 +38,11 @@ class OrdenCompraLinea extends Model
     public function producto(): BelongsTo
     {
         return $this->belongsTo(Producto::class, 'producto_id');
+    }
+
+    public function proveedor(): BelongsTo
+    {
+        return $this->belongsTo(Proveedor::class, 'proveedor_id');
     }
 
     /**

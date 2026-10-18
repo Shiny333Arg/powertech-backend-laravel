@@ -19,8 +19,10 @@ $usuario = auth()->user();
 
     <p>tareas pendientes:</p>
     <ul>
-        <li>gestion/compra/crear: cambiar el select por un buscador</li>
-        <li>gestion/compra/crear: autoreposición</li>
+        <li>trabajo por lotes: que el servidor genere las órdenes de compra automáticas sin usar cmd</li>
+        <li>los presupuestos deben tener fecha de vencimiento: 1 semana. al actualizar un precio, un presupuesto y una venta no deben cambiar</li>
+        <li>varios proveedores por cada producto</li>
+        <li>gestion/compra/crear: autoreposición automática con un botón</li>
         <li>gestion/venta/crear: corregir la tabla, "precio unitario" "importe"</li>
         <li>gestion/venta/crear: mostrar impuestos</li>
         <li>hardcodear los correos para los proveedores</li>

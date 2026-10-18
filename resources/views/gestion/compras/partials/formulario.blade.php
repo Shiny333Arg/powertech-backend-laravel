@@ -1,658 +1,581 @@
 {{--
-    Detalle de un pedido. Lo comparten create y edit.
+    Detalle de un pedido a proveedores. Lo comparten el alta y la edición.
 
-    El proveedor NO es editable acá: en el alta se elige antes (create pide
-    primero a quién se le pide, porque el buscador de productos depende de
-    eso) y en la edición no se cambia, porque cambiar de destinatario es otro
-    pedido, no una corrección de este.
+    El proveedor NO se elige: sale de los productos que se carguen. Si todos los
+    renglones son del mismo, el pedido queda dirigido a él y se comporta como
+    siempre; si hay varios, al aprobarlo se emite una orden por proveedor y cada
+    uno recibe por correo solamente sus renglones. Por eso la columna de
+    proveedor es informativa: muestra a quién se le va a pedir cada cosa.
 
-    El costo unitario tampoco se edita: sale del catálogo (producto->costo). Se
-    muestra para que el encargado vea cuánto pesa cada renglón, pero el dato
-    tiene un solo dueño, que es la ficha del producto.
+    Cuando un producto pueda tener varios proveedores, esa celda pasa a ser un
+    desplegable y no hay que tocar nada más: la línea ya guarda su proveedor_id.
 
-    El buscador filtra en el cliente sobre $productos, que ya viene acotada a
-    los del proveedor. No usa la ruta gestion.buscar.productos como el alta de
-    ventas: esa busca en todo el catálogo y acá un producto de otro proveedor
-    no es una opción válida.
+    El costo unitario no se edita ni se muestra por renglón: sale del catálogo
+    (producto->costo) y el dato tiene un solo dueño, que es la ficha del
+    producto. Lo que sí se ve es el estimado del pedido, que es la referencia que
+    el administrativo necesita para aprobar.
+
+    El buscador va contra gestion.buscar.productos, igual que el alta de ventas:
+    ahora el catálogo entero es una opción válida, así que no tiene sentido
+    bajarlo al HTML como hacía la versión anterior.
 
     Espera:
-      $orden     OrdenCompra (nueva o existente)
-      $proveedor Proveedor
-      $productos Collection de los productos de ese proveedor
-      $accion    URL del form
-      $metodo    'POST' o 'PUT'
+      $orden            OrdenCompra (nueva o existente)
+      $lineasIniciales  array de renglones ya hidratados, lo arma el controlador
+      $accion           URL del form
+      $metodo           'POST' o 'PUT'
 --}}
 
-@php
-    // Lo que necesita el buscador, y nada más: el resto del modelo no tiene
-    // por qué viajar al HTML.
-    $catalogo = $productos->map(fn ($producto) => [
-        'id'         => $producto->id,
-        'codigo'     => $producto->codigo,
-        'nombre'     => $producto->nombre,
-        'costo'      => $producto->costo === null ? null : (float) $producto->costo,
-        'disponible' => (int) $producto->stock_disponible,
-        'reposicion' => (int) $producto->punto_reposicion,
-    ])->values();
-@endphp
+<form action="{{ $accion }}" method="POST" autocomplete="off" id="formPedido">
 
-<form method="POST" action="{{ $accion }}" autocomplete="off" data-form-pedido>
     @csrf
 
     @if ($metodo === 'PUT')
-        @method('PUT')
+    @method('PUT')
     @endif
 
-    @if ($metodo === 'POST')
-        <input type="hidden" name="proveedor_id" value="{{ $proveedor->id }}">
+
+    {{-- Errores generales de validación --}}
+    @if ($errors->any())
+
+    <div class="alert alert-danger">
+
+        <strong>Revisá estos campos:</strong>
+
+        <ul class="mb-0 mt-2">
+            @foreach ($errors->all() as $error)
+            <li>{{ $error }}</li>
+            @endforeach
+        </ul>
+
+    </div>
+
     @endif
 
-    <section class="p-4 rounded-4 bg-light shadow-sm border mb-4">
-        <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-3">
-            <div>
+
+    <div class="row g-4">
+
+        <!-- Columna izquierda: detalle -->
+        <div class="col-12 col-lg-8">
+
+            <!-- Buscador y renglones -->
+            <section class="p-4 rounded-4 bg-light shadow-sm border mb-4">
+
                 <h2 class="h5 fw-bold mb-1">Productos a pedir</h2>
-                <p class="text-muted small mb-0">
-                    Buscá por código o nombre entre los productos de {{ $proveedor->razon_social }}.
-                    El costo lo toma del catálogo.
+
+                <p class="text-muted small">
+                    Buscá por código, nombre o marca en todo el catálogo. El proveedor
+                    de cada renglón sale de la ficha del producto.
                 </p>
-            </div>
 
-            <button type="button" class="btn btn-sm btn-outline-primary" data-agregar-renglon>
-                <svg xmlns="http://www.w3.org/2000/svg"
-                     width="16"
-                     height="16"
-                     fill="currentColor"
-                     class="bi bi-plus-lg me-1"
-                     viewBox="0 0 16 16"
-                     aria-hidden="true">
-                    <path fill-rule="evenodd"
-                          d="M8 2a.5.5 0 0 1 .5.5v5h5a.5.5 0 0 1 0 1h-5v5a.5.5 0 0 1-1 0v-5h-5a.5.5 0 0 1 0-1h5v-5A.5.5 0 0 1 8 2"/>
-                </svg>
-                Agregar renglón
-            </button>
+                <div class="position-relative mb-3">
+
+                    <label for="buscadorProducto" class="form-label fw-semibold">
+                        Agregar producto
+                    </label>
+
+                    <input
+                        type="text"
+                        class="form-control rounded-3"
+                        id="buscadorProducto"
+                        placeholder="Ej: RTX 3070"
+                        maxlength="150">
+
+                    <div
+                        class="list-group position-absolute w-100 shadow d-none"
+                        id="resultadosProducto"
+                        style="z-index: 1050; max-height: 18rem; overflow-y: auto;">
+                    </div>
+
+                </div>
+
+
+                <div class="table-responsive">
+
+                    <table class="table table-bordered align-middle text-center mb-0" id="tablaRenglones">
+
+                        <thead class="table-dark">
+
+                            <tr>
+                                <th class="text-nowrap">Producto</th>
+                                <th class="text-nowrap" style="width: 10rem;">Marca</th>
+                                <th class="text-nowrap" style="width: 14rem;">Proveedor</th>
+                                <th class="text-nowrap" style="width: 9rem;">Cantidad</th>
+                                <th class="text-nowrap" style="width: 5rem;">Quitar</th>
+                            </tr>
+
+                        </thead>
+
+                        <tbody id="cuerpoRenglones">
+                            {{-- Lo dibuja el script del pie --}}
+                        </tbody>
+
+                    </table>
+
+                </div>
+
+                @error('lineas')
+                <div class="text-danger small mt-2">
+                    {{ $message }}
+                </div>
+                @enderror
+
+            </section>
+
+
+            <!-- Observaciones -->
+            <section class="p-4 rounded-4 bg-light shadow-sm border">
+
+                <label for="observaciones" class="form-label fw-semibold">
+                    Observaciones
+                </label>
+
+                <textarea
+                    class="form-control rounded-3 @error('observaciones') is-invalid @enderror"
+                    id="observaciones"
+                    name="observaciones"
+                    rows="3"
+                    maxlength="2000"
+                    style="resize: none"
+                    placeholder="Notas internas sobre este pedido.">{{ old('observaciones', $orden->observaciones) }}</textarea>
+
+                <div class="form-text">
+                    Son internas: no salen en el remito que recibe el proveedor.
+                </div>
+
+                @error('observaciones')
+                <div class="invalid-feedback">
+                    {{ $message }}
+                </div>
+                @enderror
+
+            </section>
+
         </div>
 
-        @error('lineas')
-            <div class="alert alert-danger small mb-3 rounded-3">{{ $message }}</div>
-        @enderror
 
-        <div class="table-responsive">
-            <table class="table table-bordered align-middle text-center mb-0" id="tablaProductos">
+        <!-- Columna derecha: resumen -->
+        <div class="col-12 col-lg-4">
 
-                <thead class="table-dark">
+            <!-- Cómo se va a emitir -->
+            <section class="p-4 rounded-4 bg-light shadow-sm border mb-4">
 
-                    <tr>
-                        <th class="text-nowrap">Producto</th>
-                        <th class="text-nowrap" style="width: 12rem;">Cantidad</th>
-                        <th class="text-nowrap" style="width: 10rem;">Costo unitario</th>
-                        <th class="text-nowrap" style="width: 10rem;">Subtotal</th>
-                        <th class="text-nowrap" style="width: 5rem;">Quitar</th>
-                    </tr>
+                <h2 class="h6 fw-bold mb-1">Cómo se va a emitir</h2>
 
-                </thead>
+                <p class="text-muted small mb-3">
+                    Un pedido con productos de varios proveedores se reparte al aprobarlo:
+                    cada uno recibe una orden con sus renglones y nada más.
+                </p>
 
-                <tbody data-renglones>
-                    @php
-                        // old() gana sobre las lineas guardadas: si la validacion
-                        // rechazo el formulario, lo que el usuario escribio no se
-                        // puede perder.
-                        $renglones = old('lineas', $orden->lineas->map(fn ($linea) => [
-                            'producto_id'     => $linea->producto_id,
-                            'cantidad_pedida' => $linea->cantidad_pedida,
-                            'costo_unitario'  => $linea->costo_unitario,
-                        ])->all());
+                <div id="resumenProveedores" class="vstack gap-2">
+                    {{-- Lo dibuja el script del pie --}}
+                </div>
 
-                        $renglones = $renglones ?: [['producto_id' => '', 'cantidad_pedida' => 1]];
-                    @endphp
+            </section>
 
-                    @foreach ($renglones as $i => $renglon)
-                        @php
-                            // El costo sale del producto. El guardado en la linea
-                            // queda solo de red para el caso raro de un producto
-                            // que ya no figura entre los del proveedor.
-                            $guardado = $renglon['producto_id'] ?? '';
-                            $elegido  = $productos->firstWhere('id', (int) $guardado);
-                            $costo    = $elegido?->costo ?? ($renglon['costo_unitario'] ?? null);
-                            $cantidad = (int) ($renglon['cantidad_pedida'] ?? 1);
-                            $subtotal = $costo === null ? null : (float) $costo * max($cantidad, 0);
 
-                            // Se cargo algo que el proveedor ya no vende: no se
-                            // puede preseleccionar, hay que avisar y que elijan.
-                            $huerfano = $guardado !== '' && $elegido === null;
-                        @endphp
+            <!-- Totales -->
+            <section class="p-4 rounded-4 bg-white shadow-sm border">
 
-                        <tr>
-                            <td class="text-start">
-                                {{--
-                                    El texto es solo la interfaz. Lo que viaja al
-                                    servidor es el hidden de abajo, igual que el
-                                    buscador de clientes del alta de ventas.
-                                --}}
-                                <div class="position-relative">
-                                    <input type="text"
-                                           class="form-control rounded-3 @error("lineas.{$i}.producto_id") is-invalid @enderror"
-                                           value="{{ $elegido ? $elegido->codigo . ' — ' . $elegido->nombre : '' }}"
-                                           placeholder="Buscá por código o nombre"
-                                           autocomplete="off"
-                                           role="combobox"
-                                           aria-expanded="false"
-                                           maxlength="150"
-                                           data-buscador-producto>
+                <div class="d-flex justify-content-between align-items-center">
+                    <span class="text-muted">Renglones</span>
+                    <span class="fw-semibold" id="totalRenglones">0</span>
+                </div>
 
-                                    <input type="hidden"
-                                           name="lineas[{{ $i }}][producto_id]"
-                                           value="{{ $elegido?->id }}"
-                                           data-producto-campo>
+                <hr>
 
-                                    {{-- Lo llena el script. Fijo, para que no lo recorte la tabla. --}}
-                                    <div class="list-group shadow d-none"
-                                         style="position: fixed; z-index: 1050; max-height: 18rem; overflow-y: auto;"
-                                         data-resultados-producto></div>
+                <div class="d-flex justify-content-between align-items-center">
+                    <span class="text-muted">Unidades</span>
+                    <span class="fw-semibold" id="totalUnidades">0</span>
+                </div>
 
-                                    <div class="invalid-feedback" data-producto-error>
-                                        @error("lineas.{$i}.producto_id"){{ $message }}@enderror
-                                    </div>
-                                </div>
+                <hr>
 
-                                <div class="text-muted small mt-1" data-producto-detalle>
-                                    @if ($elegido)
-                                        disp. {{ $elegido->stock_disponible }} / rep. {{ $elegido->punto_reposicion }}
-                                    @endif
-                                </div>
+                <div class="d-flex justify-content-between align-items-center">
+                    <span class="text-muted">Total estimado</span>
+                    <span class="h5 fw-bold mb-0" id="totalEstimado">$ 0,00</span>
+                </div>
 
-                                @if ($huerfano)
-                                    <div class="text-danger small mt-1" data-aviso-catalogo>
-                                        El producto cargado ya no figura entre los de este proveedor. Elegí otro.
-                                    </div>
-                                @endif
-                            </td>
+                <div class="form-text">
+                    Al costo del catálogo. El precio real lo fija la factura del proveedor
+                    cuando llega la mercadería.
+                </div>
 
-                            <td>
-                                <input type="number" name="lineas[{{ $i }}][cantidad_pedida]"
-                                       value="{{ $renglon['cantidad_pedida'] ?? 1 }}"
-                                       min="1" max="999999" required
-                                       class="form-control rounded-3 text-end @error("lineas.{$i}.cantidad_pedida") is-invalid @enderror">
+                <div class="alert alert-warning small mt-3 d-none" id="avisoSinProveedor">
+                    Hay renglones sin proveedor al que pedirles. Quitalos, o asignales un
+                    proveedor desde la ficha del producto.
+                </div>
 
-                                <div class="invalid-feedback">
-                                    @error("lineas.{$i}.cantidad_pedida"){{ $message }}@enderror
-                                </div>
-                            </td>
+                <div class="mt-4 d-flex flex-wrap gap-2">
 
-                            {{-- Solo lectura: el valor viaja en el hidden, que la pantalla no deja tocar. --}}
-                            <td class="text-end text-nowrap">
-                                <span data-costo-texto>
-                                    {{ $costo === null ? '—' : '$ ' . number_format((float) $costo, 2, ',', '.') }}
-                                </span>
+                    <button
+                        type="submit"
+                        class="btn btn-success px-4 fw-semibold shadow-sm"
+                        id="btnGuardar"
+                        disabled>
+                        {{ $metodo === 'PUT' ? 'Guardar cambios' : 'Guardar borrador' }}
+                    </button>
 
-                                <input type="hidden"
-                                       name="lineas[{{ $i }}][costo_unitario]"
-                                       value="{{ $costo }}"
-                                       data-costo-campo>
-                            </td>
+                    <a
+                        href="{{ $orden->exists ? route('gestion.compras.show', $orden) : route('gestion.compras.index') }}"
+                        class="btn btn-outline-secondary px-4 fw-semibold shadow-sm">
+                        Volver
+                    </a>
 
-                            <td class="text-end text-nowrap fw-semibold" data-subtotal>
-                                {{ $subtotal === null ? '—' : '$ ' . number_format($subtotal, 2, ',', '.') }}
-                            </td>
+                </div>
 
-                            <td class="text-center">
-                                <button type="button"
-                                        class="btn btn-sm btn-outline-danger"
-                                        data-quitar-renglon
-                                        aria-label="Quitar renglón"
-                                        title="Quitar renglón">
-                                    <svg xmlns="http://www.w3.org/2000/svg"
-                                         width="16"
-                                         height="16"
-                                         fill="currentColor"
-                                         class="bi bi-trash"
-                                         viewBox="0 0 16 16"
-                                         aria-hidden="true">
-                                        <path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5m5 0A.5.5 0 0 1 11 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5m-3 0A.5.5 0 0 1 8 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5"/>
-                                        <path d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1 0-2h3.5a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1H14a1 1 0 0 1 .5 1M5 4v9a1 1 0 0 0 1 1h5a1 1 0 0 0 1-1V4zM6.5 2a.5.5 0 0 0-.5.5V3h4v-.5a.5.5 0 0 0-.5-.5z"/>
-                                    </svg>
-                                </button>
-                            </td>
-                        </tr>
-                    @endforeach
-                </tbody>
+                <div class="form-text mt-3">
+                    Se guarda en borrador. Ninguna orden sale sin que un administrativo
+                    la apruebe.
+                </div>
 
-                <tfoot class="table-light">
-                    <tr>
-                        <td colspan="3" class="text-end fw-semibold">Total estimado</td>
-                        <td class="text-end fw-bold text-nowrap" data-total>—</td>
-                        <td></td>
-                    </tr>
-                </tfoot>
-            </table>
+            </section>
+
         </div>
 
-        <div class="form-text mt-2">
-            El costo es el del catálogo y acá no se edita: para cambiarlo, andá a la ficha del
-            producto. Los importes son una estimación para dimensionar el pedido, y en ningún caso
-            se le informan al proveedor.
-        </div>
-    </section>
-
-    <div class="mb-3">
-        <label for="observaciones" class="form-label">Observaciones</label>
-        <textarea id="observaciones" name="observaciones" rows="3"
-                  class="form-control @error('observaciones') is-invalid @enderror"
-                  placeholder="Se incluyen en el remito que recibe el proveedor.">{{ old('observaciones', $orden->observaciones) }}</textarea>
-
-        @error('observaciones')
-            <div class="invalid-feedback">{{ $message }}</div>
-        @enderror
     </div>
 
-    <div class="d-flex gap-2">
-        <button type="submit" class="btn btn-primary">
-            {{ $metodo === 'POST' ? 'Crear el pedido' : 'Guardar los cambios' }}
-        </button>
-
-        <a href="{{ $orden->exists ? route('gestion.compras.show', $orden) : route('gestion.compras.index') }}"
-           class="btn btn-outline-secondary">
-            Cancelar
-        </a>
-    </div>
 </form>
 
-{{-- Los productos del proveedor, para el buscador. Sin ensuciar atributos HTML. --}}
-<script type="application/json" id="catalogoProveedor">
-    @json($catalogo)
+
+{{-- Datos iniciales para el script, sin ensuciar atributos HTML --}}
+<script type="application/json" id="datosRenglones">
+    @json($lineasIniciales)
 </script>
 
-@push('scripts')
-    <script>
-        // Renglones dinamicos. Se clona el primero y se le reescriben los
-        // indices del name: Laravel arma el array por el indice, asi que dos
-        // renglones con el mismo numero se pisan.
-        (function () {
-            'use strict';
 
-            const cuerpo = document.querySelector('[data-renglones]');
-            if (!cuerpo) return;
+<script>
+    (function() {
+        'use strict';
 
-            const form       = document.querySelector('[data-form-pedido]');
-            const celdaTotal = document.querySelector('[data-total]');
-            const catalogo   = JSON.parse(document.getElementById('catalogoProveedor').textContent) || [];
+        var urlProductos = @json(route('gestion.buscar.productos'));
 
-            const TOPE = 50; // Resultados por busqueda: una lista larga no se lee.
+        var renglones = JSON.parse(document.getElementById('datosRenglones').textContent) || [];
 
-            // Mismo formato que el resto de la pantalla: 1.234,56.
-            const formato = new Intl.NumberFormat('es-AR', {
+        var cuerpo = document.getElementById('cuerpoRenglones');
+        var buscador = document.getElementById('buscadorProducto');
+        var resultados = document.getElementById('resultadosProducto');
+        var resumen = document.getElementById('resumenProveedores');
+        var totalRenglones = document.getElementById('totalRenglones');
+        var totalUnidades = document.getElementById('totalUnidades');
+        var totalEstimado = document.getElementById('totalEstimado');
+        var avisoSinProveedor = document.getElementById('avisoSinProveedor');
+        var btnGuardar = document.getElementById('btnGuardar');
+
+        // ----------------------------------------------------------
+        // Utilidades
+        // ----------------------------------------------------------
+
+        function pesos(n) {
+            return '$ ' + Number(n || 0).toLocaleString('es-AR', {
                 minimumFractionDigits: 2,
-                maximumFractionDigits: 2,
+                maximumFractionDigits: 2
             });
+        }
 
-            const pesos = (numero) => '$ ' + formato.format(numero);
-
-            // Sin acentos y en minusculas, para que "bateria" encuentre "Batería".
-            const normalizar = (texto) => (texto ?? '')
-                .toString()
-                .normalize('NFD')
-                .replace(/[\u0300-\u036f]/g, '')
-                .toLowerCase()
-                .trim();
-
-            const escapar = (texto) => {
-                const div = document.createElement('div');
-                div.textContent = texto ?? '';
-                return div.innerHTML;
+        function debounce(fn, ms) {
+            var t;
+            return function() {
+                var args = arguments;
+                clearTimeout(t);
+                t = setTimeout(function() {
+                    fn.apply(null, args);
+                }, ms);
             };
+        }
 
-            catalogo.forEach((producto) => {
-                producto.busqueda = normalizar(producto.codigo + ' ' + producto.nombre);
-                producto.etiqueta = producto.codigo + ' — ' + producto.nombre;
+        function escapar(texto) {
+            var div = document.createElement('div');
+            div.textContent = texto == null ? '' : texto;
+            return div.innerHTML;
+        }
+
+        // Un renglón se puede pedir si tiene proveedor y ese proveedor está
+        // activo. Es la misma condición que valida el servidor: conviene que el
+        // usuario la vea antes de mandar el formulario y que se lo rechacen.
+        function pedible(renglon) {
+            return !!(renglon.proveedor && renglon.proveedor.activo);
+        }
+
+        // ----------------------------------------------------------
+        // Renglones
+        // ----------------------------------------------------------
+
+        function celdaProveedor(renglon) {
+            if (!renglon.proveedor) {
+                return '<span class="badge text-bg-danger">Sin proveedor</span>';
+            }
+
+            var nombre = '<div class="small">' + escapar(renglon.proveedor.razon_social) + '</div>';
+
+            if (!renglon.proveedor.activo) {
+                nombre += '<span class="badge text-bg-warning mt-1">Dado de baja</span>';
+            }
+
+            return nombre;
+        }
+
+        function dibujarRenglones() {
+            cuerpo.innerHTML = '';
+
+            if (!renglones.length) {
+                cuerpo.innerHTML =
+                    '<tr><td colspan="5" class="text-center py-4 text-muted">' +
+                    'Todavía no cargaste productos. Buscá uno arriba para empezar.' +
+                    '</td></tr>';
+            }
+
+            renglones.forEach(function(renglon, i) {
+                var fila = document.createElement('tr');
+
+                if (!pedible(renglon)) {
+                    fila.className = 'table-warning';
+                }
+
+                fila.innerHTML =
+                    '<td class="text-start">' +
+                    '<div class="fw-semibold">' + escapar(renglon.nombre) + '</div>' +
+                    '<div class="text-muted small">' + escapar(renglon.codigo) + '</div>' +
+                    '<input type="hidden" name="lineas[' + i + '][producto_id]" value="' + renglon.producto_id + '">' +
+                    '</td>' +
+
+                    '<td class="small">' + (renglon.marca ? escapar(renglon.marca) : '<span class="text-muted">—</span>') + '</td>' +
+
+                    '<td>' + celdaProveedor(renglon) + '</td>' +
+
+                    '<td>' +
+                    '<input type="number" class="form-control form-control-sm text-center" ' +
+                    'name="lineas[' + i + '][cantidad_pedida]" value="' + renglon.cantidad + '" ' +
+                    'min="1" max="999999" data-indice="' + i + '">' +
+                    '</td>' +
+
+                    '<td>' +
+                    '<button type="button" class="btn btn-sm btn-outline-danger" ' +
+                    'data-quitar="' + i + '" title="Quitar">&times;</button>' +
+                    '</td>';
+
+                cuerpo.appendChild(fila);
             });
 
-            const reindexar = () => {
-                cuerpo.querySelectorAll('tr').forEach((fila, i) => {
-                    fila.querySelectorAll('[name]').forEach((campo) => {
-                        campo.name = campo.name.replace(/lineas\[\d+\]/, `lineas[${i}]`);
-                    });
+            actualizarResumen();
+        }
+
+        function actualizarResumen() {
+            var unidades = renglones.reduce(function(a, r) {
+                return a + Number(r.cantidad);
+            }, 0);
+
+            var estimado = renglones.reduce(function(a, r) {
+                return a + (Number(r.costo) || 0) * Number(r.cantidad);
+            }, 0);
+
+            var huerfanos = renglones.filter(function(r) {
+                return !pedible(r);
+            });
+
+            totalRenglones.textContent = renglones.length;
+            totalUnidades.textContent = unidades;
+            totalEstimado.textContent = pesos(estimado);
+
+            avisoSinProveedor.classList.toggle('d-none', huerfanos.length === 0);
+
+            // Guardar con un renglón sin proveedor lo rechaza el servidor: no
+            // tiene sentido dejar que mande el formulario y pierda el tiempo.
+            btnGuardar.disabled = renglones.length === 0 || huerfanos.length > 0;
+
+            dibujarResumen();
+        }
+
+        function dibujarResumen() {
+            var grupos = [];
+
+            renglones.forEach(function(r) {
+                if (!r.proveedor) return;
+
+                var grupo = grupos.filter(function(g) {
+                    return g.id === r.proveedor.id;
+                })[0];
+
+                if (!grupo) {
+                    grupo = {
+                        id: r.proveedor.id,
+                        nombre: r.proveedor.razon_social,
+                        activo: r.proveedor.activo,
+                        items: 0,
+                        unidades: 0
+                    };
+                    grupos.push(grupo);
+                }
+
+                grupo.items++;
+                grupo.unidades += Number(r.cantidad);
+            });
+
+            if (!grupos.length) {
+                resumen.innerHTML = '<div class="text-muted small">Cargá productos para ver a quiénes se les va a pedir.</div>';
+                return;
+            }
+
+            var encabezado = grupos.length === 1 ?
+                '<div class="small text-muted">Va a quedar una sola orden, dirigida a:</div>' :
+                '<div class="small text-muted">Al aprobarlo se van a emitir <strong>' + grupos.length + ' órdenes</strong>:</div>';
+
+            resumen.innerHTML = encabezado + grupos.map(function(g) {
+                return '<div class="d-flex justify-content-between align-items-center border rounded-3 bg-white p-2">' +
+                    '<span class="small fw-semibold">' + escapar(g.nombre) +
+                    (g.activo ? '' : ' <span class="badge text-bg-warning">baja</span>') +
+                    '</span>' +
+                    '<span class="text-muted small text-nowrap">' + g.items + ' ítem' + (g.items === 1 ? '' : 's') +
+                    ' · ' + g.unidades + ' u.</span>' +
+                    '</div>';
+            }).join('');
+        }
+
+        function agregarProducto(p) {
+            var existente = renglones.filter(function(r) {
+                return r.producto_id === p.id;
+            })[0];
+
+            // Sumar en vez de abrir otro renglón: el servidor rechaza productos
+            // repetidos, y el proveedor no tiene por qué recibir un remito con
+            // el mismo ítem dos veces.
+            if (existente) {
+                existente.cantidad++;
+            } else {
+                renglones.push({
+                    producto_id: p.id,
+                    codigo: p.codigo,
+                    nombre: p.nombre,
+                    marca: p.marca,
+                    costo: p.costo,
+                    cantidad: 1,
+                    proveedor: p.proveedor
                 });
-            };
+            }
 
-            // ----------------------------------------------------------
-            // Importes
-            // ----------------------------------------------------------
+            buscador.value = '';
+            ocultar(resultados);
+            dibujarRenglones();
+        }
 
-            // El costo lo manda el catalogo, no el usuario: lo escribe elegir()
-            // en el hidden, que es lo unico que viaja al servidor. Aca solo se
-            // formatea lo que ya esta en el campo.
-            const recalcularFila = (fila) => {
-                const campo    = fila.querySelector('[data-costo-campo]');
-                const texto    = fila.querySelector('[data-costo-texto]');
-                const subtotal = fila.querySelector('[data-subtotal]');
+        cuerpo.addEventListener('click', function(e) {
+            var boton = e.target.closest('[data-quitar]');
+            if (!boton) return;
 
-                const costo    = parseFloat(campo?.value ?? '');
-                const cantidad = parseInt(fila.querySelector('input[name*="cantidad_pedida"]')?.value, 10);
+            renglones.splice(Number(boton.dataset.quitar), 1);
+            dibujarRenglones();
+        });
 
-                if (Number.isNaN(costo)) {
-                    if (texto) texto.textContent = '—';
-                    if (subtotal) subtotal.textContent = '—';
-                    return;
-                }
+        cuerpo.addEventListener('input', function(e) {
+            if (!e.target.dataset.indice) return;
 
-                if (texto) texto.textContent = pesos(costo);
+            var i = Number(e.target.dataset.indice);
+            var valor = parseInt(e.target.value, 10);
 
-                if (subtotal) {
-                    subtotal.textContent = Number.isNaN(cantidad) || cantidad < 1
-                        ? '—'
-                        : pesos(costo * cantidad);
-                }
-            };
+            renglones[i].cantidad = isNaN(valor) || valor < 1 ? 1 : valor;
+            actualizarResumen();
+        });
 
-            const recalcularTotal = () => {
-                if (!celdaTotal) return;
+        // ----------------------------------------------------------
+        // Buscador
+        // ----------------------------------------------------------
 
-                let total = 0;
-                let hayAlguno = false;
+        function ocultar(caja) {
+            caja.classList.add('d-none');
+            caja.innerHTML = '';
+        }
 
-                cuerpo.querySelectorAll('tr').forEach((fila) => {
-                    const costo    = parseFloat(fila.querySelector('[data-costo-campo]')?.value ?? '');
-                    const cantidad = parseInt(fila.querySelector('input[name*="cantidad_pedida"]')?.value, 10);
+        function buscar(url, texto, alRecibir) {
+            if (texto.trim().length < 2) return alRecibir([]);
 
-                    if (Number.isNaN(costo) || Number.isNaN(cantidad) || cantidad < 1) return;
-
-                    total += costo * cantidad;
-                    hayAlguno = true;
-                });
-
-                celdaTotal.textContent = hayAlguno ? pesos(total) : '—';
-            };
-
-            const recalcularTodo = () => {
-                cuerpo.querySelectorAll('tr').forEach(recalcularFila);
-                recalcularTotal();
-            };
-
-            // ----------------------------------------------------------
-            // Buscador de producto (uno por renglon)
-            // ----------------------------------------------------------
-
-            let filaAbierta = null;
-
-            const cajaDe  = (fila) => fila.querySelector('[data-resultados-producto]');
-            const campoDe = (fila) => fila.querySelector('[data-buscador-producto]');
-
-            // La caja va con position: fixed porque .table-responsive recorta
-            // todo lo que se sale de la tabla. Se la ubica contra el input.
-            const ubicar = (fila) => {
-                const caja = cajaDe(fila);
-                const r = campoDe(fila).getBoundingClientRect();
-
-                caja.style.top   = (r.bottom + 2) + 'px';
-                caja.style.left  = r.left + 'px';
-                caja.style.width = r.width + 'px';
-            };
-
-            const cerrar = (fila) => {
-                if (!fila) return;
-
-                const caja = cajaDe(fila);
-                caja.classList.add('d-none');
-                caja.innerHTML = '';
-                campoDe(fila).setAttribute('aria-expanded', 'false');
-
-                if (filaAbierta === fila) filaAbierta = null;
-            };
-
-            const cerrarTodo = () => cuerpo.querySelectorAll('tr').forEach(cerrar);
-
-            const opcionesDe = (fila) =>
-                Array.prototype.slice.call(cajaDe(fila).querySelectorAll('[data-producto-id]'));
-
-            const marcar = (fila, i) => {
-                const opciones = opcionesDe(fila);
-
-                opciones.forEach((o) => o.classList.remove('active'));
-
-                if (i >= 0 && opciones[i]) {
-                    opciones[i].classList.add('active');
-                    opciones[i].scrollIntoView({ block: 'nearest' });
-                }
-            };
-
-            const limpiarProducto = (fila) => {
-                fila.querySelector('[data-producto-campo]').value = '';
-                fila.querySelector('[data-costo-campo]').value = '';
-                fila.querySelector('[data-producto-detalle]').textContent = '';
-            };
-
-            const elegir = (fila, producto) => {
-                if (!producto) return;
-
-                const input = campoDe(fila);
-
-                input.value = producto.etiqueta;
-                input.classList.remove('is-invalid');
-
-                fila.querySelector('[data-producto-campo]').value = producto.id;
-                fila.querySelector('[data-costo-campo]').value = producto.costo ?? '';
-                fila.querySelector('[data-producto-detalle]').textContent =
-                    'disp. ' + producto.disponible + ' / rep. ' + producto.reposicion;
-
-                const aviso = fila.querySelector('[data-aviso-catalogo]');
-                if (aviso) aviso.remove();
-
-                cerrar(fila);
-                recalcularFila(fila);
-                recalcularTotal();
-            };
-
-            const mostrar = (fila) => {
-                const caja = cajaDe(fila);
-                const q = normalizar(campoDe(fila).value);
-
-                const encontrados = catalogo.filter((p) => q === '' || p.busqueda.indexOf(q) !== -1);
-
-                caja.innerHTML = '';
-
-                if (!encontrados.length) {
-                    caja.innerHTML = '<div class="list-group-item text-muted small">' +
-                        'Ningún producto de este proveedor coincide con la búsqueda.</div>';
-                } else {
-                    encontrados.slice(0, TOPE).forEach((p) => {
-                        const bajo = p.disponible <= p.reposicion;
-
-                        const boton = document.createElement('button');
-                        boton.type = 'button';
-                        boton.className = 'list-group-item list-group-item-action d-flex justify-content-between align-items-center gap-3 text-start';
-                        boton.dataset.productoId = p.id;
-
-                        boton.innerHTML =
-                            '<span>' +
-                                '<span class="fw-semibold">' + escapar(p.nombre) + '</span>' +
-                                '<span class="text-muted small ms-2">' + escapar(p.codigo) + '</span>' +
-                            '</span>' +
-                            '<span class="text-nowrap">' +
-                                '<span class="badge text-bg-' + (bajo ? 'warning' : 'secondary') + ' me-2">' +
-                                    'disp. ' + p.disponible + ' / rep. ' + p.reposicion +
-                                '</span>' +
-                                (p.costo === null ? '—' : pesos(p.costo)) +
-                            '</span>';
-
-                        caja.appendChild(boton);
-                    });
-
-                    if (encontrados.length > TOPE) {
-                        const pie = document.createElement('div');
-                        pie.className = 'list-group-item text-muted small';
-                        pie.textContent = 'Hay ' + (encontrados.length - TOPE) + ' resultados más. Afiná la búsqueda.';
-                        caja.appendChild(pie);
-                    }
-                }
-
-                ubicar(fila);
-                caja.classList.remove('d-none');
-                campoDe(fila).setAttribute('aria-expanded', 'true');
-                filaAbierta = fila;
-            };
-
-            // ----------------------------------------------------------
-            // Eventos (delegados: asi los renglones clonados andan solos)
-            // ----------------------------------------------------------
-
-            cuerpo.addEventListener('focusin', (evento) => {
-                if (!evento.target.matches('[data-buscador-producto]')) return;
-
-                const fila = evento.target.closest('tr');
-                if (filaAbierta && filaAbierta !== fila) cerrar(filaAbierta);
-
-                mostrar(fila);
-            });
-
-            const alEditar = (evento) => {
-                const fila = evento.target.closest('tr');
-                if (!fila) return;
-
-                if (evento.target.matches('[data-buscador-producto]')) {
-                    // Lo que escribe invalida la eleccion anterior: el texto no
-                    // alcanza, hace falta volver a elegir de la lista.
-                    limpiarProducto(fila);
-                    mostrar(fila);
-                }
-
-                recalcularFila(fila);
-                recalcularTotal();
-            };
-
-            cuerpo.addEventListener('input', alEditar);
-            cuerpo.addEventListener('change', alEditar);
-
-            cuerpo.addEventListener('keydown', (evento) => {
-                if (!evento.target.matches('[data-buscador-producto]')) return;
-
-                const fila = evento.target.closest('tr');
-                const abierta = !cajaDe(fila).classList.contains('d-none');
-
-                if (evento.key === 'Escape') {
-                    cerrar(fila);
-                    return;
-                }
-
-                if (evento.key === 'ArrowDown' || evento.key === 'ArrowUp') {
-                    evento.preventDefault();
-
-                    if (!abierta) {
-                        mostrar(fila);
-                        return;
+            fetch(url + '?q=' + encodeURIComponent(texto), {
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    credentials: 'same-origin'
+                })
+                .then(function(r) {
+                    if (!r.ok) {
+                        return r.text().then(function(cuerpo) {
+                            console.error('Búsqueda ' + url + ' → HTTP ' + r.status, cuerpo.slice(0, 800));
+                            return [];
+                        });
                     }
 
-                    const opciones = opcionesDe(fila);
-                    const actual = opciones.findIndex((o) => o.classList.contains('active'));
+                    var tipo = r.headers.get('content-type') || '';
 
-                    marcar(fila, evento.key === 'ArrowDown'
-                        ? Math.min(actual + 1, opciones.length - 1)
-                        : Math.max(actual - 1, 0));
+                    if (tipo.indexOf('application/json') === -1) {
+                        return r.text().then(function(cuerpo) {
+                            console.error('Búsqueda ' + url + ' → no devolvió JSON (¿redirect de middleware?)', cuerpo.slice(0, 800));
+                            return [];
+                        });
+                    }
 
-                    return;
-                }
+                    return r.json();
+                })
+                .then(alRecibir)
+                .catch(function(e) {
+                    console.error('Búsqueda ' + url + ' falló', e);
+                    alRecibir([]);
+                });
+        }
 
-                if (evento.key === 'Enter' && abierta) {
-                    // Nunca manda el formulario con la lista abierta.
-                    evento.preventDefault();
+        buscador.addEventListener('input', debounce(function() {
+            buscar(urlProductos, buscador.value, function(items) {
+                if (!items.length) return ocultar(resultados);
 
-                    const opciones = opcionesDe(fila);
-                    const actual = opciones.findIndex((o) => o.classList.contains('active'));
+                resultados.innerHTML = '';
 
-                    // Con uno marcado, o con un unico candidato, Enter elige.
-                    const opcion = actual >= 0 ? opciones[actual] : (opciones.length === 1 ? opciones[0] : null);
-                    if (!opcion) return;
+                items.forEach(function(p) {
+                    var boton = document.createElement('button');
+                    boton.type = 'button';
+                    boton.className = 'list-group-item list-group-item-action d-flex justify-content-between align-items-center gap-3';
 
-                    elegir(fila, catalogo.find((p) => String(p.id) === opcion.dataset.productoId));
-                }
-            });
+                    // El disponible va en el desplegable porque es el motivo por
+                    // el que alguien abre esta pantalla: se pide lo que falta.
+                    var falta = p.disponible <= p.reposicion;
 
-            cuerpo.addEventListener('click', (evento) => {
-                const opcion = evento.target.closest('[data-producto-id]');
+                    boton.innerHTML =
+                        '<span class="text-start">' +
+                        '<span class="fw-semibold">' + escapar(p.nombre) + '</span>' +
+                        '<span class="text-muted small ms-2">' + escapar(p.codigo) + '</span>' +
+                        '<span class="d-block text-muted small">' +
+                        (p.marca ? escapar(p.marca) + ' · ' : '') +
+                        (p.proveedor ? escapar(p.proveedor.razon_social) : 'sin proveedor') +
+                        '</span>' +
+                        '</span>' +
+                        '<span class="text-nowrap">' +
+                        '<span class="badge text-bg-' + (falta ? 'danger' : 'secondary') + '">' +
+                        p.disponible + ' disp.' +
+                        '</span>' +
+                        '</span>';
 
-                if (opcion) {
-                    const fila = opcion.closest('tr');
-                    elegir(fila, catalogo.find((p) => String(p.id) === opcion.dataset.productoId));
-                    campoDe(fila).focus();
-                    return;
-                }
+                    boton.addEventListener('click', function() {
+                        agregarProducto(p);
+                    });
 
-                if (!evento.target.closest('[data-quitar-renglon]')) return;
-
-                // Nunca se queda sin renglones: un pedido vacio no se puede
-                // guardar, y un formulario sin filas no deja volver atras.
-                if (cuerpo.querySelectorAll('tr').length === 1) return;
-
-                cerrarTodo();
-                evento.target.closest('tr').remove();
-                reindexar();
-                recalcularTotal();
-            });
-
-            document.addEventListener('click', (evento) => {
-                if (evento.target.closest('[data-resultados-producto]')) return;
-                if (evento.target.closest('[data-buscador-producto]')) return;
-
-                cerrarTodo();
-            });
-
-            // La caja va fija contra la ventana: si algo se mueve, se reubica.
-            const reubicar = () => filaAbierta && ubicar(filaAbierta);
-
-            window.addEventListener('resize', reubicar);
-            window.addEventListener('scroll', reubicar, true);
-
-            document.querySelector('[data-agregar-renglon]')?.addEventListener('click', () => {
-                cerrarTodo();
-
-                const nueva = cuerpo.querySelector('tr').cloneNode(true);
-
-                nueva.querySelector('[data-buscador-producto]').value = '';
-                nueva.querySelector('[data-producto-campo]').value = '';
-                nueva.querySelector('[data-costo-campo]').value = '';
-                nueva.querySelector('[data-producto-detalle]').textContent = '';
-                nueva.querySelector('input[name*="cantidad_pedida"]').value = 1;
-
-                const caja = nueva.querySelector('[data-resultados-producto]');
-                caja.innerHTML = '';
-                caja.classList.add('d-none');
-
-                // Los errores son del renglon que se clono, no de este.
-                nueva.querySelectorAll('.is-invalid').forEach((campo) => campo.classList.remove('is-invalid'));
-                nueva.querySelectorAll('.invalid-feedback').forEach((error) => (error.textContent = ''));
-                nueva.querySelectorAll('[data-aviso-catalogo]').forEach((aviso) => aviso.remove());
-
-                cuerpo.appendChild(nueva);
-                reindexar();
-                recalcularFila(nueva);
-                recalcularTotal();
-
-                nueva.querySelector('[data-buscador-producto]').focus();
-            });
-
-            // El hidden no se puede marcar required: el navegador no valida
-            // campos ocultos. Texto escrito sin elegir de la lista no vale.
-            form?.addEventListener('submit', (evento) => {
-                let primero = null;
-
-                cuerpo.querySelectorAll('tr').forEach((fila) => {
-                    const input = campoDe(fila);
-                    const vacio = !fila.querySelector('[data-producto-campo]').value;
-
-                    input.classList.toggle('is-invalid', vacio);
-                    fila.querySelector('[data-producto-error]').textContent = vacio
-                        ? 'Elegí un producto de la lista.'
-                        : '';
-
-                    if (vacio && !primero) primero = input;
+                    resultados.appendChild(boton);
                 });
 
-                if (!primero) return;
-
-                evento.preventDefault();
-                cerrarTodo();
-                primero.focus();
+                resultados.classList.remove('d-none');
             });
+        }, 300));
 
-            recalcularTodo();
-        })();
-    </script>
-@endpush
+        document.addEventListener('click', function(e) {
+            if (!e.target.closest('#resultadosProducto') && e.target !== buscador) ocultar(resultados);
+        });
+
+        // Enter en el buscador no manda el formulario: lo normal es que el
+        // usuario esté buscando, no terminando.
+        buscador.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') e.preventDefault();
+        });
+
+        // ----------------------------------------------------------
+        // Arranque
+        // ----------------------------------------------------------
+
+        dibujarRenglones();
+    })();
+</script>
