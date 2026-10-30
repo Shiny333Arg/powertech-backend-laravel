@@ -3,6 +3,7 @@
 use App\Http\Controllers\HelpController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\CarritoController;
 use App\Http\Controllers\gestion\BusquedaController;
 use App\Http\Controllers\gestion\CategoriaController;
 use App\Http\Controllers\gestion\ClienteController;
@@ -85,7 +86,37 @@ Route::middleware(['auth', 'ambito:tienda'])
             ->name('profile.update');
     });
 
+// ========================================================
+// CARRITO
+// ========================================================
+// 'verified' aplica la regla del layout del lado del servidor: un cliente
+// con el correo sin confirmar navega, pero no arma pedidos.
+//
+// El carrito NO es un recurso del cliente sino el suyo propio: no hay
+// index de carritos ni {carrito} en la URL. Lo que se manipula es la
+// linea, y la linea se valida contra el carrito activo de quien pide.
 
+Route::prefix('carrito')
+    ->name('cliente.carrito.')
+    ->middleware('verified')
+    ->group(function () {
+
+        Route::get('/', [CarritoController::class, 'index'])
+            ->name('index');
+
+        Route::post('/', [CarritoController::class, 'store'])
+            ->name('store');
+
+        Route::patch('/{linea}', [CarritoController::class, 'update'])
+            ->name('update');
+
+        Route::delete('/{linea}', [CarritoController::class, 'destroy'])
+            ->name('destroy');
+    });
+
+
+
+    
 // ============================================================
 // GESTIÓN
 // ============================================================

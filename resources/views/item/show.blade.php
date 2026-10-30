@@ -106,6 +106,12 @@
                     {{ $producto->nombre }}
                 </h1>
 
+                @if ($producto->codigo)
+                <div class="text-muted small mb-3">
+                    Código {{ $producto->codigo }}
+                </div>
+                @endif
+
                 <hr class="text-muted opacity-25">
 
                 <div class="mt-2 flex-grow-1">
@@ -231,14 +237,8 @@
                     BLOQUE DE COMPRA
                     Solo para el rol cliente con correo confirmado. El invitado no
                     ve cantidad, ni botón, ni aviso: el bloque entero no existe.
-
-                    El Route::has() es andamio: todavía no hay CarritoController ni
-                    rutas de carrito en web.php. Mientras no existan, el botón se
-                    renderiza deshabilitado en vez de reventar con RouteNotFound.
                 --}}
                 @if ($puedeComprar)
-
-                @if (Route::has('cliente.carrito.store'))
 
                 <form action="{{ route('cliente.carrito.store') }}" method="POST">
 
@@ -256,9 +256,14 @@
                             name="cantidad"
                             id="cantidad"
                             class="form-control @error('cantidad') is-invalid @enderror"
+                            {{--
+                                Sin tope por stock: se admite preventa, asi que
+                                pedir mas unidades de las que hay es legitimo.
+                                El 99 es un freno contra el tipeo.
+                            --}}
                             value="{{ old('cantidad', 1) }}"
                             min="1"
-                            @unless ($enPreventa) max="{{ $disponible }}" @endunless
+                            max="99"
                             required>
 
                         @error('cantidad')
@@ -290,24 +295,6 @@
                     </div>
 
                 </form>
-
-                @else
-
-                <div class="d-grid gap-2">
-
-                    <button type="button"
-                        class="btn btn-primary fw-semibold py-2 rounded-3"
-                        disabled>
-                        Agregar al carrito
-                    </button>
-
-                    <span class="text-muted small text-center">
-                        El carrito todavía no está habilitado.
-                    </span>
-
-                </div>
-
-                @endif
 
                 @endif
 
