@@ -19,7 +19,6 @@ $usuario = auth()->user();
 
     <p>tareas pendientes:</p>
     <ul>
-        <li>trabajo por lotes: que el servidor genere las órdenes de compra automáticas sin usar cmd</li>
         <li>los presupuestos deben tener fecha de vencimiento: 1 semana. al actualizar un precio, un presupuesto y una venta no deben cambiar</li>
         <li>varios proveedores por cada producto</li>
         <li>gestion/compra/crear: autoreposición automática con un botón</li>

@@ -19,6 +19,12 @@
     ahora el catálogo entero es una opción válida, así que no tiene sentido
     bajarlo al HTML como hacía la versión anterior.
 
+    El botón "traer lo que falta pedir" va contra gestion.compras.sugerencias y
+    carga de una todos los productos bajo su punto de reposición que ningún
+    proveedor tiene todavía. Los borradores automáticos que queden cubiertos se
+    dan de baja solos cuando este pedido se apruebe, no antes: si el formulario
+    se abandona, esos borradores siguen en pie.
+
     Espera:
       $orden            OrdenCompra (nueva o existente)
       $lineasIniciales  array de renglones ya hidratados, lo arma el controlador
@@ -88,6 +94,33 @@
                     </div>
 
                 </div>
+
+
+                {{--
+                    El atajo del administrativo: en vez de buscar uno por uno los
+                    diez productos que están en falta, los trae todos.
+
+                    Deja afuera lo que ya está en manos de un proveedor —orden
+                    aprobada, enviada o recibida a medias—, porque eso ya se
+                    pidió. Lo que solo figura en un borrador SÍ entra: un
+                    borrador no es un compromiso y este pedido lo reemplaza.
+                --}}
+                <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+
+                    <button
+                        type="button"
+                        class="btn btn-outline-primary btn-sm fw-semibold"
+                        id="btnSugerencias">
+                        Traer lo que falta pedir
+                    </button>
+
+                    <span class="text-muted small" id="ayudaSugerencias">
+                        Productos bajo su punto de reposición que todavía no le llegaron a ningún proveedor.
+                    </span>
+
+                </div>
+
+                <div class="alert alert-info small d-none" id="avisoSugerencias" role="status"></div>
 
 
                 <div class="table-responsive">
@@ -249,6 +282,7 @@
         'use strict';
 
         var urlProductos = @json(route('gestion.buscar.productos'));
+        var urlSugerencias = @json(route('gestion.compras.sugerencias'));
 
         var renglones = JSON.parse(document.getElementById('datosRenglones').textContent) || [];
 
@@ -261,6 +295,8 @@
         var totalEstimado = document.getElementById('totalEstimado');
         var avisoSinProveedor = document.getElementById('avisoSinProveedor');
         var btnGuardar = document.getElementById('btnGuardar');
+        var btnSugerencias = document.getElementById('btnSugerencias');
+        var avisoSugerencias = document.getElementById('avisoSugerencias');
 
         // ----------------------------------------------------------
         // Utilidades
@@ -288,6 +324,10 @@
             var div = document.createElement('div');
             div.textContent = texto == null ? '' : texto;
             return div.innerHTML;
+        }
+
+        function plural(n, singular, plural) {
+            return n + ' ' + (n === 1 ? singular : plural);
         }
 
         // Un renglón se puede pedir si tiene proveedor y ese proveedor está
@@ -488,7 +528,17 @@
         function buscar(url, texto, alRecibir) {
             if (texto.trim().length < 2) return alRecibir([]);
 
-            fetch(url + '?q=' + encodeURIComponent(texto), {
+            pedirJson(url + '?q=' + encodeURIComponent(texto), alRecibir, function() {
+                alRecibir([]);
+            });
+        }
+
+        // El manejo de respuestas raras está acá y no en cada llamada porque la
+        // falla típica no es un 500: es un middleware que redirige al login y
+        // devuelve HTML con status 200. Sin este chequeo, r.json() explota con
+        // un error de parseo que no dice nada.
+        function pedirJson(url, alRecibir, alFallar) {
+            fetch(url, {
                     headers: {
                         'Accept': 'application/json',
                         'X-Requested-With': 'XMLHttpRequest'
@@ -498,8 +548,9 @@
                 .then(function(r) {
                     if (!r.ok) {
                         return r.text().then(function(cuerpo) {
-                            console.error('Búsqueda ' + url + ' → HTTP ' + r.status, cuerpo.slice(0, 800));
-                            return [];
+                            console.error('Pedido ' + url + ' → HTTP ' + r.status, cuerpo.slice(0, 800));
+                            alFallar(r.status);
+                            return null;
                         });
                     }
 
@@ -507,17 +558,20 @@
 
                     if (tipo.indexOf('application/json') === -1) {
                         return r.text().then(function(cuerpo) {
-                            console.error('Búsqueda ' + url + ' → no devolvió JSON (¿redirect de middleware?)', cuerpo.slice(0, 800));
-                            return [];
+                            console.error('Pedido ' + url + ' → no devolvió JSON (¿redirect de middleware?)', cuerpo.slice(0, 800));
+                            alFallar(0);
+                            return null;
                         });
                     }
 
                     return r.json();
                 })
-                .then(alRecibir)
+                .then(function(datos) {
+                    if (datos !== null) alRecibir(datos);
+                })
                 .catch(function(e) {
-                    console.error('Búsqueda ' + url + ' falló', e);
-                    alRecibir([]);
+                    console.error('Pedido ' + url + ' falló', e);
+                    alFallar(0);
                 });
         }
 
@@ -570,6 +624,119 @@
         // usuario esté buscando, no terminando.
         buscador.addEventListener('keydown', function(e) {
             if (e.key === 'Enter') e.preventDefault();
+        });
+
+        // ----------------------------------------------------------
+        // Traer lo que falta pedir
+        // ----------------------------------------------------------
+
+        function avisar(html, clase) {
+            avisoSugerencias.className = 'alert ' + clase + ' small';
+            avisoSugerencias.innerHTML = html;
+        }
+
+        /**
+         * Mezcla lo sugerido con lo que ya está cargado.
+         *
+         * La cantidad SOLO SUBE, igual que OrdenCompraService::ampliar(). Si el
+         * administrativo escribió un número mayor, es una decisión suya y el
+         * botón no se la pisa; si escribió uno menor, la sugerencia lo corrige
+         * porque esa es la cantidad que saca al producto del punto de
+         * reposición.
+         */
+        function fusionar(sugeridos) {
+            var agregados = 0;
+            var ajustados = 0;
+
+            sugeridos.forEach(function(s) {
+                var existente = renglones.filter(function(r) {
+                    return r.producto_id === s.producto_id;
+                })[0];
+
+                if (!existente) {
+                    renglones.push(s);
+                    agregados++;
+                    return;
+                }
+
+                if (Number(s.cantidad) > Number(existente.cantidad)) {
+                    existente.cantidad = Number(s.cantidad);
+                    ajustados++;
+                }
+            });
+
+            return {
+                agregados: agregados,
+                ajustados: ajustados
+            };
+        }
+
+        function listaOmitidos(omitidos) {
+            return '<ul class="mb-0 mt-2">' + omitidos.map(function(o) {
+                return '<li>' + escapar(o.nombre) + ' <span class="text-muted">(' + escapar(o.codigo) + ')</span> — ' +
+                    escapar(o.motivo) + '</li>';
+            }).join('') + '</ul>';
+        }
+
+        function contarSugerencias(resultado, omitidos) {
+            var partes = [];
+
+            if (resultado.agregados) partes.push('Se agregaron ' + plural(resultado.agregados, 'producto', 'productos') + '.');
+            if (resultado.ajustados) partes.push('Se subió la cantidad de ' + plural(resultado.ajustados, 'renglón', 'renglones') + ' que ya estaban cargados.');
+
+            if (!partes.length) {
+                partes.push(omitidos.length ?
+                    'No hay nada más para agregar.' :
+                    'No hay productos en falta sin pedir: está todo cubierto.');
+            }
+
+            return partes.join(' ');
+        }
+
+        btnSugerencias.addEventListener('click', function() {
+            btnSugerencias.disabled = true;
+            btnSugerencias.textContent = 'Buscando…';
+
+            avisoSugerencias.classList.add('d-none');
+
+            pedirJson(urlSugerencias, function(datos) {
+                btnSugerencias.disabled = false;
+                btnSugerencias.textContent = 'Traer lo que falta pedir';
+
+                var sugeridos = datos.renglones || [];
+                var omitidos = datos.omitidos || [];
+
+                var resultado = fusionar(sugeridos);
+
+                dibujarRenglones();
+
+                var mensaje = contarSugerencias(resultado, omitidos);
+                var clase = 'alert-info';
+
+                // Los que no se pueden pedir no se esconden: un producto en
+                // falta que nadie va a reponer porque le falta el proveedor es
+                // justamente lo que hay que ver.
+                if (omitidos.length) {
+                    mensaje += '<div class="mt-2"><strong>No se pudieron agregar ' +
+                        plural(omitidos.length, 'producto', 'productos') +
+                        ':</strong>' + listaOmitidos(omitidos) + '</div>';
+                    clase = 'alert-warning';
+                }
+
+                avisar(mensaje, clase);
+                avisoSugerencias.classList.remove('d-none');
+
+            }, function(estado) {
+                btnSugerencias.disabled = false;
+                btnSugerencias.textContent = 'Traer lo que falta pedir';
+
+                avisar(estado === 403 ?
+                    'No tenés permiso para armar pedidos a proveedores.' :
+                    'No se pudo traer la lista. Probá de nuevo, o cargá los productos con el buscador.',
+                    'alert-danger');
+
+                avisoSugerencias.classList.remove('d-none');
+            });
         });
 
         // ----------------------------------------------------------

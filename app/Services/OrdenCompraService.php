@@ -13,6 +13,7 @@ use App\Models\OrdenCompra;
 use App\Models\Producto;
 use App\Models\Proveedor;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -271,8 +272,18 @@ class OrdenCompraService
      * que quede registrada es esta, y pedirle al administrativo que vuelva a
      * aprobar tres documentos que acaba de autorizar seria pedirle la misma
      * firma cuatro veces.
+     *
+     * <b>Y es donde se limpia lo que este pedido deja sin sentido.</b> Ver
+     * anularBorradoresSuperados().
+     *
+     * Devuelve un array y no la orden sola porque la pantalla tiene dos cosas
+     * que contar: que se aprobo, y que borradores se dieron de baja en el mismo
+     * acto. Mismo criterio que enviarTodas(). La orden que se recibio queda
+     * actualizada en memoria, asi que el llamador la sigue teniendo.
+     *
+     * @return array{orden: OrdenCompra, anulados: list<string>}
      */
-    public function aprobar(OrdenCompra $orden, User $usuario): OrdenCompra
+    public function aprobar(OrdenCompra $orden, User $usuario): array
     {
         $this->exigirTransicion($orden, EstadoOrdenCompra::Aprobada);
 
@@ -298,8 +309,88 @@ class OrdenCompraService
                     : ($orden->fecha_entrega_estimada ?? $this->entregaEstimada($orden->proveedor)),
             ])->save();
 
-            return $orden;
+            // DESPUES del save, y el orden no es casual: anular dispara
+            // ReponerPorCancelacion, que vuelve a evaluar cada producto. Si
+            // esta orden todavia no figurara como aprobada, esa evaluacion no
+            // encontraria ninguna orden abierta cubriendo el faltante y
+            // recrearia el borrador que acabamos de dar de baja.
+            $anulados = $this->anularBorradoresSuperados($orden, $usuario);
+
+            return ['orden' => $orden, 'anulados' => $anulados];
         });
+    }
+
+    /**
+     * Da de baja los borradores automaticos que este pedido deja sin sentido.
+     *
+     * <b>El problema que resuelve.</b> El restock arma borradores solo. Si el
+     * administrativo arma a mano un pedido que cubre esos mismos productos —que
+     * es lo que hace el boton de sugerencias del alta— los borradores quedan
+     * ahi, pidiendo algo que ya se pidio. Nadie los va a aprobar, nadie los va
+     * a cancelar, y el listado se llena de documentos que no significan nada.
+     * Peor: si alguien los aprueba por error, el proveedor recibe dos pedidos
+     * por el mismo faltante.
+     *
+     * <b>Solo automaticas, y solo si quedan COMPLETAMENTE cubiertas.</b> Un
+     * borrador manual es alguien escribiendo y no se toca. Y un borrador de
+     * ocho renglones del que este pedido cubre cinco no se anula: los tres que
+     * quedan no los reemplazo nadie, y tirarlos seria perder pedidos legitimos.
+     * La unidad que se superpone es el renglon; el documento se da de baja solo
+     * cuando ya no le queda nada propio.
+     *
+     * <b>La cantidad no se compara.</b> Alcanza con que el producto este en el
+     * pedido aprobado. Si la cantidad quedo corta, lo dice
+     * OrdenCompraLinea::cubreElFaltante() sobre la orden que sobrevive, que es
+     * el mecanismo que ya existe para eso; chequearlo tambien acá seria tener
+     * dos definiciones de lo mismo.
+     *
+     * <b>Se le atribuye al que aprobo</b>, a diferencia del alta automatica,
+     * donde usuario_creo_id queda en null. No es inconsistencia: nadie decidio
+     * crear esos borradores, pero esta persona si decidio aprobar un pedido que
+     * los reemplaza. La baja es consecuencia directa de su firma.
+     *
+     * @return list<string> los numeros de los pedidos que se dieron de baja
+     */
+    private function anularBorradoresSuperados(OrdenCompra $aprobada, User $usuario): array
+    {
+        $cubiertos = $aprobada->lineas()
+            ->pluck('producto_id')
+            ->map(fn ($id) => (int) $id);
+
+        if ($cubiertos->isEmpty()) {
+            return [];
+        }
+
+        $borradores = OrdenCompra::query()
+            ->automaticas()
+            ->where('estado', EstadoOrdenCompra::Borrador->value)
+            ->whereKeyNot($aprobada->getKey())
+            ->whereHas('lineas', fn (Builder $linea) => $linea->whereIn('producto_id', $cubiertos))
+            ->with('lineas:id,orden_compra_id,producto_id')
+            ->get();
+
+        $anulados = [];
+
+        foreach ($borradores as $borrador) {
+            $propios = $borrador->lineas
+                ->pluck('producto_id')
+                ->map(fn ($id) => (int) $id);
+
+            // Le queda algo que este pedido no cubre: sigue en pie.
+            if ($propios->diff($cubiertos)->isNotEmpty()) {
+                continue;
+            }
+
+            $this->cancelar(
+                $borrador,
+                $usuario,
+                "su contenido quedó cubierto por el pedido {$aprobada->numero}",
+            );
+
+            $anulados[] = $borrador->numero;
+        }
+
+        return $anulados;
     }
 
     /**

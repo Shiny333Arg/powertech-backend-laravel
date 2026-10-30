@@ -44,6 +44,15 @@ require __DIR__ . '/auth.php';
 Route::get('/', [HomeController::class, 'index'])
     ->name('cliente.home');
 
+    
+// ========================================================
+// FICHA DE PRODUCTO
+// ========================================================
+// Pública: el invitado ve la ficha sin precio ni compra.
+
+Route::get('/item/{producto}', [HomeController::class, 'producto'])
+    ->name('cliente.items.show');
+
 
 // ========================================================
 // AYUDA
@@ -445,7 +454,8 @@ Route::prefix('gestion')
         // registro de quien autorizo, la segunda le manda un correo al
         // proveedor. Ninguna de las dos es "guardar un campo".
         //
-        // /create va antes de /{orden} para que no lo capture el wildcard.
+        // /create y /suggestions van antes de /{orden} para que no los
+        // capture el wildcard.
 
         Route::prefix('purchase-order')
             ->name('compras.')
@@ -456,6 +466,18 @@ Route::prefix('gestion')
 
                 Route::get('/create', [OrdenCompraController::class, 'create'])
                     ->name('create');
+
+                // Los productos bajo su punto de reposicion que ningun
+                // proveedor tiene todavia, para que el alta los cargue de una.
+                // Devuelve JSON: el cliente es un fetch del formulario.
+                //
+                // Deja afuera lo que ya esta en una orden aprobada, enviada o
+                // recibida a medias. Lo que solo figura en un BORRADOR entra
+                // igual: un borrador no es un compromiso y este pedido lo
+                // reemplaza. Ese borrador se da de baja solo cuando el pedido
+                // nuevo se apruebe, en OrdenCompraService.
+                Route::get('/suggestions', [OrdenCompraController::class, 'sugerencias'])
+                    ->name('sugerencias');
 
                 Route::post('/', [OrdenCompraController::class, 'store'])
                     ->name('store');

@@ -10,6 +10,9 @@ use App\Models\OrdenCompra;
 use App\Models\OrdenCompraLinea;
 use App\Models\Producto;
 use App\Services\OrdenCompraService;
+use App\Services\ReposicionService;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -164,6 +167,130 @@ class OrdenCompraController extends Controller
     }
 
     // ------------------------------------------------------------------
+    // Sugerencias para el alta
+    // ------------------------------------------------------------------
+
+    /**
+     * Lo que hay que pedir y nadie pidió todavía, listo para que el formulario
+     * lo cargue de una.
+     *
+     * <b>«Todavía no pedido» significa que ningún proveedor lo sabe.</b> Un
+     * producto que solo figura en un BORRADOR entra igual en la lista: un
+     * borrador no es un compromiso, no salió ningún remito, y el administrativo
+     * que arma este pedido lo está reemplazando. Lo que deja un producto afuera
+     * es una orden aprobada, enviada o recibida a medias, porque esas ya están
+     * en manos del proveedor y pedir de nuevo seria comprar dos veces.
+     *
+     * <b>El borrador que queda cubierto no se toca desde acá.</b> Se cancela
+     * recién cuando este pedido se apruebe, en
+     * OrdenCompraService::anularBorradoresSuperados(). Mientras tanto los dos
+     * conviven, que es lo correcto: si el administrativo abandona este
+     * formulario sin guardar, el borrador automático sigue en pie y nadie
+     * perdió nada.
+     *
+     * <b>Los que no se pueden pedir se informan, no se agregan.</b> Un renglón
+     * sin proveedor —o con el proveedor dado de baja— deja el formulario sin
+     * poder guardarse, y si llegara a aprobarse reventaría en
+     * repartirPorProveedor(). Meterlos en la tabla convertiría una ayuda en un
+     * bloqueo, así que viajan aparte y la pantalla dice cuáles son y por qué.
+     *
+     * Devuelve JSON y no una vista: el cliente es un fetch del formulario, y
+     * una página de error HTML es indistinguible de una respuesta vacía. Por
+     * eso el permiso se chequea a mano en vez de con authorize(), igual que en
+     * BusquedaController.
+     */
+    public function sugerencias(Request $request, ReposicionService $reposicion): JsonResponse
+    {
+        if ($request->user()?->cannot('create', OrdenCompra::class)) {
+            return response()->json([
+                'message' => 'No tenés permiso para armar pedidos a proveedores.',
+            ], 403);
+        }
+
+        $productos = Producto::query()
+            ->activos()
+            ->bajoPuntoReposicion()
+            // El filtro no es por 'reposicion_automatica': un producto con
+            // reposición manual y el stock en el piso es justamente lo que
+            // nadie va a pedir solo, y es el motivo por el que alguien abre
+            // esta pantalla.
+            ->whereNotIn('id', $this->productosYaPedidos())
+            ->with('proveedor:id,razon_social,activo')
+            ->orderBy('nombre')
+            ->get();
+
+        $renglones = [];
+        $omitidos  = [];
+
+        foreach ($productos as $producto) {
+            $proveedor = $producto->proveedor;
+
+            if ($proveedor === null) {
+                $omitidos[] = $this->omitido($producto, 'no tiene proveedor asignado');
+
+                continue;
+            }
+
+            if (! $proveedor->activo) {
+                $omitidos[] = $this->omitido($producto, "«{$proveedor->razon_social}» está dado de baja");
+
+                continue;
+            }
+
+            // La misma cuenta que usa el restock automático: lo que falta para
+            // volver al umbral más el lote de compra. Que las dos vías pidan la
+            // misma cantidad es lo que hace comparables un pedido armado a mano
+            // y uno generado solo.
+            $renglones[] = $this->renglon($producto, $reposicion->cantidadSugerida($producto));
+        }
+
+        return response()->json([
+            'renglones' => $renglones,
+            'omitidos'  => $omitidos,
+        ]);
+    }
+
+    /**
+     * Los ids de producto que ya están en manos de algún proveedor.
+     *
+     * Una sola consulta en vez de preguntarle a cada producto por su
+     * ordenAbierta(): sobre un catálogo entero en falta, eso es un N+1.
+     *
+     * <b>whereNotNull('proveedor_id')</b> replica la regla de
+     * OrdenCompra::scopeConProducto(): una madre ya repartida no cubre nada,
+     * porque quien puede cumplir el pedido es la hija. Acá la condición alcanza
+     * sola porque los tres estados que miramos excluyen el borrador, que es el
+     * único caso en que una madre sí cuenta.
+     *
+     * @return list<int>
+     */
+    private function productosYaPedidos(): array
+    {
+        return OrdenCompraLinea::query()
+            ->whereHas('ordenCompra', fn (Builder $orden) => $orden
+                ->whereIn('estado', [
+                    EstadoOrdenCompra::Aprobada->value,
+                    EstadoOrdenCompra::Enviada->value,
+                    EstadoOrdenCompra::RecibidaParcial->value,
+                ])
+                ->whereNotNull('proveedor_id'))
+            ->distinct()
+            ->pluck('producto_id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+    }
+
+    /** @return array<string, mixed> */
+    private function omitido(Producto $producto, string $motivo): array
+    {
+        return [
+            'codigo' => $producto->codigo,
+            'nombre' => $producto->nombre,
+            'motivo' => $motivo,
+        ];
+    }
+
+    // ------------------------------------------------------------------
     // Transiciones
     // ------------------------------------------------------------------
 
@@ -171,22 +298,34 @@ class OrdenCompraController extends Controller
      * Requerimiento explicito: ninguna orden sale sin que un administrativo la
      * mire. Es tambien el momento en que un pedido mezclado se reparte en una
      * orden por proveedor: la firma que queda registrada es esta.
+     *
+     * Y es donde se dan de baja los borradores automaticos que este pedido deja
+     * sin sentido. El servicio devuelve cuales fueron para poder decirlo: una
+     * anulacion silenciosa es indistinguible de un documento que desaparecio.
      */
     public function aprobar(Request $request, OrdenCompra $orden): RedirectResponse
     {
         $this->authorize('aprobar', $orden);
 
         try {
-            $this->ordenes->aprobar($orden, $request->user());
+            ['anulados' => $anulados] = $this->ordenes->aprobar($orden, $request->user());
         } catch (TransicionNoPermitidaException $error) {
             return back()->with('error', $error->getMessage());
         }
 
         $hijas = $orden->hijas()->count();
 
-        return back()->with('exito', $hijas > 0
+        $aviso = $hijas > 0
             ? "Se aprobó el pedido {$orden->numero} y se emitieron {$hijas} órdenes, una por proveedor. Ya se las puede enviar."
-            : "Se aprobó el pedido {$orden->numero}. Ya se le puede enviar al proveedor.");
+            : "Se aprobó el pedido {$orden->numero}. Ya se le puede enviar al proveedor.";
+
+        if ($anulados !== []) {
+            $aviso .= count($anulados) === 1
+                ? ' Se canceló el pedido automático '.$anulados[0].', que pedía lo mismo.'
+                : ' Se cancelaron los pedidos automáticos '.implode(', ', $anulados).', que pedían lo mismo.';
+        }
+
+        return back()->with('exito', $aviso);
     }
 
     /**

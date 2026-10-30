@@ -10,11 +10,11 @@
 --}}
 
 @php
-    $disponible = (int) $producto->stock_disponible;
-    $enPreventa = $disponible <= 0;
-@endphp
+$disponible = (int) $producto->stock_disponible;
+$enPreventa = $disponible <= 0;
+    @endphp
 
-<div class="col-6 col-md-4 col-lg-3">
+    <div class="col-6 col-md-4 col-lg-3">
 
     <div class="card h-100 border-0 shadow-sm rounded-4 overflow-hidden">
 
@@ -73,12 +73,14 @@
 
             <div class="mt-auto">
 
+                @auth
                 <div class="h5 fw-bold mb-2">
                     $ {{ number_format($producto->precio, 2, ',', '.') }}
                 </div>
+                @endauth
 
                 {{-- TODO: apuntar a la ficha del producto cuando exista la ruta de tienda --}}
-                <a href="#" class="btn btn-sm btn-primary w-100 fw-semibold">
+                <a href="{{ route('cliente.items.show', $producto) }}" class="btn btn-sm btn-primary w-100 fw-semibold">
                     Ver producto
                 </a>
 
@@ -88,4 +90,4 @@
 
     </div>
 
-</div>
+    </div>
