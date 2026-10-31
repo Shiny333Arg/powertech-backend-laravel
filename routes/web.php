@@ -4,6 +4,7 @@ use App\Http\Controllers\HelpController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\CarritoController;
+use App\Http\Controllers\CatalogoController;
 use App\Http\Controllers\CheckoutController;
 use App\Http\Controllers\CompraController;
 use App\Http\Controllers\gestion\BusquedaController;
@@ -46,6 +47,16 @@ require __DIR__ . '/auth.php';
 
 Route::get('/', [HomeController::class, 'index'])
     ->name('cliente.home');
+
+
+// ========================================================
+// CATÁLOGO / RESULTADOS DE BÚSQUEDA
+// ========================================================
+// Pública, igual que la ficha. Todos los filtros viajan por querystring:
+// ?q=&categoria=&marca=&precio_min=&precio_max=&orden=&promocion=
+
+Route::get('/items', [CatalogoController::class, 'index'])
+    ->name('cliente.items.index');
 
 
 // ========================================================

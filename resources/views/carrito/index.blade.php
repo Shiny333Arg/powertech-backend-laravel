@@ -47,13 +47,6 @@
 
             <div class="card-body text-center py-5 px-3">
 
-                <div class="bg-light rounded-circle d-inline-flex align-items-center justify-content-center mb-4"
-                     style="width: 90px; height: 90px;">
-
-                    <i class="bi bi-cart3 text-secondary" style="font-size: 2.5rem;"></i>
-
-                </div>
-
                 <h4 class="fw-bold mb-2">Tu carrito está vacío</h4>
 
                 <p class="text-muted mb-4">

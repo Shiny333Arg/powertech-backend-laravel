@@ -29,11 +29,25 @@ class Producto extends Model
     protected $table = 'productos';
 
     protected $fillable = [
-        'categoria_id', 'alicuota_iva_id', 'proveedor_id', 'codigo', 'nombre',
-        'marca', 'descripcion', 'imagen', 'precio', 'costo',
-        'stock_fisico', 'stock_comprometido',
-        'punto_reposicion', 'cantidad_reposicion', 'reposicion_automatica',
-        'peso_gramos', 'destacado', 'publicado_app', 'activo',
+        'categoria_id',
+        'alicuota_iva_id',
+        'proveedor_id',
+        'codigo',
+        'nombre',
+        'marca',
+        'descripcion',
+        'imagen',
+        'precio',
+        'costo',
+        'stock_fisico',
+        'stock_comprometido',
+        'punto_reposicion',
+        'cantidad_reposicion',
+        'reposicion_automatica',
+        'peso_gramos',
+        'destacado',
+        'publicado_app',
+        'activo',
     ];
 
     protected $casts = [
@@ -99,7 +113,11 @@ class Producto extends Model
     /** Lo que se ve en la tienda: activo Y publicado. Son preguntas distintas. */
     public function scopePublicados(Builder $query): Builder
     {
-        return $query->where('activo', true)->where('publicado_app', true);
+        // Calificadas con qualifyColumn y no a mano: el scope se usa dentro de
+        // consultas que hacen JOIN con categorias, que tambien tiene 'activo'.
+        // Sin calificar, el motor corta por columna ambigua.
+        return $query->where($query->qualifyColumn('activo'), true)
+            ->where($query->qualifyColumn('publicado_app'), true);
     }
 
     public function scopeConDisponibilidad(Builder $query): Builder
