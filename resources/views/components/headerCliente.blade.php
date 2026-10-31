@@ -35,6 +35,11 @@
           @auth
           @php $usuario = auth()->user(); @endphp
 
+          <li class="nav-item px-2">
+            <a class="nav-link rounded fw-bold text-white @if (request()->routeIs('cliente.help.*')) active @endif"
+              href="{{ route('cliente.compras.index') }}">Mis compras</a>
+          </li>
+
           <li class="nav-item dropdown px-2">
             <a class="nav-link rounded dropdown-toggle fw-bold text-white" href="#" id="miCuentaDropdown"
               role="button" data-bs-toggle="dropdown" aria-expanded="false">

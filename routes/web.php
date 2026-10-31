@@ -4,6 +4,8 @@ use App\Http\Controllers\HelpController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\CarritoController;
+use App\Http\Controllers\CheckoutController;
+use App\Http\Controllers\CompraController;
 use App\Http\Controllers\gestion\BusquedaController;
 use App\Http\Controllers\gestion\CategoriaController;
 use App\Http\Controllers\gestion\ClienteController;
@@ -45,7 +47,7 @@ require __DIR__ . '/auth.php';
 Route::get('/', [HomeController::class, 'index'])
     ->name('cliente.home');
 
-    
+
 // ========================================================
 // FICHA DE PRODUCTO
 // ========================================================
@@ -87,6 +89,51 @@ Route::middleware(['auth', 'ambito:tienda'])
     });
 
 // ========================================================
+// MIS COMPRAS
+// ========================================================
+// Solo lectura. El cliente no cancela ni modifica desde aca: cancelar
+// una venta pagada libera stock comprometido y, si ya tiene CAE, exige
+// nota de credito. Es una decision de la empresa, no autogestion.
+
+Route::prefix('compras')
+    ->name('cliente.compras.')
+    ->group(function () {
+
+        Route::get('/', [CompraController::class, 'index'])
+            ->name('index');
+
+        Route::get('/{venta}', [CompraController::class, 'show'])
+            ->name('show');
+    });
+
+
+
+
+// ========================================================
+// CHECKOUT
+// ========================================================
+// Solo retiro en el local: el circuito de envio y tracking no esta
+// implementado todavia.
+//
+// La venta online nace PAGADA: sin pago acreditado no hay venta, y sin
+// venta no hay stock comprometido. Por eso no hay una ruta de "crear
+// pedido" separada del pago.
+
+Route::prefix('checkout')
+    ->name('cliente.checkout.')
+    ->middleware('verified')
+    ->group(function () {
+
+        Route::get('/', [CheckoutController::class, 'index'])
+            ->name('index');
+
+        Route::post('/', [CheckoutController::class, 'store'])
+            ->name('store');
+    });
+
+
+
+// ========================================================
 // CARRITO
 // ========================================================
 // 'verified' aplica la regla del layout del lado del servidor: un cliente
@@ -116,7 +163,7 @@ Route::prefix('carrito')
 
 
 
-    
+
 // ============================================================
 // GESTIÓN
 // ============================================================

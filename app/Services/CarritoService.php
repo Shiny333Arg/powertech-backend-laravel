@@ -27,16 +27,22 @@ use Illuminate\Support\Str;
 class CarritoService
 {
     /**
-     * El carrito activo del cliente, creandolo si todavia no tiene uno.
+     * El carrito ABIERTO del cliente, creandolo si todavia no tiene uno.
      *
-     * Un cliente tiene como mucho un carrito activo: los demas quedaron en
-     * 'convertido' o 'abandonado'. Se toma el mas reciente por las dudas de
+     * Abierto incluye `en_checkout`, no solo `activo`: durante el checkout el
+     * carrito sigue siendo el del cliente. Buscarlo por `activo` a secas
+     * devuelve vacio mientras esta pagando y hace que este metodo cree un
+     * carrito nuevo, dejando el que tenia los productos huerfano. Esa fue
+     * exactamente la causa de que el carrito se vaciara al entrar al checkout.
+     *
+     * Un cliente tiene como mucho un carrito abierto: los demas quedaron en
+     * `convertido` o `abandonado`. Se toma el mas reciente por las dudas de
      * que una carrera haya dejado dos.
      */
-    public function activoDe(User $user): Carrito
+    public function abiertoDe(User $user): Carrito
     {
         $carrito = Carrito::query()
-            ->activo()
+            ->abierto()
             ->where('user_id', $user->id)
             ->latest('id')
             ->first();
@@ -67,6 +73,8 @@ class CarritoService
     {
         return DB::transaction(function () use ($carrito, $producto, $cantidad) {
 
+            $this->volverAComprar($carrito);
+
             $linea = $carrito->lineas()->firstOrCreate(
                 ['producto_id' => $producto->id],
                 ['cantidad'    => 0],
@@ -94,6 +102,8 @@ class CarritoService
         }
 
         $linea->update(['cantidad' => $cantidad]);
+
+        $this->volverAComprar($linea->carrito);
     }
 
     /**
@@ -104,10 +114,29 @@ class CarritoService
      */
     public function quitar(CarritoLinea $linea): void
     {
+        $carrito = $linea->carrito;
+
         $linea->delete();
+
+        $this->volverAComprar($carrito);
     }
 
-    /** Unidades totales en el carrito activo. Alimenta el contador del header. */
+    /**
+     * Devuelve el carrito de `en_checkout` a `activo`.
+     *
+     * Tocar el carrito significa que el cliente volvio a la vitrina: dejar el
+     * estado en `en_checkout` ensuciaria el reporte de abandono en el
+     * checkout, que es el que distingue a quien se fue de la pantalla de pago
+     * de quien solo estaba mirando.
+     */
+    private function volverAComprar(?Carrito $carrito): void
+    {
+        if ($carrito && $carrito->estado === EstadoCarrito::EnCheckout) {
+            $carrito->update(['estado' => EstadoCarrito::Activo]);
+        }
+    }
+
+    /** Unidades totales en el carrito abierto. Alimenta el contador del header. */
     public function cantidadDeItems(?User $user): int
     {
         if (! $user || ! $user->esCliente()) {
@@ -117,7 +146,7 @@ class CarritoService
         return (int) CarritoLinea::query()
             ->whereIn('carrito_id', Carrito::query()
                 ->select('id')
-                ->activo()
+                ->abierto()
                 ->where('user_id', $user->id))
             ->sum('cantidad');
     }

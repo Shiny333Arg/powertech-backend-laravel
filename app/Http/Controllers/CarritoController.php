@@ -14,8 +14,8 @@ use Illuminate\View\View;
 /**
  * Carrito del cliente en la tienda.
  *
- * Alcance de esta etapa: agregar, quitar y cambiar cantidad. El checkout
- * (conversion a venta, Mercado Pago, modo de entrega) todavia no existe.
+ * Alcance de esta etapa: agregar, quitar y cambiar cantidad. El checkout vive
+ * en CheckoutController.
  *
  * El carrito no toca stock en ninguna de sus formas: ver CarritoService.
  *
@@ -38,7 +38,7 @@ class CarritoController extends Controller
      */
     public function index(MotorPromociones $motor): View
     {
-        $carrito = $this->carritos->activoDe(request()->user());
+        $carrito = $this->carritos->abiertoDe(request()->user());
 
         $carrito->load(['lineas.producto.categoria:id,nombre']);
 
@@ -72,7 +72,7 @@ class CarritoController extends Controller
         $producto = Producto::findOrFail($request->integer('producto_id'));
 
         $this->carritos->agregar(
-            $this->carritos->activoDe($request->user()),
+            $this->carritos->abiertoDe($request->user()),
             $producto,
             $request->integer('cantidad'),
         );
@@ -108,7 +108,7 @@ class CarritoController extends Controller
     }
 
     /**
-     * La linea tiene que ser del carrito activo de QUIEN pide.
+     * La linea tiene que ser del carrito abierto de QUIEN pide.
      *
      * Sin esto, el id de la URL alcanza para editar el carrito de otro cliente.
      * Es 404 y no 403 a proposito: una linea ajena no tiene por que existir
@@ -117,7 +117,7 @@ class CarritoController extends Controller
     private function verificarPropiedad(CarritoLinea $linea): void
     {
         abort_unless(
-            $linea->carrito_id === $this->carritos->activoDe(request()->user())->id,
+            $linea->carrito_id === $this->carritos->abiertoDe(request()->user())->id,
             404,
         );
     }

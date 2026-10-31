@@ -50,14 +50,14 @@ class ClienteController extends Controller
 
         $clientes = Cliente::query()
             ->with(['tipoDocumento:id,nombre', 'condicionIva:id,nombre'])
-            ->when($filtros['q'] ?? null, fn ($q, $texto) => $q->where(
-                fn ($sub) => $sub->where('razon_social', 'like', "%{$texto}%")
+            ->when($filtros['q'] ?? null, fn($q, $texto) => $q->where(
+                fn($sub) => $sub->where('razon_social', 'like', "%{$texto}%")
                     ->orWhere('nro_doc', 'like', "%{$texto}%")
             ))
             // Las pantallas de gestion necesitan ver lo dado de baja para
             // poder reactivarlo: por eso el filtro es explicito y no un
             // global scope.
-            ->when(isset($filtros['activo']), fn ($q) => $q->where('activo', (bool) $filtros['activo']))
+            ->when(isset($filtros['activo']), fn($q) => $q->where('activo', (bool) $filtros['activo']))
             ->orderBy('razon_social')
             ->paginate(25)
             ->withQueryString();
@@ -108,7 +108,7 @@ class ClienteController extends Controller
         return $this->enviarInvitacion($usuario)
             ? $respuesta
             : $respuesta->withErrors(['estado' => "El cliente quedó creado, pero no se pudo enviar el correo a "
-                ."{$usuario->email}. Reenviá la invitación desde su ficha."]);
+                . "{$usuario->email}. Reenviá la invitación desde su ficha."]);
     }
 
     public function show(Cliente $cliente): View
@@ -123,14 +123,19 @@ class ClienteController extends Controller
             // pendiente y devuelve un booleano (ver User::invitacionPendiente).
             // Sin el alias, el modelo llega sin la columna y la daria por nula,
             // o sea pendiente, para todos.
-            'user' => fn ($query) => $query
+            'user' => fn($query) => $query
                 ->select(['id', 'email', 'nombres', 'apellido', 'activo', 'email_verified_at'])
                 ->selectRaw('password IS NULL AS invitacion_pendiente'),
         ]);
 
         return view('gestion.clientes.show', [
             'cliente' => $cliente,
-            'ventas'  => $cliente->ventas()->latest('fecha')->limit(10)->get(),
+            'ventas'  => $cliente->ventas()
+                ->latest('fecha')
+                ->latest('id')
+                ->paginate(10, ['*'], 'compras')
+                ->withQueryString()
+                ->fragment('compras'),
         ]);
     }
 

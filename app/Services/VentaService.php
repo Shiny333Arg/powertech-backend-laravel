@@ -98,6 +98,56 @@ class VentaService
         });
     }
 
+
+    /**
+     * Venta de la tienda, que nace PAGADA.
+     *
+     * No pasa por presupuesto ni por confirmada: el pago ya se acredito antes de
+     * que esta venta existiera. Es la unica forma de que el stock no quede
+     * comprometido por un checkout abandonado, que es el caso normal.
+     *
+     * Sin vendedor y sin validador: no hay empleado en el circuito online.
+     *
+     * El comprobante y la preparacion NO se hacen aca: los orquesta
+     * CheckoutService, que es quien sabe que el pago entro.
+     *
+     * @param  array{cliente_id:int, modo_entrega:string, observaciones?:string|null,
+     *               lineas: list<array{producto_id:int, cantidad:int}>}  $datos
+     */
+    public function crearOnline(array $datos): Venta
+    {
+        return DB::transaction(function () use ($datos) {
+            $productos = $this->productosDe($datos['lineas']);
+            $calculo = $this->calcular($datos['lineas'], $productos, CanalVenta::Online, 0);
+
+            $venta = new Venta([
+                'numero'            => Numerador::proximoNumero('venta'),
+                'canal'             => CanalVenta::Online,
+                'cliente_id'        => $datos['cliente_id'],
+                'usuario_id'        => null,
+                'estado'            => EstadoVenta::Pagada,
+                'modo_entrega'      => $datos['modo_entrega'],
+                'validez_hasta'     => null,
+                'usuario_valido_id' => null,
+                'fecha_validacion'  => null,
+                'observaciones'     => $datos['observaciones'] ?? null,
+                'fecha'             => now(),
+                ...$calculo['totales'],
+            ]);
+
+            $venta->save();
+
+            $this->guardarLineas($venta, $calculo['lineas']);
+
+            // Compromete al nacer porque ya esta pagada. No es el compromiso de
+            // una venta confirmada esperando cobro: ese estado no existe online.
+            $this->comprometerStock($venta, null);
+
+            return $venta->load('lineas.producto');
+        });
+    }
+
+
     // ------------------------------------------------------------------
     // Edicion
     // ------------------------------------------------------------------
@@ -217,7 +267,7 @@ class VentaService
     // Stock
     // ------------------------------------------------------------------
 
-    private function comprometerStock(Venta $venta, User $usuario): void
+    private function comprometerStock(Venta $venta, ?User $usuario): void
     {
         foreach ($venta->load('lineas.producto')->lineas as $linea) {
             $this->stock->comprometer($linea->producto, $linea->cantidad, $venta, $usuario);

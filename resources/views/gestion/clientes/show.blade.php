@@ -91,10 +91,23 @@
     <!-- Columna izquierda -->
     <div class="col-12 col-lg-8">
 
-        <!-- Últimas compras -->
-        <section class="mb-4">
+        <!-- Historial de compras -->
+        <section class="mb-4" id="compras">
 
             <h2 class="h5 fw-bold mb-3">Últimas compras</h2>
+
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+
+                <h2 class="h5 fw-bold mb-0">Historial de compras</h2>
+
+                @if ($ventas->total() > 0)
+                <span class="text-muted small">
+                    Mostrando {{ $ventas->firstItem() }}–{{ $ventas->lastItem() }}
+                    de {{ $ventas->total() }}
+                </span>
+                @endif
+
+            </div>
 
             <div class="table-responsive">
 
@@ -154,6 +167,12 @@
                 </table>
 
             </div>
+
+            @if ($ventas->hasPages())
+            <div class="d-flex justify-content-center mt-3">
+                {{ $ventas->onEachSide(2)->links() }}
+            </div>
+            @endif
 
         </section>
 
@@ -395,8 +414,8 @@
             <h2 class="h6 fw-bold mb-3">Cuenta en la tienda</h2>
 
             @include('gestion.clientes.partials.acceso', [
-                'cliente' => $cliente,
-                'detalle' => true,
+            'cliente' => $cliente,
+            'detalle' => true,
             ])
 
         </section>
