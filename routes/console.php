@@ -40,3 +40,7 @@ Schedule::command(RevisarReposicion::class)
     ->dailyAt('07:00')
     ->withoutOverlapping()
     ->onOneServer();
+
+Schedule::command('queue:work --stop-when-empty --queue=reposicion,default')
+    ->everyFiveMinutes()
+    ->withoutOverlapping();

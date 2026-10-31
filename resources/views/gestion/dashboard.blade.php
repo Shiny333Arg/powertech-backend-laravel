@@ -19,9 +19,9 @@ $usuario = auth()->user();
 
     <p>tareas pendientes:</p>
     <ul>
-        <li>gestion/cliente/crear: falta el formulario</li>
-        <li>gestion/compra/crear: cambiar el select por un buscador</li>
-        <li>gestion/compra/crear: autoreposición</li>
+        <li>tras actualizar un producto, se inactiva solo</li>
+        <li>los presupuestos deben tener fecha de vencimiento: 1 semana. al actualizar un precio, un presupuesto y una venta no deben cambiar</li>
+        <li>varios proveedores por cada producto</li>
         <li>gestion/venta/crear: corregir la tabla, "precio unitario" "importe"</li>
         <li>gestion/venta/crear: mostrar impuestos</li>
         <li>hardcodear los correos para los proveedores</li>
@@ -34,8 +34,6 @@ $usuario = auth()->user();
         <li>mercado pago</li>
         <li>carrito de compras</li>
         <li>tracking</li>
-        <li>ver productos, lado cliente</li>
-        <li>buscador de productos, lado cliente</li>
         <li>ver detalles de una promoción, lado cliente</li>
     </ul>
 

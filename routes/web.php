@@ -3,6 +3,10 @@
 use App\Http\Controllers\HelpController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\CarritoController;
+use App\Http\Controllers\CatalogoController;
+use App\Http\Controllers\CheckoutController;
+use App\Http\Controllers\CompraController;
 use App\Http\Controllers\gestion\BusquedaController;
 use App\Http\Controllers\gestion\CategoriaController;
 use App\Http\Controllers\gestion\ClienteController;
@@ -46,6 +50,25 @@ Route::get('/', [HomeController::class, 'index'])
 
 
 // ========================================================
+// CATÁLOGO / RESULTADOS DE BÚSQUEDA
+// ========================================================
+// Pública, igual que la ficha. Todos los filtros viajan por querystring:
+// ?q=&categoria=&marca=&precio_min=&precio_max=&orden=&promocion=
+
+Route::get('/items', [CatalogoController::class, 'index'])
+    ->name('cliente.items.index');
+
+
+// ========================================================
+// FICHA DE PRODUCTO
+// ========================================================
+// Pública: el invitado ve la ficha sin precio ni compra.
+
+Route::get('/item/{producto}', [HomeController::class, 'producto'])
+    ->name('cliente.items.show');
+
+
+// ========================================================
 // AYUDA
 // ========================================================
 
@@ -74,8 +97,82 @@ Route::middleware(['auth', 'ambito:tienda'])
 
         Route::patch('/perfil', [ProfileController::class, 'update'])
             ->name('profile.update');
-
     });
+
+// ========================================================
+// MIS COMPRAS
+// ========================================================
+// Solo lectura. El cliente no cancela ni modifica desde aca: cancelar
+// una venta pagada libera stock comprometido y, si ya tiene CAE, exige
+// nota de credito. Es una decision de la empresa, no autogestion.
+
+Route::prefix('compras')
+    ->name('cliente.compras.')
+    ->group(function () {
+
+        Route::get('/', [CompraController::class, 'index'])
+            ->name('index');
+
+        Route::get('/{venta}', [CompraController::class, 'show'])
+            ->name('show');
+    });
+
+
+
+
+// ========================================================
+// CHECKOUT
+// ========================================================
+// Solo retiro en el local: el circuito de envio y tracking no esta
+// implementado todavia.
+//
+// La venta online nace PAGADA: sin pago acreditado no hay venta, y sin
+// venta no hay stock comprometido. Por eso no hay una ruta de "crear
+// pedido" separada del pago.
+
+Route::prefix('checkout')
+    ->name('cliente.checkout.')
+    ->middleware('verified')
+    ->group(function () {
+
+        Route::get('/', [CheckoutController::class, 'index'])
+            ->name('index');
+
+        Route::post('/', [CheckoutController::class, 'store'])
+            ->name('store');
+    });
+
+
+
+// ========================================================
+// CARRITO
+// ========================================================
+// 'verified' aplica la regla del layout del lado del servidor: un cliente
+// con el correo sin confirmar navega, pero no arma pedidos.
+//
+// El carrito NO es un recurso del cliente sino el suyo propio: no hay
+// index de carritos ni {carrito} en la URL. Lo que se manipula es la
+// linea, y la linea se valida contra el carrito activo de quien pide.
+
+Route::prefix('carrito')
+    ->name('cliente.carrito.')
+    ->middleware('verified')
+    ->group(function () {
+
+        Route::get('/', [CarritoController::class, 'index'])
+            ->name('index');
+
+        Route::post('/', [CarritoController::class, 'store'])
+            ->name('store');
+
+        Route::patch('/{linea}', [CarritoController::class, 'update'])
+            ->name('update');
+
+        Route::delete('/{linea}', [CarritoController::class, 'destroy'])
+            ->name('destroy');
+    });
+
+
 
 
 // ============================================================
@@ -363,6 +460,10 @@ Route::prefix('gestion')
 
                 Route::patch('/{cliente}/reactivar', [ClienteController::class, 'reactivar'])
                     ->name('reactivar');
+
+                // Envia un mail: es una accion, no una modificacion del recurso.
+                Route::post('/{cliente}/reenviar-invitacion', [ClienteController::class, 'reenviarInvitacion'])
+                    ->name('reenviarInvitacion');
             });
 
 
@@ -442,7 +543,8 @@ Route::prefix('gestion')
         // registro de quien autorizo, la segunda le manda un correo al
         // proveedor. Ninguna de las dos es "guardar un campo".
         //
-        // /create va antes de /{orden} para que no lo capture el wildcard.
+        // /create y /suggestions van antes de /{orden} para que no los
+        // capture el wildcard.
 
         Route::prefix('purchase-order')
             ->name('compras.')
@@ -453,6 +555,18 @@ Route::prefix('gestion')
 
                 Route::get('/create', [OrdenCompraController::class, 'create'])
                     ->name('create');
+
+                // Los productos bajo su punto de reposicion que ningun
+                // proveedor tiene todavia, para que el alta los cargue de una.
+                // Devuelve JSON: el cliente es un fetch del formulario.
+                //
+                // Deja afuera lo que ya esta en una orden aprobada, enviada o
+                // recibida a medias. Lo que solo figura en un BORRADOR entra
+                // igual: un borrador no es un compromiso y este pedido lo
+                // reemplaza. Ese borrador se da de baja solo cuando el pedido
+                // nuevo se apruebe, en OrdenCompraService.
+                Route::get('/suggestions', [OrdenCompraController::class, 'sugerencias'])
+                    ->name('sugerencias');
 
                 Route::post('/', [OrdenCompraController::class, 'store'])
                     ->name('store');

@@ -13,8 +13,7 @@
 @section('content')
 
 <p class="text-center">
-    Hola, <strong>{{ $user->nombres }}</strong>. Elegí la contraseña con la que vas a ingresar
-    al sistema de gestión.
+    Hola, <strong>{{ $user->nombres }}</strong>. Elegí la contraseña con la que vas a ingresar.
 </p>
 
 <form method="POST" action="{{ request()->fullUrl() }}">

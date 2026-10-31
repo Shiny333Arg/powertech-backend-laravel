@@ -10,20 +10,26 @@ use Illuminate\Http\Request;
 /**
  * Autocompletado de las pantallas de gestion. Devuelve JSON, no vistas.
  *
- * Lo consumen la carga de una venta y la seleccion de productos alcanzados por
- * una promocion. Por eso el permiso que se exige es de lectura del catalogo y
- * no 'venta.crear': buscar un producto no es vender, y gatearlo con el permiso
- * del primer consumidor dejaba afuera al administrativo, que no vende pero si
- * arma promociones.
+ * Lo consumen la carga de una venta, la seleccion de productos alcanzados por
+ * una promocion y el armado de un pedido a proveedores. Por eso el permiso que
+ * se exige es de lectura del catalogo y no 'venta.crear': buscar un producto no
+ * es vender, y gatearlo con el permiso del primer consumidor dejaba afuera al
+ * administrativo, que no vende pero si arma promociones y pedidos.
  *
- * El precio que viaja es informativo: el servidor lo vuelve a tomar del
- * catalogo al guardar. Un precio que llega del formulario es un precio que el
- * operador puede editar.
+ * El precio y el costo que viajan son informativos: el servidor los vuelve a
+ * tomar del catalogo al guardar. Un precio que llega del formulario es un
+ * precio que el operador puede editar.
  *
  * Se incluye stock_disponible porque el vendedor tiene que ver, al cargar la
  * linea, si la venta es preventa. No se filtra por disponibilidad: vender sin
- * stock esta admitido y es un aviso, no un bloqueo, y una promocion sobre un
- * producto agotado es un caso legitimo —se promociona lo que esta por reponerse.
+ * stock esta admitido y es un aviso, no un bloqueo; una promocion sobre un
+ * producto agotado es un caso legitimo —se promociona lo que esta por
+ * reponerse— y un pedido a proveedor se hace justamente por lo que falta.
+ *
+ * El proveedor viaja con su estado: el formulario de compras necesita mostrar a
+ * quien se le va a pedir cada renglon, y marcar los que no se pueden pedir
+ * —producto sin proveedor, o con uno dado de baja— antes de que el usuario
+ * mande el formulario y se lo rechace la validacion.
  *
  * Los errores salen como JSON y no con abort(): el cliente de esta ruta es un
  * fetch, y una pagina de error HTML del lado del navegador es indistinguible
@@ -51,12 +57,13 @@ class BusquedaController extends Controller
                 ->where('nombre', 'like', "%{$texto}%")
                 ->orWhere('codigo', 'like', "%{$texto}%")
                 ->orWhere('marca', 'like', "%{$texto}%"))
-            // La usa la tabla de productos alcanzados de promociones. La venta
-            // la ignora: un campo de mas en el JSON no le molesta.
-            ->with('categoria:id,nombre')
+            // La categoria la usa la tabla de productos alcanzados de
+            // promociones; el proveedor, el formulario de compras. La venta
+            // ignora las dos: un campo de mas en el JSON no le molesta.
+            ->with(['categoria:id,nombre', 'proveedor:id,razon_social,activo'])
             ->orderBy('nombre')
             ->limit(20)
-            ->get(['id', 'codigo', 'nombre', 'marca', 'precio', 'stock_disponible', 'categoria_id']);
+            ->get(['id', 'codigo', 'nombre', 'marca', 'precio', 'costo', 'stock_disponible', 'punto_reposicion', 'categoria_id', 'proveedor_id']);
 
         return response()->json(
             $productos->map(fn (Producto $p) => [
@@ -66,8 +73,15 @@ class BusquedaController extends Controller
                 'marca'      => $p->marca,
                 'categoria'  => $p->categoria?->nombre,
                 'precio'     => (float) $p->precio,
+                'costo'      => $p->costo === null ? null : (float) $p->costo,
                 'disponible' => (int) $p->stock_disponible,
                 'preventa'   => (int) $p->stock_disponible <= 0,
+                'reposicion' => (int) $p->punto_reposicion,
+                'proveedor'  => $p->proveedor === null ? null : [
+                    'id'           => $p->proveedor->id,
+                    'razon_social' => $p->proveedor->razon_social,
+                    'activo'       => (bool) $p->proveedor->activo,
+                ],
             ])->values()
         );
     }

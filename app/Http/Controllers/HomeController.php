@@ -6,6 +6,8 @@ use App\Models\Producto;
 use App\Models\Promocion;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
+use App\Enums\CanalVenta;
+use App\Services\MotorPromociones;
 
 /**
  * Vitrina de la tienda.
@@ -51,6 +53,42 @@ class HomeController extends Controller
             ->get();
     }
 
+
+    /**
+     * Ficha de producto de la tienda.
+     *
+     * 404 si no esta publicado: scopePublicados exige activo Y publicado_app, y
+     * un producto despublicado no tiene que ser alcanzable por URL directa.
+     *
+     * El precio con promocion sale del MotorPromociones y no de un calculo local:
+     * es la unica fuente de descuento del sistema y trabaja en centavos.
+     */
+    public function producto(Producto $producto, MotorPromociones $motor): View
+    {
+        abort_unless($producto->activo && $producto->publicado_app, 404);
+
+        $producto->load('categoria:id,nombre');
+
+        $resultado = $motor->paraProductos(
+            collect([$producto->id => $producto]),
+            CanalVenta::Online
+        )[$producto->id] ?? ['descuento' => 0, 'aplicaciones' => []];
+
+        return view('item.show', [
+            'producto'     => $producto,
+            'precioFinal'  => (float) $producto->precio - ($resultado['descuento'] / 100),
+            'promociones'  => Promocion::whereIn('id', array_keys($resultado['aplicaciones']))->get(),
+            'relacionados' => Producto::query()
+                ->publicados()
+                ->where('categoria_id', $producto->categoria_id)
+                ->whereKeyNot($producto->getKey())
+                ->inRandomOrder()
+                ->limit(4)
+                ->get(),
+        ]);
+    }
+
+
     /**
      * Productos publicados de las categorias indicadas, ordenados por unidades
      * vendidas. Incluye los que nunca se vendieron, al final: una categoria
@@ -69,7 +107,7 @@ class HomeController extends Controller
         return Producto::query()
             ->select('productos.*')
             ->selectSub($unidades, 'unidades_vendidas')
-            ->whereHas('categoria', fn ($q) => $q->whereIn('slug', $slugs))
+            ->whereHas('categoria', fn($q) => $q->whereIn('slug', $slugs))
             ->where('productos.activo', true)
             ->where('productos.publicado_app', true)
             ->orderByDesc('unidades_vendidas')

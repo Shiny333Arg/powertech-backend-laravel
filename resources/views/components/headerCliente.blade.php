@@ -1,8 +1,12 @@
 {{--
     Barra de la tienda. La ven visitantes y clientes logueados.
 
-    Productos y Promociones se agregan cuando exista el catalogo de la tienda
-    (hoy esas URLs no tienen ruta).
+    La busqueda es un form GET a cliente.items.index: el Enter del input y el
+    click en la lupa son el mismo submit, y el resultado queda en la URL
+    (compartible, marcable y navegable con el boton atras).
+
+    El form va DENTRO del collapse para que en mobile aparezca al abrir el menu
+    hamburguesa en lugar de amontonarse contra el logo.
 --}}
 <header>
   <nav class="navbar navbar-expand-md navbar-dark bg-primary shadow-sm">
@@ -20,12 +24,48 @@
 
       <!-- Menú colapsable -->
       <div class="collapse navbar-collapse" id="navbarTienda">
+
+        <!-- Buscador -->
+        <form class="d-flex flex-grow-1 my-2 my-md-0 mx-md-4" style="max-width: 520px;"
+          role="search" method="GET" action="{{ route('cliente.items.index') }}">
+
+          <div class="input-group">
+
+            <label for="buscadorTienda" class="visually-hidden">Buscar productos</label>
+
+            <input type="search" name="q" id="buscadorTienda"
+              class="form-control border-0"
+              placeholder="Buscar productos..."
+              value="{{ request('q') }}"
+              autocomplete="off"
+              aria-label="Buscar productos">
+
+            <button class="btn btn-light fw-bold text-primary" type="submit" aria-label="Buscar">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor"
+                viewBox="0 0 16 16" aria-hidden="true">
+                <path
+                  d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001q.044.06.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1 1 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0" />
+              </svg>
+            </button>
+
+          </div>
+
+        </form>
+
         <ul class="navbar-nav ms-auto gap-md-2 align-items-md-center">
 
           <li class="nav-item px-2">
             <a class="nav-link rounded fw-bold text-white @if (request()->routeIs('cliente.home')) active @endif"
               href="{{ route('cliente.home') }}">Inicio</a>
           </li>
+
+          @auth
+          @php $usuario = auth()->user(); @endphp
+          <li class="nav-item px-2">
+            <a class="nav-link rounded fw-bold text-white @if (request()->routeIs('cliente.compras.*')) active @endif"
+              href="{{ route('cliente.compras.index') }}">Mis compras</a>
+          </li>
+          @endauth
 
           <li class="nav-item px-2">
             <a class="nav-link rounded fw-bold text-white @if (request()->routeIs('cliente.help.*')) active @endif"
@@ -76,11 +116,11 @@
           </li>
 
           <li class="nav-item px-2">
-            <a class="nav-link rounded fw-bold text-white"
-              href="{{ route('cliente.home') }}">
+            <a class="nav-link rounded fw-bold text-white" href="{{ route('cliente.carrito.index') }}">
               <svg xmlns="http://www.w3.org/2000/svg" width="25" height="25" fill="currentColor" class="bi bi-cart3" viewBox="0 0 16 16">
                 <path d="M0 1.5A.5.5 0 0 1 .5 1H2a.5.5 0 0 1 .485.379L2.89 3H14.5a.5.5 0 0 1 .49.598l-1 5a.5.5 0 0 1-.465.401l-9.397.472L4.415 11H13a.5.5 0 0 1 0 1H4a.5.5 0 0 1-.491-.408L2.01 3.607 1.61 2H.5a.5.5 0 0 1-.5-.5M3.102 4l.84 4.479 9.144-.459L13.89 4zM5 12a2 2 0 1 0 0 4 2 2 0 0 0 0-4m7 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4m-7 1a1 1 0 1 1 0 2 1 1 0 0 1 0-2m7 0a1 1 0 1 1 0 2 1 1 0 0 1 0-2" />
-              </svg></a>
+              </svg>
+            </a>
           </li>
 
 

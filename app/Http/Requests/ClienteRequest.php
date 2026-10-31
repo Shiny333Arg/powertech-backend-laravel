@@ -2,26 +2,43 @@
 
 namespace App\Http\Requests;
 
-use App\Models\CondicionIva;
-use App\Models\TipoDocumento;
-use App\Rules\Cuit;
+use App\Http\Requests\Concerns\ReglasDatosCliente;
+use App\Models\Cliente;
 use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 
 /**
- * El documento y la condicion frente al IVA NO son opcionales: son requisito
- * de la facturacion electronica. Sin ellos el sistema no puede determinar si
- * corresponde factura A o B.
+ * Alta y edicion de un cliente desde gestion.
  *
- * Si `App\Http\Requests\Concerns\ReglasDatosCliente` ya define estas reglas,
- * reemplazar el cuerpo de rules() por el trait y dejar solo la unicidad.
+ * Las reglas son LAS MISMAS que las del registro en la tienda: el cliente que
+ * carga un empleado no es una entidad distinta, es la misma cuenta dada de
+ * alta por otra puerta. Por eso todo sale de ReglasDatosCliente y no se
+ * reescribe aca: si manana cambia que un monotributista necesita CUIT, cambia
+ * en un solo lugar y vale para las dos puertas.
+ *
+ * Lo unico que NO comparte con el registro es la contraseña. El cliente nace
+ * sin ella y la elige el mismo desde el enlace que recibe por correo
+ * (InvitacionCliente), igual que el empleado invitado.
+ *
+ * <b>La edicion valida lo fiscal solo si lo fiscal cambio.</b> Ver
+ * tocaronLosDatosFiscales(): es lo que permite corregirle el telefono a un
+ * cliente cargado antes de que existieran estas reglas.
+ *
+ * La autorizacion vive en ClientePolicy y la aplica el controlador con
+ * Gate::authorize(), no este request.
  */
 class ClienteRequest extends FormRequest
 {
+    use ReglasDatosCliente;
+
     public function authorize(): bool
     {
         return true;
+    }
+
+    protected function prepareForValidation(): void
+    {
+        $this->normalizarDatosCliente();
     }
 
     /**
@@ -29,81 +46,40 @@ class ClienteRequest extends FormRequest
      */
     public function rules(): array
     {
-        $cliente = $this->route('cliente');
+        $cliente = $this->cliente();
 
-        return [
-            'razon_social'      => ['required', 'string', 'max:150'],
-            'tipo_documento_id' => ['required', 'integer', Rule::exists('tipos_documento', 'id')],
-            // La regla Cuit valida el digito verificador. Solo se aplica
-            // cuando el documento elegido es un CUIT o un CUIL.
-            'nro_doc'           => ['required', 'string', 'max:20', ...($this->exigeCuit() ? [new Cuit] : [])],
-            'condicion_iva_id'  => ['required', 'integer', Rule::exists('condiciones_iva', 'id')],
-            'telefono'          => ['nullable', 'string', 'max:30'],
-            'activo'            => ['boolean'],
+        // Si no tocaron el documento ni la condicion frente al IVA, esas tres
+        // columnas no se validan y tampoco se escriben: datosDelCliente() usa
+        // safe()->only(), y lo que no se valido no esta ahi. La fila fiscal
+        // queda exactamente como estaba.
+        $reglas = $this->tocaronLosDatosFiscales()
+            ? $this->reglasDatosFiscales($cliente)
+            : $this->reglasDeContacto();
 
-            // Unicidad compuesta: el mismo documento no puede pertenecer a dos
-            // clientes. Es la regla que impide el duplicado por tipeo.
-            'nro_doc_unico' => [
-                Rule::unique('clientes', 'nro_doc')
-                    ->where('tipo_documento_id', $this->integer('tipo_documento_id'))
-                    ->ignore($cliente?->id),
-            ],
-        ];
-    }
+        if ($this->tieneCuenta()) {
+            // En la edicion se ignora al propio usuario: si no, su correo
+            // actual chocaria contra la regla de unicidad.
+            return $reglas + $this->reglasNombreYCorreo(ignorarUserId: $cliente?->user_id);
+        }
 
-    public function withValidator(Validator $validator): void
-    {
-        $validator->after(function (Validator $validator): void {
-            $codigos = config('facturacion.codigos');
-            $tipoDoc = TipoDocumento::find($this->integer('tipo_documento_id'));
-            $condicion = CondicionIva::find($this->integer('condicion_iva_id'));
+        // Cliente de mostrador sin cuenta: no hay nombre ni apellido de los
+        // que derivar la razon social, asi que deja de ser opcional.
+        $reglas['razon_social'] = ['required', 'string', 'max:150'];
 
-            if (! $tipoDoc || ! $condicion) {
-                return;
-            }
-
-            // Un responsable inscripto sin CUIT no puede recibir factura A, y
-            // la factura A es justamente lo que lo define. Atajarlo en el alta
-            // evita descubrirlo recien al intentar cobrar.
-            if ($condicion->codigo_afip === $codigos['condicion_iva']['responsable_inscripto']
-                && $tipoDoc->codigo_afip !== $codigos['documento']['cuit']) {
-                $validator->errors()->add(
-                    'tipo_documento_id',
-                    'Un responsable inscripto tiene que identificarse con CUIT.'
-                );
-            }
-
-        });
-    }
-
-    /** El documento elegido exige digito verificador. */
-    private function exigeCuit(): bool
-    {
-        $codigos = config('facturacion.codigos.documento');
-        $codigo = TipoDocumento::whereKey($this->integer('tipo_documento_id'))->value('codigo_afip');
-
-        return in_array((int) $codigo, [$codigos['cuit'], $codigos['cuil']], true);
-    }
-
-    protected function prepareForValidation(): void
-    {
-        $this->merge([
-            'nro_doc'       => preg_replace('/\D/', '', (string) $this->input('nro_doc')),
-            'nro_doc_unico' => $this->input('nro_doc'),
-        ]);
+        return $reglas;
     }
 
     /**
-     * @return array<string, string>
+     * @return array<int, callable>
      */
-    public function attributes(): array
+    public function after(): array
     {
+        if (! $this->tocaronLosDatosFiscales()) {
+            return [];
+        }
+
         return [
-            'razon_social'      => 'razón social',
-            'tipo_documento_id' => 'tipo de documento',
-            'nro_doc'           => 'número de documento',
-            'nro_doc_unico'     => 'número de documento',
-            'condicion_iva_id'  => 'condición frente al IVA',
+            fn (Validator $validator) => $this->validarCoherenciaFiscal($validator),
         ];
     }
 
@@ -112,19 +88,87 @@ class ClienteRequest extends FormRequest
      */
     public function messages(): array
     {
-        return [
-            'nro_doc_unico.unique' => 'Ya existe un cliente con ese tipo y número de documento.',
+        return $this->mensajesDatosCliente() + [
+            // El mensaje del trait esta escrito para el cliente que se registra
+            // solo. Aca lo lee un empleado, que necesita saber que hacer.
+            'email.unique' => 'Ese correo ya tiene una cuenta. Buscá al cliente en el listado '
+                .'en lugar de crearlo de nuevo.',
+            'nro_doc.unique' => 'Ya existe un cliente con ese tipo y número de documento.',
         ];
     }
 
     /**
-     * Solo las columnas del modelo: `nro_doc_unico` es un campo auxiliar de
-     * validacion y no tiene que llegar al fill().
-     *
-     * @return array<string, mixed>
+     * @return array<string, string>
      */
-    public function datos(): array
+    public function attributes(): array
     {
-        return collect($this->validated())->except('nro_doc_unico')->all();
+        return [
+            'nombres'           => 'nombres',
+            'apellido'          => 'apellido',
+            'email'             => 'correo electrónico',
+            'razon_social'      => 'razón social',
+            'tipo_documento_id' => 'tipo de documento',
+            'nro_doc'           => 'número de documento',
+            'condicion_iva_id'  => 'condición frente al IVA',
+            'telefono'          => 'teléfono',
+        ];
+    }
+
+    /** Lo unico del cliente que no es fiscal. */
+    private function reglasDeContacto(): array
+    {
+        return [
+            'razon_social' => ['nullable', 'string', 'max:150'],
+            'telefono'     => ['nullable', 'string', 'max:30'],
+        ];
+    }
+
+    /**
+     * En el alta, siempre. En la edicion, solo si el formulario trae un
+     * documento o una condicion distintos de los guardados.
+     *
+     * Sin esto, endurecer una regla congela las fichas que no la cumplen: un
+     * cliente cargado como monotributista con DNI, de cuando eso se aceptaba,
+     * no se podria ni corregirle el telefono. Y el empleado no tendria forma
+     * de arreglarlo, porque el error aparece sobre un campo que no toco.
+     *
+     * No es un permiso para dejar datos incoherentes: en cuanto alguien
+     * cambia uno de los tres, se validan los tres juntos.
+     *
+     * La comparacion corre despues de prepareForValidation(), asi que
+     * `nro_doc` ya viene sin puntos ni guiones y se compara contra la columna,
+     * que tambien se guardo normalizada.
+     */
+    private function tocaronLosDatosFiscales(): bool
+    {
+        $cliente = $this->cliente();
+
+        if ($cliente === null) {
+            return true;
+        }
+
+        return (int) $this->input('tipo_documento_id') !== (int) $cliente->tipo_documento_id
+            || (string) $this->input('nro_doc') !== (string) $cliente->nro_doc
+            || (int) $this->input('condicion_iva_id') !== (int) $cliente->condicion_iva_id;
+    }
+
+    /**
+     * Si hay que validar los datos de `users`.
+     *
+     * En el alta siempre: toda cuenta nueva nace con su fila en users. En la
+     * edicion, solo si el cliente ya tiene una; los de mostrador viejos
+     * (user_id nulo) no la tienen y el formulario no muestra ese bloque.
+     */
+    public function tieneCuenta(): bool
+    {
+        return $this->isMethod('POST') || $this->cliente()?->user_id !== null;
+    }
+
+    /** El cliente que viene de la URL, en la edicion. */
+    public function cliente(): ?Cliente
+    {
+        $cliente = $this->route('cliente');
+
+        return $cliente instanceof Cliente ? $cliente : null;
     }
 }

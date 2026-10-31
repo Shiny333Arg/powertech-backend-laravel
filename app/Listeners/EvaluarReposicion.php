@@ -25,12 +25,42 @@ use Throwable;
  */
 class EvaluarReposicion implements ShouldQueue
 {
-    /** Se encola recien cuando la transaccion que lo origino hizo commit. */
-    public bool $afterCommit = true;
+    /**
+     * Corre en este mismo proceso PHP, apenas la respuesta HTTP salio hacia el
+     * navegador. <b>No hace falta worker ni una consola abierta.</b>
+     *
+     * Es el reemplazo natural de la conexion 'database' para este circuito: lo
+     * que la reposicion necesitaba era no demorar la confirmacion de la venta,
+     * no durabilidad. Nunca hizo falta que estos jobs sobrevivieran a un
+     * reinicio ni que corrieran en otra maquina.
+     *
+     * <b>Lo que se resigna, y que lo cubre.</b> Un job que se pierde porque el
+     * proceso murio entre la respuesta y su ejecucion no deja rastro en la
+     * tabla jobs y no se reintenta. Lo recupera el barrido diario
+     * (compras:revisar-reposicion), que para eso esta. Ese barrido necesita que
+     * el scheduler corra: una tarea programada que ejecute
+     * `php artisan schedule:run` cada minuto. Sin ella, esta conexion se queda
+     * sin red.
+     *
+     * Para volver a un worker de verdad alcanza con borrar esta linea: $queue
+     * sigue abajo, intacta.
+     */
+    public string $connection = 'deferred';
 
-    /** Cola propia: la reposicion nunca debe demorar mails ni facturacion. */
+    /**
+     * Cola propia: la reposicion nunca debe demorar mails ni facturacion.
+     *
+     * Sin efecto mientras $connection sea 'deferred' —esa conexion no tiene
+     * colas— pero se conserva para que volver a 'database' sea borrar una
+     * linea y no reconstruir esto.
+     */
     public string $queue = 'reposicion';
 
+    /**
+     * Sin efecto bajo 'deferred': el job corre una sola vez, en el proceso que
+     * lo despacho, y no vuelve a una cola. Se conservan por el mismo motivo que
+     * $queue.
+     */
     public int $tries = 3;
 
     /** @var list<int> */

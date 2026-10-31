@@ -164,6 +164,6 @@ class User extends Authenticatable implements MustVerifyEmail
             return (bool) $this->attributes['invitacion_pendiente'];
         }
 
-        return $this->esDeGestion() && $this->password === null;
+        return $this->password === null;
     }
 }

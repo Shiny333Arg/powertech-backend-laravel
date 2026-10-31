@@ -4,9 +4,19 @@
 
 @section('content')
 
+@php
+// Un pedido mezclado no tiene destinatario propio: lo tienen sus órdenes. La
+// vista pregunta esto una vez y después solo mira el booleano, para no repetir
+// la misma comprobación en cada bloque.
+$repartido = $orden->esMadre();
+$destinatarios = $orden->proveedoresInvolucrados();
+@endphp
+
 {{-- Título --}}
 <section class="mb-4">
-    <h1 class="h3 fw-bold mb-2">
+
+
+    <h1 class="h3 fw-bold mb-2 mt-1">
         Pedido {{ $orden->numero }}
         <span class="badge text-bg-{{ $orden->estado->color() }} align-middle ms-1">
             {{ $orden->estado->etiqueta() }}
@@ -14,7 +24,12 @@
     </h1>
 
     <p class="text-muted mb-0">
-        {{ $orden->proveedor->razon_social }} · {{ $orden->origen->etiqueta() }}
+        @if ($repartido)
+        {{ $destinatarios->count() }} {{ $destinatarios->count() === 1 ? 'proveedor' : 'proveedores' }}
+        @else
+        {{ $orden->proveedor->razon_social }}
+        @endif
+        · {{ $orden->origen->etiqueta() }}
     </p>
 </section>
 
@@ -30,14 +45,19 @@
 
     Un @can que da false no distingue entre "te falta el permiso" y "el estado
     no lo permite". Esa diferencia es justo la que necesita ver el usuario.
+
+    A la policy se le suma la FORMA del documento, que la policy no mira: un
+    pedido repartido se aprueba, se envia y se cancela entero, pero no se recibe
+    ni se cierra, porque la mercaderia la manda cada proveedor contra su propia
+    orden y cargarla sobre el pedido no diria cual de los tres cumplio.
 --}}
 @php
 $puede = [
 'editar' => \Illuminate\Support\Facades\Gate::allows('update', $orden),
 'aprobar' => \Illuminate\Support\Facades\Gate::allows('aprobar', $orden),
-'enviar' => \Illuminate\Support\Facades\Gate::allows('enviar', $orden),
-'recibir' => \Illuminate\Support\Facades\Gate::allows('recibir', $orden),
-'cerrar' => \Illuminate\Support\Facades\Gate::allows('cerrar', $orden),
+'enviar' => \Illuminate\Support\Facades\Gate::allows('enviar', $orden) && $orden->tieneAlgoQueEnviar(),
+'recibir' => \Illuminate\Support\Facades\Gate::allows('recibir', $orden) && ! $repartido,
+'cerrar' => \Illuminate\Support\Facades\Gate::allows('cerrar', $orden) && ! $repartido,
 'cancelar' => \Illuminate\Support\Facades\Gate::allows('cancelar', $orden),
 ];
 
@@ -54,6 +74,12 @@ $orden->estado->esCerrada()
 $orden->esBorrador() && $esPropio && ! auth()->user()->tienePermiso('compra.aprobar_propias')
 => 'Este pedido lo cargaste vos y no tenés permiso para aprobar tus propios pedidos: lo tiene que aprobar otro usuario.',
 
+$repartido && $orden->estado === \App\Enums\EstadoOrdenCompra::Enviada
+=> 'Ya salieron todos los remitos. La mercadería se recibe en la orden de cada proveedor, más abajo.',
+
+$repartido
+=> 'Este pedido se opera desde la orden de cada proveedor, más abajo.',
+
 default
 => 'No tenés permisos para operar sobre este pedido.',
 };
@@ -69,6 +95,28 @@ default
 --}}
 <section class="mb-4 d-flex flex-column flex-md-row align-items-stretch gap-2">
 
+    @if ($orden->padre)
+    {{--
+        Una orden emitida desde un pedido mezclado. El enlace al pedido no es
+        decorativo: es el único lugar donde se ven juntas las órdenes hermanas,
+        y es lo que explica por qué este documento tiene un número con barra.
+    --}}
+    <a
+        href="{{ route('gestion.compras.show', $orden->padre) }}"
+        class="btn btn-outline-secondary d-flex align-items-center justify-content-center gap-2">
+
+        <svg xmlns="http://www.w3.org/2000/svg"
+            width="18"
+            height="18"
+            fill="currentColor"
+            viewBox="0 0 16 16">
+            <path fill-rule="evenodd"
+                d="M15 8a.5.5 0 0 0-.5-.5H2.707l3.147-3.146a.5.5 0 1 0-.708-.708l-4 4a.5.5 0 0 0 0 .708l4 4a.5.5 0 0 0 .708-.708L2.707 8.5H14.5A.5.5 0 0 0 15 8" />
+        </svg>
+
+        Volver a {{ $orden->padre->numero }}
+    </a>
+    @else
     <a
         href="{{ route('gestion.compras.index') }}"
         class="btn btn-outline-secondary d-flex align-items-center justify-content-center gap-2">
@@ -84,6 +132,7 @@ default
 
         Volver a pedidos
     </a>
+    @endif
 
     <div class="d-flex flex-column flex-md-row gap-2 ms-md-auto">
 
@@ -120,7 +169,7 @@ default
                     <path d="M10.97 4.97a.75.75 0 0 1 1.07 1.05l-3.992 4.99a.75.75 0 0 1-1.08.02L4.324 8.384a.75.75 0 1 1 1.06-1.06l2.093 2.093z" />
                 </svg>
 
-                Aprobar
+                {{ $repartido ? 'Aprobar y emitir ' . $destinatarios->count() . ' órdenes' : 'Aprobar' }}
             </button>
         </form>
         @endif
@@ -137,7 +186,7 @@ default
                     <path d="M0 4a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2zm2-1a1 1 0 0 0-1 1v.217l7 4.2 7-4.2V4a1 1 0 0 0-1-1zm13 2.383-4.708 2.825L15 11.105zm-.034 6.876-5.64-3.471L8 9.583l-1.326-.795-5.64 3.47A1 1 0 0 0 2 13h12a1 1 0 0 0 .966-.741M1 11.105l4.708-2.897L1 5.383z" />
                 </svg>
 
-                Enviar remito por correo
+                {{ $repartido ? 'Enviar el remito a cada proveedor' : 'Enviar remito por correo' }}
             </button>
         </form>
         @endif
@@ -214,30 +263,49 @@ default
     </div>
 </section>
 
-{{-- Aviso sobre el canal de pedido --}}
+{{--
+    Aviso sobre el canal de pedido.
+
+    En un pedido repartido se revisan todos los destinatarios, no uno: con tres
+    proveedores, el que tiene el canal mal configurado es el único que no va a
+    recibir nada, y el administrativo tiene que saber cuál antes de darle a
+    enviar y no después.
+--}}
 @if ($orden->estado === \App\Enums\EstadoOrdenCompra::Aprobada)
-@if ($orden->proveedor->canal_pedido !== \App\Enums\CanalPedido::Email)
+
+@php
+$malConfigurados = $destinatarios->filter(fn ($p) =>
+$p->canal_pedido !== \App\Enums\CanalPedido::Email || blank($p->email)
+);
+@endphp
+
+@foreach ($malConfigurados as $proveedor)
 <div class="alert alert-warning alert-dismissible fade show mb-4" role="alert">
-    <strong>Este proveedor no está configurado para recibir pedidos por correo.</strong>
-    Su canal es «{{ $orden->proveedor->canal_pedido->etiqueta() }}».
-    <a href="{{ route('gestion.proveedores.edit', $orden->proveedor) }}" class="alert-link">
+    @if ($proveedor->canal_pedido !== \App\Enums\CanalPedido::Email)
+    <strong>{{ $proveedor->razon_social }} no está configurado para recibir pedidos por correo.</strong>
+    Su canal es «{{ $proveedor->canal_pedido->etiqueta() }}».
+    <a href="{{ route('gestion.proveedores.edit', $proveedor) }}" class="alert-link">
         Cambialo a email
     </a>
     para poder enviarle el remito.
-
-    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar"></button>
-</div>
-@elseif (blank($orden->proveedor->email))
-<div class="alert alert-warning alert-dismissible fade show mb-4" role="alert">
-    <strong>{{ $orden->proveedor->razon_social }} no tiene correo cargado.</strong>
-    <a href="{{ route('gestion.proveedores.edit', $orden->proveedor) }}" class="alert-link">
+    @else
+    <strong>{{ $proveedor->razon_social }} no tiene correo cargado.</strong>
+    <a href="{{ route('gestion.proveedores.edit', $proveedor) }}" class="alert-link">
         Cargalo en su ficha
     </a>
     para poder enviarle el remito.
+    @endif
+
+    @if ($repartido)
+    <span class="d-block small mt-1">
+        Los demás proveedores del pedido sí van a recibir el suyo: cada orden se envía por separado.
+    </span>
+    @endif
 
     <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar"></button>
 </div>
-@endif
+@endforeach
+
 @endif
 
 @php
@@ -297,6 +365,101 @@ $insuficientes = $orden->estaAbierta() ? $orden->lineasInsuficientes() : collect
     {{-- Columna izquierda --}}
     <div class="col-12 col-lg-8">
 
+        {{--
+            Órdenes emitidas.
+
+            Es el bloque que convierte un pedido repartido en algo operable: el
+            estado de cada proveedor por separado, y los botones de cada uno.
+            Que un remito no salga es lo normal —un proveedor sin casilla
+            cargada— y acá se ve exactamente cuál quedó pendiente, sin volver a
+            molestar a los que ya recibieron el suyo.
+        --}}
+        @if ($repartido && $orden->hijas->isNotEmpty())
+        <section class="p-4 rounded-4 bg-light shadow-sm border mb-4">
+
+            <h2 class="h5 fw-bold mb-1">Órdenes emitidas</h2>
+
+            <p class="text-muted small mb-3">
+                Una por proveedor. Cada una se envía y se recibe por separado, y lleva su propio
+                estado: el pedido de arriba resume el de la más atrasada.
+            </p>
+
+            <div class="table-responsive">
+
+                <table class="table table-bordered align-middle text-center mb-0">
+
+                    <thead class="table-dark">
+                        <tr>
+                            <th class="text-nowrap">Orden</th>
+                            <th class="text-nowrap text-start">Proveedor</th>
+                            <th class="text-nowrap">Estado</th>
+                            <th class="text-nowrap">Renglones</th>
+                            <th class="text-nowrap">Estimado</th>
+                            <th class="text-nowrap">Acciones</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        @foreach ($orden->hijas as $hija)
+                        <tr>
+                            <td class="text-nowrap fw-semibold">
+                                <a href="{{ route('gestion.compras.show', $hija) }}" class="text-decoration-none">
+                                    {{ $hija->numero }}
+                                </a>
+                            </td>
+
+                            <td class="text-start">
+                                <div class="fw-semibold">{{ $hija->proveedor->razon_social }}</div>
+                                <div class="text-muted small">{{ $hija->proveedor->email ?? '— sin correo —' }}</div>
+                            </td>
+
+                            <td>
+                                <span class="badge text-bg-{{ $hija->estado->color() }}">
+                                    {{ $hija->estado->etiqueta() }}
+                                </span>
+                            </td>
+
+                            <td class="text-nowrap">
+                                {{ $hija->lineas->count() }}
+                            </td>
+
+                            <td class="text-nowrap">
+                                $ {{ number_format((float) $hija->total_estimado, 2, ',', '.') }}
+                            </td>
+
+                            <td class="text-nowrap">
+
+                                @if (\Illuminate\Support\Facades\Gate::allows('enviar', $hija))
+                                <form method="POST" action="{{ route('gestion.compras.enviar', $hija) }}" class="d-inline">
+                                    @csrf
+                                    <button type="submit" class="btn btn-sm btn-primary" title="Enviar el remito a este proveedor">
+                                        Enviar
+                                    </button>
+                                </form>
+                                @endif
+
+                                @if (\Illuminate\Support\Facades\Gate::allows('recibir', $hija))
+                                <a href="{{ route('gestion.compras.recibir', $hija) }}" class="btn btn-sm btn-success">
+                                    Recibir
+                                </a>
+                                @endif
+
+                                <a href="{{ route('gestion.compras.show', $hija) }}" class="btn btn-sm btn-outline-secondary">
+                                    Ver
+                                </a>
+
+                            </td>
+                        </tr>
+                        @endforeach
+                    </tbody>
+
+                </table>
+
+            </div>
+
+        </section>
+        @endif
+
         {{-- Detalle del pedido --}}
         <section class="p-4 rounded-4 bg-light shadow-sm border mb-4">
 
@@ -314,6 +477,13 @@ $insuficientes = $orden->estaAbierta() ? $orden->lineasInsuficientes() : collect
                         <tr>
                             <th class="text-nowrap">Código</th>
                             <th class="text-nowrap">Producto</th>
+
+                            {{-- Solo cuando hay más de uno: en una orden común
+                                 la columna repetiría el encabezado. --}}
+                            @if ($repartido)
+                            <th class="text-nowrap">Proveedor</th>
+                            @endif
+
                             <th class="text-nowrap">Pedido</th>
                             <th class="text-nowrap">Recibido</th>
                             <th class="text-nowrap">Costo unitario</th>
@@ -342,6 +512,12 @@ $insuficientes = $orden->estaAbierta() ? $orden->lineasInsuficientes() : collect
                                 </div>
                                 @endif
                             </td>
+
+                            @if ($repartido)
+                            <td class="small text-start">
+                                {{ $linea->proveedor?->razon_social ?? '—' }}
+                            </td>
+                            @endif
 
                             <td class="text-nowrap fw-semibold">
                                 {{ $linea->cantidad_pedida }}
@@ -374,7 +550,7 @@ $insuficientes = $orden->estaAbierta() ? $orden->lineasInsuficientes() : collect
 
                     <tfoot class="table-light">
                         <tr>
-                            <td colspan="5" class="text-end fw-semibold">
+                            <td colspan="{{ $repartido ? 6 : 5 }}" class="text-end fw-semibold">
                                 Total estimado
                             </td>
 
@@ -391,6 +567,12 @@ $insuficientes = $orden->estaAbierta() ? $orden->lineasInsuficientes() : collect
             <div class="form-text mt-2">
                 Los importes son una estimación tomada del costo del catálogo, para dimensionar el
                 pedido. No se le informan al proveedor: el precio real lo fija su factura.
+
+                @if ($repartido)
+                <br>
+                Este es el detalle completo del pedido. El mismo importe está repartido entre las
+                órdenes de arriba, así que no se suman: son lo mismo visto de dos maneras.
+                @endif
             </div>
 
         </section>
@@ -498,7 +680,12 @@ $insuficientes = $orden->estaAbierta() ? $orden->lineasInsuficientes() : collect
 
             @if ($orden->fecha_entrega_estimada)
             <div class="d-flex justify-content-between gap-3 mb-2">
-                <span class="text-muted">Entrega estimada</span>
+                <span class="text-muted">
+                    Entrega estimada
+                    @if ($repartido)
+                    <span class="d-block small">la del proveedor más lento</span>
+                    @endif
+                </span>
                 <span class="text-end">{{ $orden->fecha_entrega_estimada->format('d/m/Y') }}</span>
             </div>
             @endif
@@ -520,32 +707,46 @@ $insuficientes = $orden->estaAbierta() ? $orden->lineasInsuficientes() : collect
 
         </section>
 
-        {{-- Proveedor --}}
+        {{-- Proveedores --}}
         <section class="p-4 rounded-4 bg-light shadow-sm border mb-4">
 
             <h2 class="h6 fw-bold mb-3">
-                Proveedor
+                {{ $destinatarios->count() === 1 ? 'Proveedor' : 'Proveedores' }}
             </h2>
 
-            <p class="fw-semibold mb-2">
-                {{ $orden->proveedor->razon_social }}
-            </p>
+            @forelse ($destinatarios as $proveedor)
 
-            @if ($orden->proveedor->contacto)
-            <p class="text-muted mb-2">
-                {{ $orden->proveedor->contacto }}
-            </p>
-            @endif
+            <div @class(['pb-3 mb-3 border-bottom'=> ! $loop->last])>
 
-            <p class="mb-2">
-                {{ $orden->proveedor->email ?? '— sin correo —' }}
-            </p>
+                <p class="fw-semibold mb-2">
+                    {{ $proveedor->razon_social }}
+                </p>
 
-            @if ($orden->proveedor->telefono)
+                @if ($proveedor->contacto)
+                <p class="text-muted mb-2">
+                    {{ $proveedor->contacto }}
+                </p>
+                @endif
+
+                <p class="mb-2">
+                    {{ $proveedor->email ?? '— sin correo —' }}
+                </p>
+
+                @if ($proveedor->telefono)
+                <p class="text-muted mb-0">
+                    {{ $proveedor->telefono }}
+                </p>
+                @endif
+
+            </div>
+
+            @empty
+
             <p class="text-muted mb-0">
-                {{ $orden->proveedor->telefono }}
+                Este pedido todavía no tiene renglones, así que no hay a quién pedirle nada.
             </p>
-            @endif
+
+            @endforelse
 
         </section>
 
@@ -685,6 +886,14 @@ $insuficientes = $orden->estaAbierta() ? $orden->lineasInsuficientes() : collect
             </div>
 
             <div class="modal-body">
+
+                @if ($repartido && $orden->hijas->isNotEmpty())
+                <p class="small text-muted">
+                    <strong>Se cancelan las {{ $orden->hijas->count() }} órdenes del pedido.</strong>
+                    Si lo que querés dar de baja es la de un solo proveedor —porque avisó que no tiene
+                    stock—, cancelala desde su propia orden y el resto del pedido sigue en pie.
+                </p>
+                @endif
 
                 <p class="small text-muted">
                     El pedido no se elimina: queda cancelado y con su historial. Sus productos

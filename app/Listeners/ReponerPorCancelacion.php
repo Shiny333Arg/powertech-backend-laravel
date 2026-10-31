@@ -29,12 +29,23 @@ use Throwable;
  */
 class ReponerPorCancelacion implements ShouldQueue
 {
+    /**
+     * Misma conexion que el resto del circuito: corre en este proceso PHP,
+     * despues de la respuesta, sin worker. Ver EvaluarReposicion para el
+     * razonamiento completo y lo que se resigna.
+     */
+    public string $connection = 'deferred';
+
+    /**
+     * Misma cola propia que el resto de la reposicion. Sin efecto bajo
+     * 'deferred'; se conserva para poder volver a 'database' borrando una linea.
+     */
+    public string $queue = 'reposicion';
+
     /** Por si alguna vez la cancelacion queda envuelta en una transaccion mayor. */
     public bool $afterCommit = true;
 
-    /** Misma cola que el resto de la reposicion: nunca demora nada del circuito de venta. */
-    public string $queue = 'reposicion';
-
+    /** Sin efecto bajo 'deferred'. Se conservan junto con $queue. */
     public int $tries = 3;
 
     /** @var list<int> */
