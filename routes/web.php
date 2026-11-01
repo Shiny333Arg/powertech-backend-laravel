@@ -1,12 +1,12 @@
 <?php
 
-use App\Http\Controllers\HelpController;
-use App\Http\Controllers\HomeController;
-use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\CarritoController;
 use App\Http\Controllers\CatalogoController;
 use App\Http\Controllers\CheckoutController;
 use App\Http\Controllers\CompraController;
+use App\Http\Controllers\HelpController;
+use App\Http\Controllers\HomeController;
+use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\gestion\BusquedaController;
 use App\Http\Controllers\gestion\CategoriaController;
 use App\Http\Controllers\gestion\ClienteController;
@@ -81,12 +81,44 @@ Route::prefix('help')
     });
 
 
+// ========================================================
+// WEBHOOK DE MERCADO PAGO
+// ========================================================
+// Va ACÁ ARRIBA, fuera de todo grupo, y no es un descuido: la llamada
+// llega desde los servidores de Mercado Pago, no desde un navegador.
+// No tiene sesión, ni cookies, ni usuario autenticado, así que 'auth'
+// la rechazaría y se perderían todas las acreditaciones.
+//
+// Es el camino AUTORITATIVO del cobro: llega aunque el cliente cierre
+// la pestaña después de pagar, y Mercado Pago lo reintenta. Lo que
+// reemplaza a la autenticación es la firma HMAC del aviso, que se
+// verifica en PasarelaMercadoPago::esAvisoConfiable().
+//
+// FALTA UN PASO FUERA DE ESTE ARCHIVO: hay que excluir esta URI de la
+// verificación CSRF. Una llamada POST de Mercado Pago no trae token.
+//   Laravel 11/12 -> bootstrap/app.php, en withMiddleware():
+//       $middleware->validateCsrfTokens(except: ['checkout/webhook']);
+//   Laravel 10 o anterior -> app/Http/Middleware/VerifyCsrfToken.php:
+//       protected $except = ['checkout/webhook'];
+
+Route::post('/checkout/webhook', [CheckoutController::class, 'webhook'])
+    ->name('cliente.checkout.webhook');
+
+
 // ============================================================
 // TIENDA - CLIENTE LOGUEADO
 // ============================================================
+//
+// Todo lo de acá adentro exige sesión de cliente. 'ambito:tienda' va
+// después de 'auth' y manda a /gestion al empleado que entre por error.
+//
+// 'verified' se aplica por bloque y no al grupo entero: un cliente con
+// el correo sin confirmar puede navegar y ver su historial, pero no
+// armar pedidos ni pagar.
 
 Route::middleware(['auth', 'ambito:tienda'])
     ->group(function () {
+
 
         // ========================================================
         // PERFIL (datos personales y fiscales)
@@ -97,82 +129,99 @@ Route::middleware(['auth', 'ambito:tienda'])
 
         Route::patch('/perfil', [ProfileController::class, 'update'])
             ->name('profile.update');
+
+
+        // ========================================================
+        // CARRITO
+        // ========================================================
+        // El carrito NO es un recurso del cliente sino el suyo propio: no
+        // hay index de carritos ni {carrito} en la URL. Lo que se manipula
+        // es la línea, y la línea se valida contra el carrito abierto de
+        // quien pide.
+
+        Route::prefix('carrito')
+            ->name('cliente.carrito.')
+            ->middleware('verified')
+            ->group(function () {
+
+                Route::get('/', [CarritoController::class, 'index'])
+                    ->name('index');
+
+                Route::post('/', [CarritoController::class, 'store'])
+                    ->name('store');
+
+                Route::patch('/{linea}', [CarritoController::class, 'update'])
+                    ->name('update');
+
+                Route::delete('/{linea}', [CarritoController::class, 'destroy'])
+                    ->name('destroy');
+            });
+
+
+        // ========================================================
+        // CHECKOUT
+        // ========================================================
+        // Solo retiro en el local: el circuito de envío y tracking no está
+        // implementado todavía.
+        //
+        // La venta online nace PAGADA: sin pago acreditado no hay venta, y
+        // sin venta no hay stock comprometido. Por eso no existe una ruta
+        // de "crear pedido" separada del pago.
+        //
+        // El cobro ocurre fuera de este sitio, así que el circuito tiene
+        // tres pasos y la vuelta llega por dos caminos:
+        //
+        //   index    el resumen, antes de pagar
+        //   pagar    crea la preferencia y redirige a Mercado Pago
+        //   retorno  el cliente vuelve del sitio de Mercado Pago
+        //
+        // El cuarto, el webhook, está arriba y fuera de este grupo porque
+        // no llega desde un navegador.
+        //
+        // `retorno` va adentro de 'auth' a propósito: Mercado Pago vuelve
+        // con una navegación GET de primer nivel, y la cookie de sesión de
+        // Laravel es SameSite=Lax, que sí viaja en ese caso. Si igual se
+        // perdiera, el webhook ya creó la venta y el cliente la encuentra
+        // en "Mis compras".
+
+        Route::prefix('checkout')
+            ->name('cliente.checkout.')
+            ->middleware('verified')
+            ->group(function () {
+
+                Route::get('/', [CheckoutController::class, 'index'])
+                    ->name('index');
+
+                Route::post('/pagar', [CheckoutController::class, 'pagar'])
+                    ->name('pagar');
+
+                Route::get('/retorno', [CheckoutController::class, 'retorno'])
+                    ->name('retorno');
+            });
+
+
+        // ========================================================
+        // MIS COMPRAS
+        // ========================================================
+        // Solo lectura. El cliente no cancela ni modifica desde acá:
+        // cancelar una venta pagada libera stock comprometido y, si ya
+        // tiene CAE, exige nota de crédito. Es una decisión de la empresa,
+        // no autogestión.
+        //
+        // Sin 'verified': consultar el historial no requiere correo
+        // confirmado. Solo comprar lo requiere.
+
+        Route::prefix('compras')
+            ->name('cliente.compras.')
+            ->group(function () {
+
+                Route::get('/', [CompraController::class, 'index'])
+                    ->name('index');
+
+                Route::get('/{venta}', [CompraController::class, 'show'])
+                    ->name('show');
+            });
     });
-
-// ========================================================
-// MIS COMPRAS
-// ========================================================
-// Solo lectura. El cliente no cancela ni modifica desde aca: cancelar
-// una venta pagada libera stock comprometido y, si ya tiene CAE, exige
-// nota de credito. Es una decision de la empresa, no autogestion.
-
-Route::prefix('compras')
-    ->name('cliente.compras.')
-    ->group(function () {
-
-        Route::get('/', [CompraController::class, 'index'])
-            ->name('index');
-
-        Route::get('/{venta}', [CompraController::class, 'show'])
-            ->name('show');
-    });
-
-
-
-
-// ========================================================
-// CHECKOUT
-// ========================================================
-// Solo retiro en el local: el circuito de envio y tracking no esta
-// implementado todavia.
-//
-// La venta online nace PAGADA: sin pago acreditado no hay venta, y sin
-// venta no hay stock comprometido. Por eso no hay una ruta de "crear
-// pedido" separada del pago.
-
-Route::prefix('checkout')
-    ->name('cliente.checkout.')
-    ->middleware('verified')
-    ->group(function () {
-
-        Route::get('/', [CheckoutController::class, 'index'])
-            ->name('index');
-
-        Route::post('/', [CheckoutController::class, 'store'])
-            ->name('store');
-    });
-
-
-
-// ========================================================
-// CARRITO
-// ========================================================
-// 'verified' aplica la regla del layout del lado del servidor: un cliente
-// con el correo sin confirmar navega, pero no arma pedidos.
-//
-// El carrito NO es un recurso del cliente sino el suyo propio: no hay
-// index de carritos ni {carrito} en la URL. Lo que se manipula es la
-// linea, y la linea se valida contra el carrito activo de quien pide.
-
-Route::prefix('carrito')
-    ->name('cliente.carrito.')
-    ->middleware('verified')
-    ->group(function () {
-
-        Route::get('/', [CarritoController::class, 'index'])
-            ->name('index');
-
-        Route::post('/', [CarritoController::class, 'store'])
-            ->name('store');
-
-        Route::patch('/{linea}', [CarritoController::class, 'update'])
-            ->name('update');
-
-        Route::delete('/{linea}', [CarritoController::class, 'destroy'])
-            ->name('destroy');
-    });
-
-
 
 
 // ============================================================

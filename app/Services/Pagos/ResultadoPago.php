@@ -62,22 +62,31 @@ final readonly class ResultadoPago
         public ?int $comisionCentavos = null,
         /** Lo que la tienda recibe, en centavos: bruto menos comision. */
         public ?int $netoAcreditadoCentavos = null,
+        /**
+         * La referencia que mandamos a la pasarela: identifica el carrito.
+         *
+         * Es como el webhook sabe de que compra se trata. El webhook llega
+         * desde los servidores de Mercado Pago, sin sesion y sin usuario
+         * autenticado, asi que no hay otra forma de resolverlo.
+         */
+        public ?string $referenciaExterna = null,
     ) {
     }
 
     /**
-     * Pago de desarrollo: se da por acreditado el total sin pasarela.
+     * SOLO PARA PRUEBAS. Da el total por acreditado sin pasar por la pasarela.
      *
-     * Existe para poder recorrer el circuito completo —venta, comprobante,
-     * preparacion, retiro— antes de integrar Mercado Pago. El dia que la
-     * pasarela exista, este metodo se borra y nada mas cambia.
+     * Sirve para ejercitar CheckoutService —venta, comprobante, preparacion,
+     * retiro— sin depender de que Mercado Pago responda ni de tener el tunel
+     * publico levantado. Ningun controlador lo usa: el circuito real pasa
+     * siempre por PasarelaMercadoPago.
      *
-     * `mp_status` queda en 'simulado' y no en 'approved' a proposito: tiene que
-     * poder distinguirse en la base un pago que nunca existio de uno real.
-     * `mp_payment_id` se llena igual, con un valor aleatorio, para ejercitar
-     * el indice unico que sostiene la idempotencia.
+     * `mp_status` queda en 'simulado' y no en 'approved' a proposito: en la
+     * base tiene que poder distinguirse un pago que nunca existio de uno
+     * real. `mp_payment_id` se llena igual, con un valor aleatorio, para
+     * ejercitar el indice unico que sostiene la idempotencia.
      */
-    public static function simulado(int $montoCentavos): self
+    public static function simulado(int $montoCentavos, ?string $referenciaExterna = null): self
     {
         return new self(
             metodo: MetodoPago::Tarjeta,
@@ -85,6 +94,7 @@ final readonly class ResultadoPago
             cuotas: 1,
             mpPaymentId: 'SIM-'.Str::upper(Str::random(20)),
             mpStatus: 'simulado',
+            referenciaExterna: $referenciaExterna,
         );
     }
 

@@ -181,7 +181,8 @@
             <!-- Confirmación -->
             <div class="col-12 col-lg-5">
 
-                <form method="POST" action="{{ route('cliente.checkout.store') }}"
+                {{-- Este submit sale del sitio: redirige a Mercado Pago. --}}
+                <form method="POST" action="{{ route('cliente.checkout.pagar') }}"
                     class="card shadow-sm border rounded-4">
 
                     @csrf
@@ -323,8 +324,13 @@
                         <div class="d-grid gap-2">
 
                             <button type="submit" class="btn btn-primary fw-semibold py-2 rounded-3">
-                                Pagar y confirmar pedido
+                                Pagar con Mercado Pago
                             </button>
+
+                            <p class="text-muted small text-center mb-0">
+                                Te llevamos al sitio de Mercado Pago para completar el pago.
+                                El pedido se registra cuando se acredita.
+                            </p>
 
                             <a href="{{ route('cliente.carrito.index') }}"
                                 class="btn btn-outline-secondary fw-semibold py-2 rounded-3">
