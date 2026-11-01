@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Enums\EstadoVenta;
 use App\Enums\ModoEntrega;
 use App\Enums\TipoMovimientoStock;
+use App\Events\VentaListaParaRetirar;
 use App\Exceptions\TransicionNoPermitidaException;
 use App\Models\Producto;
 use App\Models\User;
@@ -55,7 +56,13 @@ class EntregaService
         return $this->transicionar($venta, $destino);
     }
 
-    /** El pedido ya esta armado y espera al cliente en el local. */
+    /**
+     * El pedido ya esta armado y espera al cliente en el local.
+     *
+     * Es el unico camino hacia `lista_retiro` en todo el servicio, y por eso
+     * es el unico lugar donde se emite el aviso al cliente: ninguna otra
+     * llamada a transicionar() apunta a ese estado.
+     */
     public function listaParaRetiro(Venta $venta): Venta
     {
         if ($venta->modo_entrega !== ModoEntrega::Retiro) {
@@ -64,7 +71,27 @@ class EntregaService
             );
         }
 
-        return $this->transicionar($venta, EstadoVenta::ListaRetiro);
+        $venta = $this->transicionar($venta, EstadoVenta::ListaRetiro);
+
+        /*
+         * El aviso se emite DESPUES de la transicion y no dentro de
+         * transicionar(), que es generico: si viviera ahi habria que
+         * preguntarle a que estado va, y ese metodo no decide nada, solo
+         * ejecuta.
+         *
+         * <b>Es un evento y no un mail.</b> El listener va a la cola y, por su
+         * $afterCommit, espera el commit si esta llamada corre dentro de una
+         * transaccion. Mandar el correo aca mismo significaria sostener locks
+         * de fila mientras se espera al servidor SMTP, y avisarle al cliente
+         * de un pedido que despues puede revertirse.
+         *
+         * No hace falta protegerlo contra el doble aviso: transicionar() tira
+         * si el estado no admite el destino, y lista_retiro no transiciona a
+         * si mismo. Una segunda llamada falla antes de llegar aca.
+         */
+        VentaListaParaRetirar::dispatch($venta);
+
+        return $venta;
     }
 
     // ------------------------------------------------------------------

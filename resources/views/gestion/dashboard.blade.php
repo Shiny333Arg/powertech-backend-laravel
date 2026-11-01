@@ -31,8 +31,6 @@ $usuario = auth()->user();
         <li>for update en el cobro de ventas, para asegurarse de que hay stock</li>
         <li>iva, ingresos brutos, investigar para las ventas</li>
         <li>facturación con arca</li>
-        <li>mercado pago</li>
-        <li>carrito de compras</li>
         <li>tracking</li>
         <li>ver detalles de una promoción, lado cliente</li>
     </ul>
