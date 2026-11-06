@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\EstadoCarrito;
+use App\Enums\ModoEntrega;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -15,14 +16,25 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * Y NO compromete stock: se admite preventa, asi que reservar no protege de
  * nada, y reservar en el carrito generaria comprometido fantasma por abandono.
  * El compromiso nace con la venta confirmada.
+ *
+ * <b>El carrito es tambien el checkout en curso.</b> mp_preference_id,
+ * modo_entrega y observaciones se guardan aca y no en la sesion porque el
+ * webhook de Mercado Pago llega sin sesion: es el unico camino que esta
+ * garantizado, y necesita esos datos para crear la venta.
  */
 class Carrito extends Model
 {
     protected $table = 'carritos';
 
-    protected $fillable = ['user_id', 'session_token', 'estado'];
+    protected $fillable = [
+        'user_id', 'session_token', 'estado',
+        'mp_preference_id', 'modo_entrega', 'observaciones',
+    ];
 
-    protected $casts = ['estado' => EstadoCarrito::class];
+    protected $casts = [
+        'estado'       => EstadoCarrito::class,
+        'modo_entrega' => ModoEntrega::class,
+    ];
 
     public function user(): BelongsTo
     {

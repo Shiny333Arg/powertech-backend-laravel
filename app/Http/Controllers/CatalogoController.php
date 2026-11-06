@@ -34,6 +34,14 @@ class CatalogoController extends Controller
     {
         $filtros = $request->filtros();
 
+        // Se obtiene la promoción vigente asociada al filtro.
+        $promocion = $this->promocionDelFiltro($filtros['promocion']);
+
+        // Si la promoción no existe o ya venció, se descarta el filtro.
+        if ($promocion === null) {
+            $filtros['promocion'] = null;
+        }
+
         $productos = $this->buscar($filtros);
 
         return view('item.resultados', [
@@ -42,7 +50,7 @@ class CatalogoController extends Controller
             'categorias' => $this->categoriasConProductos(),
             'marcas'     => $this->marcasDisponibles(),
             'ordenes'    => OrdenCatalogo::opciones(),
-            'promocion'  => $this->promocionDelFiltro($filtros['promocion']),
+            'promocion'  => $promocion,
             'precios'    => $this->preciosFinales($productos, $motor),
         ]);
     }

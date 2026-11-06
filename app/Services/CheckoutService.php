@@ -9,6 +9,7 @@ use App\Enums\ModoEntrega;
 use App\Exceptions\TransicionNoPermitidaException;
 use App\Models\Carrito;
 use App\Models\Cliente;
+use App\Models\Pago;
 use App\Models\Venta;
 use App\Services\Pagos\ResultadoPago;
 use Illuminate\Support\Facades\DB;
@@ -63,18 +64,49 @@ class CheckoutService
     }
 
     /**
+     * La venta que ya se creo para este pago, si existe.
+     *
+     * <b>Es la primera linea de defensa contra la doble acreditacion.</b> El
+     * mismo pago llega por dos caminos —el retorno del navegador y el
+     * webhook, que Mercado Pago reintenta— y los dos terminan aca. Sin esta
+     * consulta, el segundo intentaria crear otra venta: otro numero interno
+     * quemado, otro comprobante con CAE y el stock comprometido dos veces.
+     *
+     * El indice unico de `pagos.mp_payment_id` es la segunda linea, la que no
+     * se puede sortear por una carrera entre los dos caminos.
+     */
+    public function ventaDePago(?string $mpPaymentId): ?Venta
+    {
+        if (blank($mpPaymentId)) {
+            return null;
+        }
+
+        return Pago::query()
+            ->where('mp_payment_id', $mpPaymentId)
+            ->first()
+            ?->venta;
+    }
+
+    /**
      * Convierte el carrito en una venta online pagada.
+     *
+     * <b>El modo de entrega y las observaciones salen del carrito, no de
+     * parametros.</b> Los eligio el cliente antes de ir a pagar y quedaron
+     * guardados ahi justamente porque el webhook llega sin sesion: es el
+     * unico camino garantizado y no tiene de donde leer un formulario.
      *
      * @throws TransicionNoPermitidaException si el carrito no esta en condiciones
      *         de cerrarse, si los datos fiscales no permiten facturar, o si el
      *         importe pagado no coincide con el total.
      */
-    public function confirmar(
-        Carrito $carrito,
-        ModoEntrega $modoEntrega,
-        ResultadoPago $pago,
-        ?string $observaciones = null,
-    ): Venta {
+    public function confirmar(Carrito $carrito, ResultadoPago $pago): Venta
+    {
+        // Idempotencia antes de cualquier escritura: si este pago ya produjo
+        // una venta, se devuelve esa y no se toca nada.
+        if ($venta = $this->ventaDePago($pago->mpPaymentId)) {
+            return $venta;
+        }
+
         $this->exigirCarritoCerrable($carrito);
 
         $cliente = $carrito->user?->cliente;
@@ -90,16 +122,20 @@ class CheckoutService
             throw TransicionNoPermitidaException::porque($problema);
         }
 
-        return DB::transaction(function () use ($carrito, $cliente, $modoEntrega, $pago, $observaciones) {
+        return DB::transaction(function () use ($carrito, $cliente, $pago) {
 
-            // Se relee con la fila bloqueada: dos callbacks de la pasarela que
-            // llegan a la vez tienen que serializarse aca, o se crean dos
-            // ventas para el mismo carrito. Es la primera barrera de
-            // idempotencia; la segunda es el indice unico de
-            // `pagos.mp_payment_id`.
+            // Se relee con la fila bloqueada: el retorno del navegador y el
+            // webhook pueden llegar a la vez y tienen que serializarse aca, o
+            // se crean dos ventas para el mismo carrito.
             $carrito = Carrito::query()
                 ->lockForUpdate()
                 ->findOrFail($carrito->getKey());
+
+            // Dentro del lock se vuelve a preguntar: el otro camino pudo
+            // haber terminado mientras este esperaba.
+            if ($venta = $this->ventaDePago($pago->mpPaymentId)) {
+                return $venta;
+            }
 
             $this->exigirCarritoCerrable($carrito);
 
@@ -111,8 +147,10 @@ class CheckoutService
 
             $venta = $this->ventas->crearOnline([
                 'cliente_id'    => $cliente->id,
-                'modo_entrega'  => $modoEntrega->value,
-                'observaciones' => $observaciones,
+                // Hoy solo retiro. El fallback cubre un carrito que llego al
+                // pago antes de que existiera la columna.
+                'modo_entrega'  => ($carrito->modo_entrega ?? ModoEntrega::Retiro)->value,
+                'observaciones' => $carrito->observaciones,
                 'lineas'        => $lineas
                     ->map(fn ($linea) => [
                         'producto_id' => $linea->producto_id,
@@ -140,9 +178,11 @@ class CheckoutService
                 // es este.
                 'estado' => EstadoPago::Acreditado,
                 // Sin cajero: en la venta online no hay empleado que cobre.
-                'usuario_id'           => null,
-                'mp_payment_id'        => $pago->mpPaymentId,
-                'mp_preference_id'     => $pago->mpPreferenceId,
+                'usuario_id'    => null,
+                'mp_payment_id' => $pago->mpPaymentId,
+                // La preferencia no viene en la respuesta del pago: la
+                // guardamos nosotros en el carrito al crearla.
+                'mp_preference_id'     => $pago->mpPreferenceId ?? $carrito->mp_preference_id,
                 'mp_merchant_order_id' => $pago->mpMerchantOrderId,
                 'mp_status'            => $pago->mpStatus,
                 'mp_status_detail'     => $pago->mpStatusDetail,
@@ -198,7 +238,7 @@ class CheckoutService
     /**
      * El carrito tiene que estar abierto y con algo adentro.
      *
-     * `convertido` no es un error del cliente: es el callback que llego dos
+     * `convertido` no es un error del cliente: es el webhook que llego dos
      * veces, o el boton apretado dos veces. Se corta con un mensaje que no
      * asusta.
      */
@@ -255,15 +295,15 @@ class CheckoutService
      * acreditado: la comision de la pasarela es un costo de la tienda y no
      * reduce lo que el cliente debe.
      *
-     * El precio del carrito es el vigente al mirarlo, y entre que la pasarela
-     * cobro y el callback llego pudo cambiar un precio o vencer una
-     * promocion. Aca eso se detecta en lugar de facturar un importe distinto
-     * al que el cliente autorizo.
-     *
-     * TODO (paso 2): hoy esto aborta y el cliente queda pagado sin pedido. Al
-     * integrar la pasarela hay que congelar el importe al crear la
-     * preferencia y, si aun asi difiere, derivar a devolucion en lugar de
-     * fallar.
+     * <b>Riesgo residual conocido.</b> El carrito no congela precios —los
+     * congela la venta— asi que entre que se creo la preferencia y que el
+     * pago se acredito, un precio o una promocion pudieron cambiar. Si eso
+     * pasa, esto aborta y el cliente queda pagado sin pedido, con el aviso de
+     * que se comunique. La ventana se acoto por dos lados: la preferencia
+     * vence en minutos y los medios de pago diferidos estan excluidos, asi
+     * que en la practica son segundos. Cerrarlo del todo exige congelar el
+     * precio en carrito_lineas al crear la preferencia, que contradice la
+     * decision de que el carrito muestre siempre el precio vigente.
      */
     private function exigirImporteExacto(Venta $venta, ResultadoPago $pago): void
     {
@@ -271,7 +311,8 @@ class CheckoutService
 
         if ($total !== $pago->montoCentavos) {
             throw TransicionNoPermitidaException::porque(
-                'El importe abonado no coincide con el total del pedido. No se registró la compra.'
+                'El importe abonado no coincide con el total del pedido. '
+                . 'No se registró la compra: comunicate con PowerTech así lo resolvemos.'
             );
         }
     }

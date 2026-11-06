@@ -19,7 +19,6 @@ $usuario = auth()->user();
 
     <p>tareas pendientes:</p>
     <ul>
-        <li>tras actualizar un producto, se inactiva solo</li>
         <li>los presupuestos deben tener fecha de vencimiento: 1 semana. al actualizar un precio, un presupuesto y una venta no deben cambiar</li>
         <li>varios proveedores por cada producto</li>
         <li>gestion/venta/crear: corregir la tabla, "precio unitario" "importe"</li>
@@ -31,10 +30,7 @@ $usuario = auth()->user();
         <li>for update en el cobro de ventas, para asegurarse de que hay stock</li>
         <li>iva, ingresos brutos, investigar para las ventas</li>
         <li>facturación con arca</li>
-        <li>mercado pago</li>
-        <li>carrito de compras</li>
         <li>tracking</li>
-        <li>ver detalles de una promoción, lado cliente</li>
     </ul>
 
 
