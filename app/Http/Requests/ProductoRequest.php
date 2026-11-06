@@ -30,7 +30,6 @@ class ProductoRequest extends FormRequest
         $this->merge([
             'reposicion_automatica' => $this->boolean('reposicion_automatica'),
             'publicado_app'         => $this->boolean('publicado_app'),
-            'activo'                => $this->boolean('activo'),
         ]);
     }
 
@@ -69,7 +68,7 @@ class ProductoRequest extends FormRequest
             'imagen' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
 
             'publicado_app' => ['boolean'],
-            'activo'        => ['boolean'],
+            'activo'        => ['prohibited'], // la baja/alta va por darDeBaja() y reactivar()
 
             // Solo en el alta: despues, el stock se mueve con movimientos.
             'stock_inicial' => [$esAlta ? 'nullable' : 'prohibited', 'integer', 'min:0', 'max:999999'],
@@ -143,6 +142,7 @@ class ProductoRequest extends FormRequest
             'imagen.image'     => 'El archivo tiene que ser una imagen.',
             'imagen.max'       => 'La imagen no puede pesar más de 2 MB.',
             'stock_inicial.prohibited' => 'El stock no se edita desde el producto: registrá un ajuste de inventario.',
+            'activo.prohibited' => 'El estado del producto no se edita desde el formulario: usá dar de baja o reactivar.',
         ];
     }
 }

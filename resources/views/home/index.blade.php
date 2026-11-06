@@ -58,29 +58,43 @@
 
             <div @class(['carousel-item', 'active'=> $i === 0])>
 
-                <div class="ratio" style="--bs-aspect-ratio: 33%;">
+                {{-- El slide entero es el enlace y no un boton dentro del caption: el
+         caption esta oculto en mobile (d-none d-md-block), asi que un boton
+         ahi adentro seria inalcanzable desde el telefono, que es donde el
+         cliente toca la imagen. --}}
+                <a href="{{ route('cliente.items.index', ['promocion' => $promocion->id]) }}"
+                    class="d-block text-decoration-none text-white"
+                    aria-label="Ver los productos de {{ $promocion->nombre }}">
 
-                    <img
-                        src="{{ asset('storage/'.$promocion->banner) }}"
-                        alt="{{ $promocion->nombre }}"
-                        class="w-100 h-100"
-                        style="object-fit: cover;">
+                    <div class="ratio" style="--bs-aspect-ratio: 33%;">
 
-                </div>
+                        <img
+                            src="{{ asset('storage/'.$promocion->banner) }}"
+                            alt="{{ $promocion->nombre }}"
+                            class="w-100 h-100"
+                            style="object-fit: cover;">
 
-                <div class="carousel-caption d-none d-md-block text-start bg-dark bg-opacity-50 rounded-3 p-3">
+                    </div>
 
-                    <h2 class="h4 fw-bold mb-1">
-                        {{ $promocion->nombre }}
-                    </h2>
+                    <div class="carousel-caption d-none d-md-block text-start bg-dark bg-opacity-50 rounded-3 p-3">
 
-                    @if ($promocion->descripcion)
-                    <p class="mb-0 small">
-                        {{ $promocion->descripcion }}
-                    </p>
-                    @endif
+                        <h2 class="h4 fw-bold mb-1">
+                            {{ $promocion->nombre }}
+                        </h2>
 
-                </div>
+                        @if ($promocion->descripcion)
+                        <p class="mb-2 small">
+                            {{ $promocion->descripcion }}
+                        </p>
+                        @endif
+
+                        <span class="btn btn-sm btn-light fw-semibold">
+                            Ver productos
+                        </span>
+
+                    </div>
+
+                </a>
 
             </div>
 
