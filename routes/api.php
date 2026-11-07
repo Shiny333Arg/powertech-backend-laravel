@@ -1,7 +1,9 @@
+
 <?php
 
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\CatalogoController;
+use App\Http\Controllers\Api\V1\DatosFiscalesController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -29,20 +31,13 @@ use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')
     ->name('api.v1.')
-
-    // Techo general del canal: 60 llamadas por minuto por IP. No reemplaza a
-    // los throttles finos de abajo, se suma. Se escribe el limite a mano en
-    // lugar de usar un limitador con nombre ('throttle:api') para no
-    // depender de un RateLimiter definido en otro archivo.
     ->middleware('throttle:60,1')
-
     ->group(function () {
-
 
         // ============================================================
         // AUTENTICACION - PUBLICO
         // ============================================================
-        //
+
         // Las unicas dos rutas sin token. Llevan throttle propio, mas
         // estricto que el del grupo: son las que un atacante golpea.
         //
@@ -62,7 +57,7 @@ Route::prefix('v1')
         // ============================================================
         // AUTENTICADO
         // ============================================================
-        //
+
         // Tres capas, en este orden y no en otro:
         //
         //   auth:sanctum   el token existe, no vencio y no fue revocado
@@ -99,21 +94,9 @@ Route::prefix('v1')
         // ============================================================
         // CATALOGO - PUBLICO, CON AUTENTICACION OPCIONAL
         // ============================================================
-        //
-        // <b>Sin 'auth:sanctum', y es deliberado.</b> Ese middleware exige
-        // token y responde 401 cuando falta o cuando no sirve, lo que
-        // convertiria una consulta publica en un error: la app no podria
-        // mostrar la vitrina a quien todavia no tiene cuenta, ni a quien
-        // vuelve despues de que se le vencio el token.
-        //
-        // El token, si viene, se lee igual: VisitanteTienda lo resuelve con
-        // el guard 'sanctum' y devuelve "invitado" ante un token ausente,
-        // vencido, revocado o inventado. De esa resolucion depende una sola
-        // cosa —si la respuesta incluye precios— y nada mas: mismos
-        // productos, mismo orden, misma paginacion y misma disponibilidad
-        // para todos.
-        //
-        // Es la misma regla que ya aplican las vistas Blade con @auth.
+
+        // Sin 'auth:sanctum', y es deliberado. La vitrina debe poder
+        // consultarse sin iniciar sesion.
 
         Route::get('home', [CatalogoController::class, 'home'])
             ->name('home');
@@ -136,9 +119,22 @@ Route::prefix('v1')
 
 
         // ============================================================
-        // PROXIMAS ETAPAS
+        // CATALOGOS FISCALES - PUBLICO
         // ============================================================
         //
+        // Datos necesarios para los desplegables del registro.
+        // No requieren token: el usuario todavía no tiene cuenta.
+        //
+        // Solo lectura. Los datos provienen de los seeders.
+
+        Route::get('datos-fiscales', DatosFiscalesController::class)
+            ->name('datos-fiscales');
+
+
+        // ============================================================
+        // PROXIMAS ETAPAS
+        // ============================================================
+
         // Carrito y checkout (con 'verified'), compras y perfil. Ver
         // claude/plan-api-movil-flutter.md en la base de conocimientos.
 

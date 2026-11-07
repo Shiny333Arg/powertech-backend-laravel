@@ -11,6 +11,7 @@ use App\Services\Pagos\PasarelaPago;
 use Illuminate\Pagination\Paginator;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
+use Illuminate\Support\Facades\URL;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -53,6 +54,11 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // Utilizar APP_URL para generar enlaces absolutos.
+        URL::forceRootUrl(config('app.url'));
+        URL::forceScheme('https');
+
+
         Paginator::useBootstrapFive();
 
         // ------------------------------------------------------------
