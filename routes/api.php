@@ -2,6 +2,7 @@
 <?php
 
 use App\Http\Controllers\Api\V1\AuthController;
+use App\Http\Controllers\Api\V1\CarritoController;
 use App\Http\Controllers\Api\V1\CatalogoController;
 use App\Http\Controllers\Api\V1\DatosFiscalesController;
 use Illuminate\Support\Facades\Route;
@@ -53,7 +54,6 @@ Route::prefix('v1')
             ->middleware('throttle:5,1')
             ->name('auth.registro');
 
-
         // ============================================================
         // AUTENTICADO
         // ============================================================
@@ -90,7 +90,6 @@ Route::prefix('v1')
                     ->name('auth.verificacion.reenviar');
             });
 
-
         // ============================================================
         // CATALOGO - PUBLICO, CON AUTENTICACION OPCIONAL
         // ============================================================
@@ -117,7 +116,6 @@ Route::prefix('v1')
         Route::get('promociones', [CatalogoController::class, 'promociones'])
             ->name('promociones');
 
-
         // ============================================================
         // CATALOGOS FISCALES - PUBLICO
         // ============================================================
@@ -130,12 +128,68 @@ Route::prefix('v1')
         Route::get('datos-fiscales', DatosFiscalesController::class)
             ->name('datos-fiscales');
 
+        // ============================================================
+        // CARRITO
+        // ============================================================
+
+        // Cuatro capas. Las tres primeras son las mismas que en el bloque de
+        // autenticacion de arriba; la cuarta es propia del carrito:
+        //
+        //   auth:sanctum     el token existe, no vencio y no fue revocado
+        //   api.activo       la cuenta no se dio de baja despues de emitirlo
+        //   api.ambito       es una cuenta de tienda, no de gestion
+        //   api.verificado   el correo esta confirmado
+        //
+        // <b>'api.verificado' replica la regla de la web.</b> routes/web.php
+        // exige 'verified' en el bloque del carrito y en el del checkout, y
+        // NO en "mis compras": navegar y mirar el historial no necesita
+        // correo confirmado, armar un pedido si. La app aplica exactamente
+        // eso. El registro entrega token antes de la verificacion a
+        // proposito —sin token la app no podria ni mostrar el perfil ni pedir
+        // el reenvio— y es este middleware el que marca hasta donde llega esa
+        // cuenta.
+        //
+        // No es el 'verified' nativo porque aquel contesta en ingles y sin un
+        // codigo que la app pueda mirar. Ver VerificarEmailVerificadoApi.
+        //
+        // <b>El carrito no lleva id en la URL.</b> Siempre es el abierto de
+        // quien trae el token. Lo que si lleva id es la linea, y se valida
+        // contra ese carrito: una linea ajena da 404.
+
+        Route::middleware(['auth:sanctum', 'api.activo', 'api.ambito:tienda', 'api.verificado'])
+            ->prefix('carrito')
+            ->name('carrito.')
+            ->group(function () {
+
+                Route::get('/', [CarritoController::class, 'index'])
+                    ->name('index');
+
+                Route::post('/', [CarritoController::class, 'store'])
+                    ->name('store');
+
+                // Vaciar va ANTES de la ruta con parametro. Las dos son
+                // DELETE sobre el mismo prefijo y Laravel resuelve por orden
+                // de declaracion: al reves, '/carrito' seguiria entrando por
+                // '/carrito/{linea}' solo si el segmento coincidiera, pero
+                // dejarlo explicito evita que un cambio futuro de la
+                // restriccion del parametro las cruce.
+                Route::delete('/', [CarritoController::class, 'vaciar'])
+                    ->name('vaciar');
+
+                Route::patch('/{linea}', [CarritoController::class, 'update'])
+                    ->whereNumber('linea')
+                    ->name('update');
+
+                Route::delete('/{linea}', [CarritoController::class, 'destroy'])
+                    ->whereNumber('linea')
+                    ->name('destroy');
+            });
 
         // ============================================================
         // PROXIMAS ETAPAS
         // ============================================================
 
-        // Carrito y checkout (con 'verified'), compras y perfil. Ver
+        // Checkout (con 'api.verificado'), compras y perfil. Ver
         // claude/plan-api-movil-flutter.md en la base de conocimientos.
 
     });

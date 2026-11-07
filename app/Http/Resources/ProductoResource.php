@@ -51,8 +51,13 @@ class ProductoResource extends JsonResource
 
             // Disponible <= 0 no oculta el producto: lo marca como preventa,
             // que esta admitida (Requerimientos 3.5 y 5.1).
+            //
+            // El criterio se lee del modelo y no se reescribe aca: es la
+            // misma pregunta que responden el carrito y las vistas, y tres
+            // copias de la comparacion son tres lugares donde puede
+            // desalinearse. El valor emitido no cambia.
             'stock_disponible' => $disponible,
-            'en_preventa'      => $disponible <= 0,
+            'en_preventa'      => $this->enPreventa(),
 
             // Se emite directo y no con whenLoaded(): este resource se anida
             // dentro de ProductoDetalleResource, y ahi la resolucion pasa por

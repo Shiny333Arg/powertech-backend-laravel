@@ -10,6 +10,7 @@ use App\Http\Middleware\VerificarAmbito;
 use App\Http\Middleware\VerificarAmbitoApi;
 use App\Http\Middleware\VerificarCuentaActiva;
 use App\Http\Middleware\VerificarCuentaActivaApi;
+use App\Http\Middleware\VerificarEmailVerificadoApi;
 use App\Http\Middleware\VerificarPermiso;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -71,6 +72,12 @@ return Application::configure(basePath: dirname(__DIR__))
 
             'api.activo' => VerificarCuentaActivaApi::class,
             'api.ambito' => VerificarAmbitoApi::class,
+
+            // El 'verified' de la app. Mismo criterio que el nativo —y que el
+            // bloque 'verified' de routes/web.php—, pero con mensaje propio y
+            // un `codigo` del que Flutter pueda colgar la pantalla de
+            // verificacion en vez de comparar textos.
+            'api.verificado' => VerificarEmailVerificadoApi::class,
         ]);
 
         // Un invitado que pide una pagina protegida va al login (hay uno solo).
