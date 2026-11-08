@@ -214,6 +214,19 @@ Route::prefix('v1')
 
                 Route::patch('/', [CheckoutController::class, 'update'])
                     ->name('update');
+
+                // Crea la orden de pago en Mercado Pago y devuelve el link.
+                // No crea la venta ni reserva stock: eso ocurre cuando el
+                // pago se acredita, por el webhook.
+                Route::post('/pagar', [CheckoutController::class, 'pagar'])
+                    ->name('pagar');
+
+                // Que paso con el ultimo intento de pago. La app lo consulta
+                // al volver del navegador. Lee lo que dejo el webhook; no
+                // consulta a Mercado Pago ni cree nada de la query string
+                // con la que el cliente vuelve.
+                Route::get('/estado', [CheckoutController::class, 'estado'])
+                    ->name('estado');
             });
 
 

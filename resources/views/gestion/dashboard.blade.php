@@ -31,6 +31,9 @@ $usuario = auth()->user();
         <li>iva, ingresos brutos, investigar para las ventas</li>
         <li>facturación con arca</li>
         <li>tracking</li>
+        <li>flutter: el cliente no puede editar sus datos</li>
+        <li>flutter: el cliente no puede recuperar sus contraseñas</li>
+        <li>flutter: ver contraseña en el input</li>
     </ul>
 
 

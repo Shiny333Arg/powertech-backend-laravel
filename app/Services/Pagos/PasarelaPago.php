@@ -28,10 +28,23 @@ interface PasarelaPago
      * El importe lo decide el llamador y viaja en centavos: la pasarela no
      * puede recalcularlo ni el cliente proponerlo.
      *
+     * <b>`$urlRetorno` existe por el canal movil.</b> La URL a la que la
+     * pasarela devuelve al cliente no puede ser la misma en los dos canales:
+     * la del circuito web vive detras de `auth` y `verified`, y el navegador
+     * del sistema que abre la app no tiene esa sesion —la app se autentica
+     * con un token Bearer que el navegador no conoce—, asi que al volver
+     * caeria en el login. El llamador movil pasa su propia ruta publica de
+     * rebote; el web no pasa nada y queda identico a como estaba.
+     *
      * @param  int  $totalCentavos  bruto a cobrar
+     * @param  string|null  $urlRetorno  a donde vuelve el cliente; null usa la del circuito web
      * @throws \App\Exceptions\PasarelaPagoException si la pasarela no pudo crearla
      */
-    public function crearPreferencia(Carrito $carrito, int $totalCentavos): PreferenciaPago;
+    public function crearPreferencia(
+        Carrito $carrito,
+        int $totalCentavos,
+        ?string $urlRetorno = null,
+    ): PreferenciaPago;
 
     /**
      * Estado de un pago segun la pasarela, consultado contra su API.
@@ -48,6 +61,29 @@ interface PasarelaPago
      * @throws \App\Exceptions\PasarelaPagoException si no se pudo consultar
      */
     public function buscarPago(string $idPagoExterno): ?ResultadoPago;
+
+    /**
+     * Estado crudo del ultimo pago hecho contra esta referencia, o null si no
+     * hay ninguno.
+     *
+     * <b>Existe por el canal movil y resuelve una ambiguedad concreta.</b>
+     * Cuando la app vuelve del navegador y todavia no hay venta, hay tres
+     * situaciones que desde la base se ven identicas: el pago fue rechazado,
+     * el cliente cancelo sin pagar, o pago bien y el webhook todavia no
+     * llego. En la web no importaba —el retorno trae el `payment_id` en la
+     * query string y con eso alcanza— pero el navegador del sistema vuelve a
+     * una pagina publica que no puede avisarle nada a la app.
+     *
+     * Devuelve el estado tal como lo nombra la pasarela, sin traducir: quien
+     * decide que hacer con cada uno es el controlador. Null significa que la
+     * pasarela no registro ningun intento de pago para esa referencia.
+     *
+     * <b>No reemplaza a buscarPago().</b> Aquel confirma un pago puntual para
+     * crear una venta; este solo informa. Ninguna venta nace de esto.
+     *
+     * @throws \App\Exceptions\PasarelaPagoException si no se pudo consultar
+     */
+    public function ultimoEstadoDeReferencia(string $referencia): ?string;
 
     /**
      * El aviso viene firmado por la pasarela y la firma es valida.

@@ -7,6 +7,7 @@ use App\Http\Controllers\CompraController;
 use App\Http\Controllers\HelpController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\RetornoMovilController;
 use App\Http\Controllers\gestion\BusquedaController;
 use App\Http\Controllers\gestion\CategoriaController;
 use App\Http\Controllers\gestion\ClienteController;
@@ -103,6 +104,21 @@ Route::prefix('help')
 
 Route::post('/checkout/webhook', [CheckoutController::class, 'webhook'])
     ->name('cliente.checkout.webhook');
+
+
+// Rebote del checkout de la APP. Publica, igual que el webhook y por un
+// motivo parecido: quien la abre no tiene sesion de Laravel.
+//
+// El cliente que paga desde Flutter lo hace en el navegador del sistema. Ese
+// navegador no conoce el token Bearer de la app, asi que 'cliente.checkout.
+// retorno' —que vive detras de auth y verified— lo mandaria al login al
+// volver de Mercado Pago.
+//
+// No confirma nada ni toca la compra: muestra una pagina que invita a volver
+// a la app. La venta la crea el webhook y la app la consulta con
+// GET /api/v1/checkout/estado. Ver RetornoMovilController.
+Route::get('/checkout/retorno-movil', RetornoMovilController::class)
+    ->name('cliente.checkout.retorno-movil');
 
 
 // ============================================================

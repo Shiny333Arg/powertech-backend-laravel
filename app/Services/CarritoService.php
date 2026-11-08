@@ -211,6 +211,7 @@ class CarritoService
      *     subtotal_lista: float,
      *     descuento_total: float,
      *     total: float,
+     *     total_centavos: int,
      *     tiene_preventa: bool,
      *     tiene_no_disponibles: bool
      * }
@@ -320,6 +321,15 @@ class CarritoService
             'subtotal_lista' => round($listaCentavos / 100, 2),
             'descuento_total' => round(($listaCentavos - $finalCentavos) / 100, 2),
             'total' => round($finalCentavos / 100, 2),
+
+            // El mismo total sin pasar por float, para lo unico que necesita
+            // exactitud al centavo: el importe que se le pide cobrar a la
+            // pasarela. Ese numero se compara despues contra el total de la
+            // venta en CheckoutService::exigirImporteExacto(), y una
+            // diferencia de un centavo deja al cliente pagado sin pedido.
+            // No se publica en el JSON: lo usa el backend.
+            'total_centavos' => $finalCentavos,
+
             'tiene_preventa' => $hayPreventa,
             'tiene_no_disponibles' => $hayNoDisponibles,
         ];

@@ -52,16 +52,21 @@ class PasarelaMercadoPago implements PasarelaPago
         'atm'           => MetodoPago::Efectivo,
     ];
 
-    public function crearPreferencia(Carrito $carrito, int $totalCentavos): PreferenciaPago
-    {
+    public function crearPreferencia(
+        Carrito $carrito,
+        int $totalCentavos,
+        ?string $urlRetorno = null,
+    ): PreferenciaPago {
         if ($totalCentavos <= 0) {
             throw PasarelaPagoException::porque('No se puede cobrar un importe de cero.');
         }
 
-        $this->exigirUrlAlcanzable(route('cliente.checkout.retorno'));
+        $retorno = $urlRetorno ?? route('cliente.checkout.retorno');
+
+        $this->exigirUrlAlcanzable($retorno);
         $this->exigirUrlAlcanzable(route('cliente.checkout.webhook'));
 
-        $cuerpo = $this->cuerpoPreferencia($carrito, $totalCentavos);
+        $cuerpo = $this->cuerpoPreferencia($carrito, $totalCentavos, $retorno);
 
         try {
             $respuesta = $this->cliente()->post('/checkout/preferences', $cuerpo);
@@ -85,7 +90,7 @@ class PasarelaMercadoPago implements PasarelaPago
                 'cuerpo'  => $detalle,
                 // Sin el access token: lo que se manda, para poder ver cual
                 // campo rechazo sin tener que reproducir la llamada.
-                'enviado' => $this->cuerpoPreferencia($carrito, $totalCentavos),
+                'enviado' => $this->cuerpoPreferencia($carrito, $totalCentavos, $retorno),
             ]);
 
             // En desarrollo el motivo de Mercado Pago llega a la pantalla. En
@@ -176,6 +181,50 @@ class PasarelaMercadoPago implements PasarelaPago
     }
 
     /**
+     * Ultimo estado de pago registrado contra una referencia externa.
+     *
+     * Usa el buscador de pagos: `GET /v1/payments/search`. Es el tercer y
+     * ultimo endpoint de Mercado Pago que toca esta clase.
+     *
+     * <b>Solo informa; no crea nada.</b> Un `approved` que salga de aca NO
+     * dispara la venta: eso sigue siendo trabajo del webhook y de
+     * CheckoutService::confirmar(). Que la app vea "aprobado" un segundo
+     * antes que el webhook no puede adelantar la creacion del pedido, porque
+     * entonces habria dos caminos creando ventas y el de aca no esta firmado.
+     */
+    public function ultimoEstadoDeReferencia(string $referencia): ?string
+    {
+        try {
+            $respuesta = $this->cliente()->get('/v1/payments/search', [
+                'external_reference' => $referencia,
+                'sort'               => 'date_created',
+                'criteria'           => 'desc',
+                'limit'              => 1,
+            ]);
+        } catch (ConnectionException $e) {
+            throw PasarelaPagoException::porque(
+                'No pudimos comunicarnos con Mercado Pago para consultar el estado del pago.'
+            );
+        }
+
+        if ($respuesta->failed()) {
+            throw PasarelaPagoException::porque(
+                'No pudimos consultar el estado del pago en Mercado Pago.'
+            );
+        }
+
+        $resultados = $respuesta->json('results');
+
+        if (! is_array($resultados) || $resultados === []) {
+            return null;
+        }
+
+        $estado = $resultados[0]['status'] ?? null;
+
+        return is_string($estado) ? $estado : null;
+    }
+
+    /**
      * Verifica la firma HMAC-SHA256 que Mercado Pago manda en x-signature.
      *
      * El manifiesto que se firma es `id:<data.id>;request-id:<x-request-id>;ts:<ts>;`
@@ -219,7 +268,10 @@ class PasarelaMercadoPago implements PasarelaPago
         }
 
         // El id que se firma es el de la query string, en minusculas.
-        $idPago = $request->query('data.id') ?? $request->query('id');
+        //$idPago = $request->query('data.id') ?? $request->query('id');
+        $idPago = $request->query('data.id')
+            ?? $request->query('data_id')
+            ?? $request->query('id');
 
         $manifiesto = '';
 
@@ -260,8 +312,13 @@ class PasarelaMercadoPago implements PasarelaPago
             return null;
         }
 
+        // $id = $request->input('data.id')
+        //     ?? $request->query('data.id')
+        //     ?? $request->input('id')
+        //     ?? $request->query('id');
         $id = $request->input('data.id')
             ?? $request->query('data.id')
+            ?? $request->query('data_id')
             ?? $request->input('id')
             ?? $request->query('id');
 
@@ -275,8 +332,11 @@ class PasarelaMercadoPago implements PasarelaPago
     /**
      * @return array<string, mixed>
      */
-    private function cuerpoPreferencia(Carrito $carrito, int $totalCentavos): array
-    {
+    private function cuerpoPreferencia(
+        Carrito $carrito,
+        int $totalCentavos,
+        string $urlRetorno,
+    ): array {
         $cliente = $carrito->user?->cliente;
 
         /*
@@ -302,10 +362,12 @@ class PasarelaMercadoPago implements PasarelaPago
 
             'external_reference' => ReferenciaCarrito::de($carrito),
 
+            // Los tres casos van a la misma URL a proposito: lo que paso lo
+            // decide la consulta a la API, no el back_url por el que vuelve.
             'back_urls' => [
-                'success' => route('cliente.checkout.retorno'),
-                'pending' => route('cliente.checkout.retorno'),
-                'failure' => route('cliente.checkout.retorno'),
+                'success' => $urlRetorno,
+                'pending' => $urlRetorno,
+                'failure' => $urlRetorno,
             ],
 
             'notification_url' => route('cliente.checkout.webhook'),
