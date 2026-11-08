@@ -8,6 +8,7 @@ use App\Enums\EstadoVenta;
 use App\Enums\ModoEntrega;
 use App\Exceptions\TransicionNoPermitidaException;
 use App\Models\Carrito;
+use App\Models\CarritoLinea;
 use App\Models\Cliente;
 use App\Models\Pago;
 use App\Models\Venta;
@@ -236,6 +237,60 @@ class CheckoutService
     }
 
     /**
+     * Todo lo que impide cerrar esta compra, o un arreglo vacio si no hay nada.
+     *
+     * <b>Es la misma validacion que corre al confirmar, pero sin lanzar.</b>
+     * Los `exigir*` de abajo sirven para abortar y nada mas: tiran en el
+     * primer problema y no tienen forma de decir "hay tres cosas mal". Una
+     * pantalla de checkout necesita exactamente eso, porque el cliente quiere
+     * arreglar todo de una y no descubrir el siguiente problema recien
+     * despues de resolver el anterior.
+     *
+     * <b>No se duplica nada:</b> los `exigir*` delegan en los mismos
+     * detectores que usa este metodo, asi que la regla y el texto viven en un
+     * solo lugar. Si divergieran, la app diria que se puede pagar y
+     * confirmar() abortaria con el dinero ya tomado.
+     *
+     * Cada bloqueo lleva un `codigo` ademas del mensaje: la app decide a que
+     * pantalla mandar al cliente —el carrito o el perfil— y eso no se puede
+     * resolver comparando textos.
+     *
+     * No incluye el importe: `exigirImporteExacto()` compara contra lo que la
+     * pasarela acredito, que todavia no existe. Esa verificacion es del
+     * momento del pago y no se puede adelantar.
+     *
+     * @return array<int, array{codigo: string, mensaje: string}>
+     */
+    public function bloqueosDe(Carrito $carrito, ?Cliente $cliente): array
+    {
+        $bloqueos = [];
+
+        if ($bloqueo = $this->bloqueoDelCarrito($carrito)) {
+            $bloqueos[] = $bloqueo;
+        }
+
+        foreach ($carrito->lineas()->with('producto')->get() as $linea) {
+            if ($bloqueo = $this->bloqueoDeLinea($linea)) {
+                $bloqueos[] = $bloqueo;
+            }
+        }
+
+        if (! $cliente) {
+            $bloqueos[] = [
+                'codigo'  => 'sin_datos_fiscales',
+                'mensaje' => 'Para comprar necesitás completar tus datos de facturación en tu perfil.',
+            ];
+        } elseif ($problema = $this->problemaDeFacturacion($cliente)) {
+            $bloqueos[] = [
+                'codigo'  => 'facturacion_incompleta',
+                'mensaje' => $problema,
+            ];
+        }
+
+        return $bloqueos;
+    }
+
+    /**
      * El carrito tiene que estar abierto y con algo adentro.
      *
      * `convertido` no es un error del cliente: es el webhook que llego dos
@@ -244,23 +299,44 @@ class CheckoutService
      */
     private function exigirCarritoCerrable(Carrito $carrito): void
     {
+        if ($bloqueo = $this->bloqueoDelCarrito($carrito)) {
+            throw TransicionNoPermitidaException::porque($bloqueo['mensaje']);
+        }
+    }
+
+    /**
+     * El estado del carrito que impide cerrarlo, o null si esta en condiciones.
+     *
+     * El `doesntExist()` consulta la base en vez de mirar la relacion
+     * cargada: confirmar() lo llama dentro del lock y ahi hace falta el
+     * estado fresco, no el que se leyo antes de esperar la fila.
+     *
+     * @return array{codigo: string, mensaje: string}|null
+     */
+    private function bloqueoDelCarrito(Carrito $carrito): ?array
+    {
         if ($carrito->estado === EstadoCarrito::Convertido) {
-            throw TransicionNoPermitidaException::porque(
-                'Este carrito ya se convirtió en un pedido.'
-            );
+            return [
+                'codigo'  => 'carrito_convertido',
+                'mensaje' => 'Este carrito ya se convirtió en un pedido.',
+            ];
         }
 
         if (! in_array($carrito->estado, [EstadoCarrito::Activo, EstadoCarrito::EnCheckout], true)) {
-            throw TransicionNoPermitidaException::porque(
-                'Este carrito ya no está disponible.'
-            );
+            return [
+                'codigo'  => 'carrito_no_disponible',
+                'mensaje' => 'Este carrito ya no está disponible.',
+            ];
         }
 
         if ($carrito->lineas()->doesntExist()) {
-            throw TransicionNoPermitidaException::porque(
-                'Tu carrito está vacío.'
-            );
+            return [
+                'codigo'  => 'carrito_vacio',
+                'mensaje' => 'Tu carrito está vacío.',
+            ];
         }
+
+        return null;
     }
 
     /**
@@ -276,16 +352,31 @@ class CheckoutService
     private function exigirProductosVendibles($lineas): void
     {
         foreach ($lineas as $linea) {
-            $producto = $linea->producto;
-
-            if (! $producto || ! $producto->activo || ! $producto->publicado_app) {
-                $nombre = $producto->nombre ?? 'Un producto de tu carrito';
-
-                throw TransicionNoPermitidaException::porque(
-                    "{$nombre} ya no está disponible en la tienda. Quitalo del carrito para seguir."
-                );
+            if ($bloqueo = $this->bloqueoDeLinea($linea)) {
+                throw TransicionNoPermitidaException::porque($bloqueo['mensaje']);
             }
         }
+    }
+
+    /**
+     * El motivo por el que esta linea no se puede vender, o null si se puede.
+     *
+     * @return array{codigo: string, mensaje: string}|null
+     */
+    private function bloqueoDeLinea(CarritoLinea $linea): ?array
+    {
+        $producto = $linea->producto;
+
+        if ($producto && $producto->activo && $producto->publicado_app) {
+            return null;
+        }
+
+        $nombre = $producto->nombre ?? 'Un producto de tu carrito';
+
+        return [
+            'codigo'  => 'producto_no_disponible',
+            'mensaje' => "{$nombre} ya no está disponible en la tienda. Quitalo del carrito para seguir.",
+        ];
     }
 
     /**

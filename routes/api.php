@@ -4,6 +4,7 @@
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\CarritoController;
 use App\Http\Controllers\Api\V1\CatalogoController;
+use App\Http\Controllers\Api\V1\CheckoutController;
 use App\Http\Controllers\Api\V1\DatosFiscalesController;
 use Illuminate\Support\Facades\Route;
 
@@ -186,10 +187,41 @@ Route::prefix('v1')
             });
 
         // ============================================================
+        // CHECKOUT
+        // ============================================================
+
+        // Misma cadena de middleware que el carrito, y por los mismos
+        // motivos. La verificacion del correo se exige igual que en el
+        // bloque 'cliente.checkout.*' de routes/web.php.
+        //
+        // <b>Dos verbos sobre un solo recurso.</b> El checkout no se lista ni
+        // se crea: es la vista previa del carrito abierto de quien pide, asi
+        // que no hay id que nombrar. GET lo muestra, PATCH guarda el modo de
+        // entrega y las observaciones.
+        //
+        // <b>Nada de esto crea una venta.</b> La venta online nace pagada y
+        // la crea CheckoutService::confirmar() cuando el pago se acredita,
+        // por el webhook que ya funciona. La preferencia de pago
+        // —POST /checkout/pagar y GET /checkout/estado— es el paso 10.
+
+        Route::middleware(['auth:sanctum', 'api.activo', 'api.ambito:tienda', 'api.verificado'])
+            ->prefix('checkout')
+            ->name('checkout.')
+            ->group(function () {
+
+                Route::get('/', [CheckoutController::class, 'index'])
+                    ->name('index');
+
+                Route::patch('/', [CheckoutController::class, 'update'])
+                    ->name('update');
+            });
+
+
+        // ============================================================
         // PROXIMAS ETAPAS
         // ============================================================
 
-        // Checkout (con 'api.verificado'), compras y perfil. Ver
+        // Pago con Mercado Pago (paso 10), compras y perfil. Ver
         // claude/plan-api-movil-flutter.md en la base de conocimientos.
 
     });
