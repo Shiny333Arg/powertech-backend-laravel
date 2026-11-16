@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\CarritoController;
 use App\Http\Controllers\Api\V1\CatalogoController;
 use App\Http\Controllers\Api\V1\CheckoutController;
+use App\Http\Controllers\Api\V1\CompraController;
 use App\Http\Controllers\Api\V1\DatosFiscalesController;
 use Illuminate\Support\Facades\Route;
 
@@ -231,10 +232,48 @@ Route::prefix('v1')
 
 
         // ============================================================
+        // MIS COMPRAS
+        // ============================================================
+
+        // Tres capas, no cuatro: aca NO va 'api.verificado'.
+        //
+        // routes/web.php exige 'verified' en el bloque del carrito y en el del
+        // checkout, y no en "mis compras". Mirar el historial no necesita
+        // correo confirmado; armar un pedido si. Un cliente que se registro,
+        // compro en el mostrador y todavia no confirmo el correo tiene que
+        // poder ver esa compra. Es la misma regla que la web, y esta anotada
+        // tambien en el bloque del carrito de arriba.
+        //
+        // <b>Solo lectura.</b> No hay POST, PATCH ni DELETE: el cliente no
+        // cancela ni modifica su pedido desde la app. Cancelar una venta
+        // pagada libera stock comprometido y, con factura autorizada, exige
+        // nota de credito.
+        //
+        // <b>El historial es siempre el de quien trae el token.</b> La lista
+        // no lleva parametros de cliente. El detalle si lleva id de venta, y
+        // una venta ajena responde 404 —no 403—: un 403 confirmaria que ese
+        // numero de pedido existe. Un presupuesto recibe el mismo 404, porque
+        // no es una compra. Ver App\Support\CompraDelCliente.
+
+        Route::middleware(['auth:sanctum', 'api.activo', 'api.ambito:tienda'])
+            ->prefix('compras')
+            ->name('compras.')
+            ->group(function () {
+
+                Route::get('/', [CompraController::class, 'index'])
+                    ->name('index');
+
+                Route::get('/{venta}', [CompraController::class, 'show'])
+                    ->whereNumber('venta')
+                    ->name('show');
+            });
+
+
+        // ============================================================
         // PROXIMAS ETAPAS
         // ============================================================
 
-        // Pago con Mercado Pago (paso 10), compras y perfil. Ver
+        // Perfil del cliente (GET y PATCH /perfil). Ver
         // claude/plan-api-movil-flutter.md en la base de conocimientos.
 
     });
