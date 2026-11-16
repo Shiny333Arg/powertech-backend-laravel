@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\V1\CatalogoController;
 use App\Http\Controllers\Api\V1\CheckoutController;
 use App\Http\Controllers\Api\V1\CompraController;
 use App\Http\Controllers\Api\V1\DatosFiscalesController;
+use App\Http\Controllers\Api\V1\PasswordRecuperacionController;
 use App\Http\Controllers\Api\V1\PerfilController;
 use Illuminate\Support\Facades\Route;
 
@@ -42,8 +43,8 @@ Route::prefix('v1')
         // AUTENTICACION - PUBLICO
         // ============================================================
 
-        // Las unicas dos rutas sin token. Llevan throttle propio, mas
-        // estricto que el del grupo: son las que un atacante golpea.
+        // Las unicas rutas sin token. Llevan throttle propio, mas estricto
+        // que el del grupo: son las que un atacante golpea.
         //
         // Ojo: el throttle de aca es por IP. El de cinco intentos por
         // correo + IP esta adentro, en LoginMovilRequest, y es el que
@@ -56,6 +57,40 @@ Route::prefix('v1')
         Route::post('auth/registro', [AuthController::class, 'registro'])
             ->middleware('throttle:5,1')
             ->name('auth.registro');
+
+        // ------------------------------------------------------------
+        // Contraseña olvidada
+        // ------------------------------------------------------------
+        //
+        // Publicas por definicion: quien olvido la contraseña no puede
+        // iniciar sesion, asi que no hay token que traer. Es el mismo
+        // criterio que routes/auth.php, donde 'forgot-password' y
+        // 'reset-password' estan dentro del grupo 'guest'.
+        //
+        // <b>Reutilizan el mecanismo web, no lo repiten.</b> Las dos
+        // delegan en App\Services\RecuperacionPassword, que es la clase
+        // que hoy usan tambien Auth\PasswordResetLinkController y
+        // Auth\NewPasswordController. El token es el del broker de
+        // Laravel: hasheado en password_reset_tokens, vence en 60 minutos
+        // y se consume al usarse (config/auth.php, passwords.users).
+        //
+        // <b>'throttle:6,1' es el mismo numero que la web</b> le pone a
+        // 'password.email' en routes/auth.php. Van las dos rutas y no solo
+        // la primera: la segunda recibe intentos de token, y aunque el
+        // token es largo y vence rapido, no hay razon para dejarla contar
+        // hasta 60 por minuto como el resto del grupo.
+        //
+        // <b>No emiten token de Sanctum.</b> Restablecer la contraseña
+        // termina en la pantalla de ingreso, igual que en la web. Ver
+        // PasswordRecuperacionController.
+
+        Route::post('auth/password/olvide', [PasswordRecuperacionController::class, 'enviarEnlace'])
+            ->middleware('throttle:6,1')
+            ->name('auth.password.olvide');
+
+        Route::post('auth/password/restablecer', [PasswordRecuperacionController::class, 'restablecer'])
+            ->middleware('throttle:6,1')
+            ->name('auth.password.restablecer');
 
         // ============================================================
         // AUTENTICADO
