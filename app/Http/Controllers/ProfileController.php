@@ -6,10 +6,9 @@ use App\Http\Requests\Auth\RegistroClienteRequest;
 use App\Http\Requests\ProfileUpdateRequest;
 use App\Models\CondicionIva;
 use App\Models\TipoDocumento;
-use App\Models\Venta;
+use App\Services\PerfilService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
 /**
@@ -21,9 +20,20 @@ use Illuminate\View\View;
  * Diferencias con el ProfileController de Breeze:
  *  - Escribe en dos tablas (users y clientes) en una transaccion.
  *  - No tiene destroy: un usuario no se elimina nunca.
+ *
+ * <b>La escritura vive en PerfilService.</b> Estaba inline en update() y la
+ * necesita igual Api\V1\PerfilController: son dos tablas en una transaccion y
+ * la baja de la verificacion al cambiar el correo. Copiada en los dos
+ * controladores, la web y la app harian cosas distintas con el mismo
+ * formulario en cuanto se agregue un campo.
  */
 class ProfileController extends Controller
 {
+    public function __construct(
+        private readonly PerfilService $perfil,
+    ) {
+    }
+
     public function edit(Request $request): View
     {
         $user = $request->user();
@@ -40,37 +50,22 @@ class ProfileController extends Controller
                 ->get(['id', 'nombre', 'codigo_afip']),
             'condicionesIva' => CondicionIva::orderBy('nombre')->get(['id', 'nombre', 'codigo_afip']),
             // Misma regla que ProfileUpdateRequest: con compras, el documento queda fijo.
-            'documentoBloqueado' => Venta::where('cliente_id', $cliente->id)->exists(),
+            'documentoBloqueado' => $this->perfil->documentoBloqueado($cliente),
         ]);
     }
 
     public function update(ProfileUpdateRequest $request): RedirectResponse
     {
-        $user    = $request->user();
-        $cliente = $request->cliente();
-
-        $cambioElCorreo = DB::transaction(function () use ($request, $user, $cliente) {
-            $user->fill($request->datosDelUsuario());
-
-            $cambioElCorreo = $user->isDirty('email');
-
-            if ($cambioElCorreo) {
-                $user->email_verified_at = null;
-            }
-
-            $user->save();
-            $cliente->update($request->datosDelCliente());
-
-            return $cambioElCorreo;
-        });
-
-        // El correo nuevo tiene que confirmarse antes de poder comprar.
-        if ($cambioElCorreo) {
-            $user->sendEmailVerificationNotification();
-        }
+        $cambioElCorreo = $this->perfil->actualizar(
+            $request->user(),
+            $request->cliente(),
+            $request->datosDelUsuario(),
+            $request->datosDelCliente(),
+        );
 
         return redirect()
             ->route('profile.edit')
+            // El correo nuevo tiene que confirmarse antes de poder comprar.
             ->with('status', $cambioElCorreo ? 'verification-link-sent' : 'profile-updated');
     }
 }

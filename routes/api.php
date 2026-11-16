@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\V1\CatalogoController;
 use App\Http\Controllers\Api\V1\CheckoutController;
 use App\Http\Controllers\Api\V1\CompraController;
 use App\Http\Controllers\Api\V1\DatosFiscalesController;
+use App\Http\Controllers\Api\V1\PerfilController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -270,10 +271,42 @@ Route::prefix('v1')
 
 
         // ============================================================
-        // PROXIMAS ETAPAS
+        // PERFIL
         // ============================================================
 
-        // Perfil del cliente (GET y PATCH /perfil). Ver
-        // claude/plan-api-movil-flutter.md en la base de conocimientos.
+        // Tres capas, sin 'api.verificado', y acá es donde más importa:
+        // routes/web.php deja el bloque de perfil bajo 'auth' + 'ambito:tienda'
+        // y exige 'verified' recién en el carrito y el checkout. Si editar el
+        // perfil pidiera el correo confirmado, un cliente que se equivocó al
+        // escribirlo al registrarse no podría corregirlo nunca: esta es la
+        // puerta de salida de ese callejón.
+        //
+        // <b>Nunca lleva id.</b> Ni en la URL ni en el cuerpo: el perfil es
+        // siempre el de quien trae el token. Los FormRequest devuelven listas
+        // blancas de columnas (datosDelUsuario / datosDelCliente), así que un
+        // `user_id` o `cliente_id` de más no hace nada.
+        //
+        // <b>Dos recursos y no uno.</b> Los datos y la contraseña son los dos
+        // formularios independientes de cliente/perfil/edit.blade.php, con
+        // validaciones distintas: una puede fallar sin arrastrar a la otra. El
+        // verbo de la contraseña es PUT, igual que en routes/auth.php.
+
+        Route::middleware(['auth:sanctum', 'api.activo', 'api.ambito:tienda'])
+            ->prefix('perfil')
+            ->name('perfil.')
+            ->group(function () {
+
+                Route::get('/', [PerfilController::class, 'show'])
+                    ->name('show');
+
+                Route::patch('/', [PerfilController::class, 'update'])
+                    ->name('update');
+
+                // Cambia la credencial: throttle propio, más estricto que el
+                // del grupo, igual que las rutas de autenticación.
+                Route::put('/password', [PerfilController::class, 'password'])
+                    ->middleware('throttle:6,1')
+                    ->name('password');
+            });
 
     });
