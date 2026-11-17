@@ -67,12 +67,23 @@ return new class extends Migration
         // Las lineas que ya existen heredan el proveedor de su orden, que hasta
         // hoy era el unico posible. Sin esto quedan en NULL y el formulario las
         // muestra como renglones sin proveedor.
-        DB::statement('
-            UPDATE orden_compra_lineas AS l
-            JOIN ordenes_compra AS o ON o.id = l.orden_compra_id
-            SET l.proveedor_id = o.proveedor_id
-            WHERE l.proveedor_id IS NULL
-        ');
+        //
+        // <b>Va con subconsulta correlacionada y no con UPDATE ... JOIN.</b>
+        // Aquella es sintaxis exclusiva de MySQL/MariaDB y hacia fallar la
+        // migracion entera bajo SQLite, que es el motor de phpunit.xml: con
+        // ese UPDATE, NINGUNA prueba funcional del proyecto podia correr,
+        // porque RefreshDatabase migra antes de cada test. Esta forma la
+        // compilan los dos motores y produce exactamente el mismo resultado
+        // en MariaDB. La subconsulta lee `ordenes_compra`, una tabla distinta
+        // de la que se actualiza, asi que tampoco cae en el error 1093.
+        DB::table('orden_compra_lineas')
+            ->whereNull('proveedor_id')
+            ->update([
+                'proveedor_id' => DB::raw(
+                    '(SELECT o.proveedor_id FROM ordenes_compra AS o'
+                    . ' WHERE o.id = orden_compra_lineas.orden_compra_id)'
+                ),
+            ]);
     }
 
     public function down(): void

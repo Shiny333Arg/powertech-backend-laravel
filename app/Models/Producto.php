@@ -161,10 +161,24 @@ class Producto extends Model
         return $query->whereNull('proveedor_id');
     }
 
-    /** Preventa: hay unidades comprometidas que todavia no estan en el deposito. */
+    /**
+     * Preventa: no queda ni una unidad libre para entregar hoy.
+     *
+     * <b>La comparacion es <= 0, no < 0.</b> Disponible en cero ya es
+     * preventa: no hay nada que entregar, y lo que se pida se cubre con la
+     * proxima reposicion igual que si el saldo fuera negativo. Esperar al -1
+     * dejaria un escalon en cero donde el producto se ofrece como si tuviera
+     * stock.
+     *
+     * <b>Este metodo es la definicion de preventa del sistema.</b>
+     * ProductoResource y las vistas de la tienda preguntan aca. Es la
+     * pregunta del PRODUCTO; la de la LINEA de un carrito —cuantas de las
+     * unidades pedidas no estan en el deposito— es otra, y la resuelve
+     * CarritoService::resumen().
+     */
     public function enPreventa(): bool
     {
-        return $this->stock_disponible < 0;
+        return $this->stock_disponible <= 0;
     }
 
     public function necesitaReposicion(): bool

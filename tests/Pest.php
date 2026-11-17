@@ -48,3 +48,15 @@ function something()
 {
     // ..
 }
+
+/*
+|--------------------------------------------------------------------------
+| Fabricas de la tienda
+|--------------------------------------------------------------------------
+|
+| Entidades de prueba —cliente, producto, promocion— compartidas por los
+| tests de la API movil. Ver el encabezado de ese archivo.
+|
+*/
+
+require_once __DIR__.'/Apoyo/fabricas.php';
