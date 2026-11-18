@@ -14,6 +14,7 @@ use App\Notifications\InvitacionEmpleado;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\View\View;
 use Throwable;
 
@@ -170,6 +171,12 @@ class EmpleadoController extends Controller
      */
     public function darDeBaja(Empleado $empleado): RedirectResponse
     {
+        // authorizeResource() solo cubre los siete metodos de recurso: las
+        // acciones de estado tienen que autorizar a mano. Va ANTES de la
+        // comprobacion de negocio: a quien no tiene permiso no se le explica
+        // por que no se puede dar de baja a ese empleado.
+        Gate::authorize('cambiarEstado', $empleado);
+
         if ($error = $this->motivoParaNoDarDeBaja($empleado)) {
             return back()->with('error', $error);
         }
@@ -184,6 +191,8 @@ class EmpleadoController extends Controller
 
     public function reactivar(Empleado $empleado): RedirectResponse
     {
+        Gate::authorize('cambiarEstado', $empleado);
+
         DB::transaction(function () use ($empleado) {
             $empleado->user->reactivar();
             $empleado->update(['fecha_baja' => null]);
@@ -199,6 +208,10 @@ class EmpleadoController extends Controller
      */
     public function reenviarInvitacion(Empleado $empleado): RedirectResponse
     {
+        // La policy ya existia y pide 'empleado.crear': reenviar una
+        // invitacion es dar acceso, no editar datos.
+        Gate::authorize('reenviarInvitacion', $empleado);
+
         $usuario = $empleado->user;
 
         if (! $usuario->activo) {

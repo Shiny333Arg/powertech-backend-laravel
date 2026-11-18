@@ -2,18 +2,17 @@
 
 namespace App\Http\Controllers\gestion;
 
-use App\Http\Requests\AjusteStockRequest;
 use App\Http\Requests\ProductoRequest;
 use App\Models\AlicuotaIva;
 use App\Models\Categoria;
 use App\Models\Producto;
 use App\Models\Proveedor;
 use App\Services\StockService;
-use App\Exceptions\StockInsuficienteException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
 
@@ -164,6 +163,11 @@ class ProductoController extends Controller
      */
     public function darDeBaja(Producto $producto): RedirectResponse
     {
+        // authorizeResource() solo cubre los siete metodos de recurso: las
+        // acciones de estado tienen que autorizar a mano, o quedan abiertas a
+        // cualquier cuenta del ambito gestion.
+        Gate::authorize('cambiarEstado', $producto);
+
         $producto->darDeBaja();
 
         return back()->with('exito', "«{$producto->nombre}» salió de operación. No se puede cargar en ventas nuevas.");
@@ -171,14 +175,11 @@ class ProductoController extends Controller
 
     public function reactivar(Producto $producto): RedirectResponse
     {
+        Gate::authorize('cambiarEstado', $producto);
+
         $producto->reactivar();
 
         return back()->with('exito', "«{$producto->nombre}» vuelve a estar en operación.");
-    }
-
-    /** Situacion de stock de un producto y su historico. */
-    public function show(Request $request, Producto $producto): View
-    {
     }
 
     /**
@@ -188,6 +189,9 @@ class ProductoController extends Controller
      */
     public function publicar(Producto $producto): RedirectResponse
     {
+        // Permiso propio: publicar en la tienda no es lo mismo que dar de baja.
+        Gate::authorize('publicar', $producto);
+
         if (! $producto->activo) {
             return back()->with('error', 'Un producto dado de baja no se puede publicar. Reactivalo primero.');
         }
@@ -199,49 +203,21 @@ class ProductoController extends Controller
 
     public function despublicar(Producto $producto): RedirectResponse
     {
+        Gate::authorize('publicar', $producto);
+
         $producto->update(['publicado_app' => false]);
 
         return back()->with('exito', "«{$producto->nombre}» dejó de verse en la tienda. Se sigue vendiendo en mostrador.");
     }
 
     /**
-     * Ajuste de inventario. Es el unico camino por el que una persona cambia el
-     * stock fisico a mano, y siempre deja movimiento con motivo y responsable.
-     *
-     * Un ajuste negativo mayor al saldo lo rechaza el servicio: si falta mas de
-     * lo que hay, el error esta en un movimiento anterior, no en el ajuste.
+     * El ajuste de inventario y el kardex NO viven aca: son StockController,
+     * en el bloque STOCK de routes/web.php. Habia dos metodos comentados
+     * —ajustarStock() y movimientos()— con rutas declaradas que los
+     * apuntaban, asi que esas dos rutas respondian 500 al invocarse. Se
+     * quitaron las rutas y los metodos; la vista de edicion ahora enlaza
+     * gestion.stock.show para el historial.
      */
-    // public function ajustarStock(AjusteStockRequest $request, Producto $producto): RedirectResponse
-    // {
-    //     try {
-    //         $movimiento = $this->stock->ajustar(
-    //             $producto,
-    //             (int) $request->validated('cantidad'),
-    //             $request->validated('motivo'),
-    //         );
-    //     } catch (StockInsuficienteException $e) {
-    //         return back()->with('error', $e->getMessage())->withInput();
-    //     }
-
-    //     return back()->with('exito', sprintf(
-    //         'Stock ajustado. «%s» queda con %d en depósito y %d disponibles.',
-    //         $producto->nombre,
-    //         $movimiento->stock_fisico_resultante,
-    //         $producto->refresh()->stock_disponible,
-    //     ));
-    // }
-
-    // /** Historial de movimientos del producto: explica cada cambio de saldo. */
-    // public function movimientos(Producto $producto): View
-    // {
-    //     return view('gestion.item.movimientos', [
-    //         'producto'    => $producto,
-    //         'movimientos' => $producto->movimientosStock()
-    //             ->with('usuario:id,nombres,apellido')
-    //             ->latest('created_at')
-    //             ->paginate(30),
-    //     ]);
-    // }
 
     /** @return array<string, mixed> */
     private function opcionesDeFormulario(): array

@@ -2,8 +2,6 @@
 
 @section('title', 'PowerTech')
 
-@vite('resources/css/gestion/promotion/index.css')
-
 @section('content')
 
 <!-- Título principal -->

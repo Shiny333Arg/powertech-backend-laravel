@@ -9,6 +9,8 @@ use App\Models\MovimientoStock;
 use App\Models\Producto;
 use App\Services\EntregaService;
 use App\Services\StockService;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -42,19 +44,12 @@ class StockController extends Controller
     {
         $this->exigirPermiso($request, 'stock.ver');
 
-        $filtros = $request->validate([
-            'producto_id' => ['nullable', 'integer'],
-            'tipo'        => ['nullable', 'string'],
-            'desde'       => ['nullable', 'date'],
-            'hasta'       => ['nullable', 'date', 'after_or_equal:desde'],
-        ]);
+        $filtros = $request->validate($this->reglasDeFiltros(incluyeProducto: true));
 
-        $movimientos = MovimientoStock::query()
-            ->with(['producto:id,codigo,nombre', 'usuario:id,nombres,apellido'])
-            ->when($filtros['producto_id'] ?? null, fn ($q, $p) => $q->where('producto_id', $p))
-            ->when($filtros['tipo'] ?? null, fn ($q, $t) => $q->where('tipo', $t))
-            ->when($filtros['desde'] ?? null, fn ($q, $d) => $q->whereDate('created_at', '>=', $d))
-            ->when($filtros['hasta'] ?? null, fn ($q, $h) => $q->whereDate('created_at', '<=', $h))
+        $movimientos = $this->aplicarFiltros(
+            MovimientoStock::query()->with(['producto:id,codigo,nombre', 'usuario:id,nombres,apellido']),
+            $filtros,
+        )
             ->latest('id')
             ->paginate(20)
             ->withQueryString();
@@ -66,17 +61,31 @@ class StockController extends Controller
         ]);
     }
 
-    /** Situacion de stock de un producto y su historico. */
+    /**
+     * Situacion de stock de un producto y su historico.
+     *
+     * Acepta los mismos filtros que el kardex global, menos el de producto,
+     * que ya lo impone la ruta. `withQueryString()` es lo que los conserva al
+     * pasar de pagina, y `$filtros` lo que los deja marcados en el formulario.
+     */
     public function show(Request $request, Producto $producto): View
     {
         $this->exigirPermiso($request, 'stock.ver');
 
+        $filtros = $request->validate($this->reglasDeFiltros(incluyeProducto: false));
+
+        $movimientos = $this->aplicarFiltros(
+            $producto->movimientosStock()->with('usuario:id,nombres,apellido'),
+            $filtros,
+        )
+            ->latest('id')
+            ->paginate(20)
+            ->withQueryString();
+
         return view('gestion.stock.show', [
             'producto'    => $producto,
-            'movimientos' => $producto->movimientosStock()
-                ->with('usuario:id,nombres,apellido')
-                ->latest('id')
-                ->paginate(20),
+            'movimientos' => $movimientos,
+            'filtros'     => $filtros,
         ]);
     }
 
@@ -152,6 +161,44 @@ class StockController extends Controller
         });
 
         return back()->with('status', 'Conteo inicial cargado.');
+    }
+
+    /**
+     * Reglas de los filtros del historico, compartidas por las dos pantallas.
+     *
+     * `producto_id` solo aplica al kardex global: en el de un producto el
+     * filtro ya lo impone la ruta, y aceptarlo ahi permitiria pedir los
+     * movimientos de otro producto por la query string.
+     *
+     * @return array<string, array<int, string>>
+     */
+    private function reglasDeFiltros(bool $incluyeProducto): array
+    {
+        $reglas = [
+            'tipo'  => ['nullable', 'string'],
+            'desde' => ['nullable', 'date'],
+            'hasta' => ['nullable', 'date', 'after_or_equal:desde'],
+        ];
+
+        if (! $incluyeProducto) {
+            return $reglas;
+        }
+
+        return ['producto_id' => ['nullable', 'integer']] + $reglas;
+    }
+
+    /**
+     * Aplica los filtros validados, sobre el modelo o sobre la relacion.
+     *
+     * @param  array{producto_id?: int|string|null, tipo?: string|null, desde?: string|null, hasta?: string|null}  $filtros
+     */
+    private function aplicarFiltros(Builder|HasMany $consulta, array $filtros): Builder|HasMany
+    {
+        return $consulta
+            ->when($filtros['producto_id'] ?? null, fn ($q, $p) => $q->where('producto_id', $p))
+            ->when($filtros['tipo'] ?? null, fn ($q, $t) => $q->where('tipo', $t))
+            ->when($filtros['desde'] ?? null, fn ($q, $d) => $q->whereDate('created_at', '>=', $d))
+            ->when($filtros['hasta'] ?? null, fn ($q, $h) => $q->whereDate('created_at', '<=', $h));
     }
 
     private function exigirPermiso(Request $request, string $clave): void

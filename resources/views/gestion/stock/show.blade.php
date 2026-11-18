@@ -368,7 +368,7 @@ $tipos = [
             <section class="mb-4">
 
                 <form
-                    action="{{ route('gestion.items.movimientos', $producto) }}"
+                    action="{{ route('gestion.stock.show', $producto) }}"
                     method="GET"
                     class="row g-3 align-items-end shadow-sm p-3 rounded bg-light"
                     autocomplete="off"

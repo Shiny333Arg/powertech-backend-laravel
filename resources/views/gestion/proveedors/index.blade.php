@@ -2,8 +2,6 @@
 
 @section('title', 'Proveedores - PowerTech')
 
-@vite('resources/css/gestion/proveedors/index.css')
-
 @section('content')
 
 <!-- Título principal -->

@@ -515,7 +515,7 @@
 
             {{-- Historial --}}
             <a
-                href="{{ route('gestion.items.movimientos', $producto) }}"
+                href="{{ route('gestion.stock.show', $producto) }}"
                 class="btn btn-outline-primary px-4 fw-semibold shadow-sm">
                 Historial de stock
             </a>

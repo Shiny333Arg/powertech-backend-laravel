@@ -51,18 +51,22 @@ Route::middleware('guest')->group(function () {
     Route::post('reset-password', [NewPasswordController::class, 'store'])
         ->name('password.store');
 
-    // Invitacion del empleado. La firma la valida el controlador (no el
-    // middleware 'signed') para mostrar un mensaje util si el enlace vencio.
+    // Invitacion del empleado y del cliente cargado desde el mostrador. La
+    // firma la valida el controlador (no el middleware 'signed') para mostrar
+    // un mensaje util si el enlace vencio.
+    //
+    // Son dos rutas y no cuatro: el formulario de la vista se envia a la MISMA
+    // URL firmada con request()->fullUrl(), asi que el POST necesita el
+    // parametro {user}. Habia dos declaraciones mas, invitacion.create y un
+    // POST sin parametro, que apuntaban a un metodo inexistente y a store()
+    // sin usuario; ninguna era alcanzable, pero duplicaban el nombre
+    // invitacion.store y hacian que route() generara la URL equivocada.
     Route::get('invitacion/{user}', [InvitacionController::class, 'show'])
         ->name('invitacion.show');
 
     Route::post('invitacion/{user}', [InvitacionController::class, 'store'])
         ->middleware('throttle:6,1')
         ->name('invitacion.store');
-        
-    Route::get('invitacion/{token}', [InvitacionController::class, 'create'])->name('invitacion.create');
-    Route::post('invitacion', [InvitacionController::class, 'store'])
-        ->middleware('throttle:6,1')->name('invitacion.store');
 });
 
 Route::middleware('auth')->group(function () {

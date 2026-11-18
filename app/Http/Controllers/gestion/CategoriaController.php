@@ -7,6 +7,7 @@ use App\Models\Categoria;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\View\View;
 
 class CategoriaController extends Controller
@@ -92,6 +93,11 @@ class CategoriaController extends Controller
      */
     public function darDeBaja(Categoria $categoria): RedirectResponse
     {
+        // authorizeResource() solo cubre los siete metodos de recurso: las
+        // acciones de estado tienen que autorizar a mano, o quedan abiertas a
+        // cualquier cuenta del ambito gestion.
+        Gate::authorize('cambiarEstado', $categoria);
+
         $categoria->darDeBaja();
 
         return back()->with('exito', "«{$categoria->nombre}» ya no está en operación.");
@@ -99,6 +105,8 @@ class CategoriaController extends Controller
 
     public function reactivar(Categoria $categoria): RedirectResponse
     {
+        Gate::authorize('cambiarEstado', $categoria);
+
         $categoria->reactivar();
 
         return back()->with('exito', "«{$categoria->nombre}» vuelve a estar en operación.");

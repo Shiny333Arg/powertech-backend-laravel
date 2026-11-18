@@ -14,6 +14,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
 
@@ -164,6 +165,11 @@ class PromocionController extends Controller
      */
     public function darDeBaja(Promocion $promocion): RedirectResponse
     {
+        // authorizeResource() solo cubre los siete metodos de recurso: las
+        // acciones de estado tienen que autorizar a mano, o quedan abiertas a
+        // cualquier cuenta del ambito gestion.
+        Gate::authorize('cambiarEstado', $promocion);
+
         $promocion->darDeBaja();
 
         return back()->with('exito', "«{$promocion->nombre}» dejó de aplicarse. Las ventas que ya la usaron conservan su descuento.");
@@ -171,6 +177,8 @@ class PromocionController extends Controller
 
     public function reactivar(Promocion $promocion): RedirectResponse
     {
+        Gate::authorize('cambiarEstado', $promocion);
+
         $promocion->reactivar();
 
         $aviso = "«{$promocion->nombre}» vuelve a estar activa.";

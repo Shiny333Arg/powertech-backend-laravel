@@ -10,6 +10,7 @@ use App\Models\Proveedor;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\View\View;
 
 /**
@@ -133,6 +134,11 @@ class ProveedorController extends Controller
      */
     public function darDeBaja(Proveedor $proveedor): RedirectResponse
     {
+        // authorizeResource() solo cubre los siete metodos de recurso: las
+        // acciones de estado tienen que autorizar a mano, o quedan abiertas a
+        // cualquier cuenta del ambito gestion.
+        Gate::authorize('cambiarEstado', $proveedor);
+
         $proveedor->darDeBaja();
 
         $productosEnReposicion = $proveedor->productos()
@@ -157,6 +163,8 @@ class ProveedorController extends Controller
 
     public function reactivar(Proveedor $proveedor): RedirectResponse
     {
+        Gate::authorize('cambiarEstado', $proveedor);
+
         $proveedor->reactivar();
 
         return back()->with('exito', "«{$proveedor->razon_social}» vuelve a estar en operación.");

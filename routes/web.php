@@ -338,13 +338,11 @@ Route::prefix('gestion')
                 Route::patch('/{producto}/despublicar', [ProductoController::class, 'despublicar'])
                     ->name('despublicar');
 
-                // OJO: estas dos se superponen con stock.ajustar y stock.show.
-                // Ver la nota al pie del bloque STOCK: hay que quedarse con una.
-                Route::patch('/{producto}/stock', [ProductoController::class, 'ajustarStock'])
-                    ->name('ajustarStock');
-
-                Route::get('/{producto}/movimientos', [ProductoController::class, 'movimientos'])
-                    ->name('movimientos');
+                // La superposicion con stock.ajustar y stock.show se resolvio en
+                // favor del bloque STOCK: ahi viven el ajuste con motivo y el
+                // kardex. Las dos rutas que habia aca —items.ajustarStock e
+                // items.movimientos— apuntaban a metodos comentados, asi que
+                // respondian 500 al invocarse.
             });
 
 
