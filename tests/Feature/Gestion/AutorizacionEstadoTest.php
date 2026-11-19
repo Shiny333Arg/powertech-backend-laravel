@@ -1,9 +1,7 @@
 <?php
 
-use App\Models\CondicionIva;
 use App\Models\Empleado;
 use App\Models\Producto;
-use App\Models\Proveedor;
 use App\Models\TipoDocumento;
 use App\Models\User;
 use Database\Seeders\Maestros\AlicuotaIvaSeeder;
@@ -65,16 +63,11 @@ function actuandoComo(string $rol): User
     return $user;
 }
 
-function proveedorDePrueba(array $atributos = []): Proveedor
-{
-    return Proveedor::create(array_merge([
-        'razon_social' => 'Proveedor de prueba',
-        'cuit' => (string) fake()->unique()->numberBetween(20_000_000_000, 29_999_999_999),
-        'condicion_iva_id' => CondicionIva::query()->value('id'),
-        'canal_pedido' => 'email',
-        'activo' => true,
-    ], $atributos));
-}
+/*
+ * proveedorDePrueba() se movio a tests/Apoyo/fabricas.php en la entrega D: la
+ * pasaron a usar tambien las pruebas de la API de proveedores, y dos copias de
+ * la misma fabrica divergen.
+ */
 
 /**
  * Empleado al que se le puede cambiar el estado.

@@ -6,6 +6,7 @@ use App\Models\Cliente;
 use App\Models\CondicionIva;
 use App\Models\Producto;
 use App\Models\Promocion;
+use App\Models\Proveedor;
 use App\Models\TipoDocumento;
 use App\Models\User;
 use Laravel\Sanctum\Sanctum;
@@ -155,6 +156,62 @@ function productoDePrueba(array $atributos = []): Producto
         'publicado_app' => true,
         'activo' => true,
     ], $atributos));
+}
+
+/**
+ * Proveedor activo, por correo y con CUIT valido.
+ *
+ * <b>Vivia dentro de AutorizacionEstadoTest.</b> Se movio aca en la entrega D,
+ * cuando la paso a necesitar tambien la prueba de la API de proveedores: Pest
+ * carga todos los archivos en el mismo proceso, asi que declararla dos veces no
+ * compila, y una segunda copia con otro nombre es de las que despues divergen.
+ * Es la regla que explica la cabecera de este archivo.
+ *
+ * El CUIT se arma con el digito verificador correcto porque ProveedorRequest lo
+ * valida con App\Rules\Cuit: un numero al azar de 11 digitos entra igual por
+ * Proveedor::create() —el modelo no valida— pero despues no se puede editar por
+ * la API sin corregirlo.
+ */
+function proveedorDePrueba(array $atributos = []): Proveedor
+{
+    return Proveedor::create(array_merge([
+        'razon_social'     => 'Proveedor de prueba',
+        'cuit'             => cuitValido(),
+        'condicion_iva_id' => CondicionIva::query()->value('id'),
+        'canal_pedido'     => 'email',
+        'activo'           => true,
+    ], $atributos));
+}
+
+/**
+ * Un CUIT distinto en cada llamada, con digito verificador correcto.
+ *
+ * Los diez primeros digitos salen de un contador, asi que no hay colisiones
+ * contra el indice unico de la tabla, y el ultimo se calcula con el mismo
+ * modulo 11 que verifica App\Rules\Cuit.
+ */
+function cuitValido(): string
+{
+    static $siguiente = 0;
+
+    $base = '30'.str_pad((string) (71000000 + $siguiente++), 8, '0', STR_PAD_LEFT);
+
+    $pesos = [5, 4, 3, 2, 7, 6, 5, 4, 3, 2];
+    $suma  = 0;
+
+    foreach ($pesos as $posicion => $peso) {
+        $suma += ((int) $base[$posicion]) * $peso;
+    }
+
+    $resto = $suma % 11;
+
+    $verificador = match ($resto) {
+        0       => 0,
+        1       => 9,
+        default => 11 - $resto,
+    };
+
+    return $base.$verificador;
 }
 
 /** Promocion vigente del canal online aplicada a un producto. */

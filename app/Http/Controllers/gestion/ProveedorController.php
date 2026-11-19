@@ -3,10 +3,10 @@
 namespace App\Http\Controllers\gestion;
 
 use App\Enums\CanalPedido;
-use App\Enums\TipoDireccion;
 use App\Http\Requests\ProveedorRequest;
 use App\Models\CondicionIva;
 use App\Models\Proveedor;
+use App\Support\DomicilioFiscal;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -22,6 +22,12 @@ use Illuminate\View\View;
  *
  * Los proveedores NO son usuarios: no tienen login ni interactuan con el
  * sistema. Por eso acá no hay nada de credenciales.
+ *
+ * <b>El domicilio fiscal se guarda en App\Support\DomicilioFiscal.</b> Era un
+ * metodo privado de este controlador hasta que la API de gestion necesito la
+ * misma regla —un solo domicilio por proveedor, reemplazado en lugar de
+ * acumulado—; esta en una clase compartida para que las dos interfaces no
+ * puedan divergir. El comportamiento del formulario no cambio.
  */
 class ProveedorController extends Controller
 {
@@ -92,7 +98,7 @@ class ProveedorController extends Controller
         $proveedor = DB::transaction(function () use ($request) {
             $proveedor = Proveedor::create($request->datosDelProveedor());
 
-            $this->guardarDireccion($proveedor, $request->datosDeLaDireccion());
+            DomicilioFiscal::guardar($proveedor, $request->datosDeLaDireccion());
 
             return $proveedor;
         });
@@ -106,7 +112,7 @@ class ProveedorController extends Controller
     {
         return view('gestion.proveedors.edit', [
             'proveedor' => $proveedor,
-            'direccion' => $proveedor->direcciones()->where('tipo', TipoDireccion::Fiscal->value)->first(),
+            'direccion' => DomicilioFiscal::de($proveedor),
         ] + $this->opcionesDeFormulario());
     }
 
@@ -115,11 +121,15 @@ class ProveedorController extends Controller
         DB::transaction(function () use ($request, $proveedor) {
             $proveedor->update($request->datosDelProveedor());
 
-            $this->guardarDireccion($proveedor, $request->datosDeLaDireccion());
+            DomicilioFiscal::guardar($proveedor, $request->datosDeLaDireccion());
         });
 
+        // 'proveedores.index' y no 'proveedors.index': el nombre de la ruta es
+        // el del prefijo name() de routes/web.php. 'proveedors' es la carpeta
+        // de VISTAS, que si se llama asi; con ese nombre, guardar la edicion
+        // terminaba en RouteNotFoundException.
         return redirect()
-            ->route('gestion.proveedors.index')
+            ->route('gestion.proveedores.index')
             ->with('exito', "Se guardaron los cambios en «{$proveedor->razon_social}».");
     }
 
@@ -168,26 +178,6 @@ class ProveedorController extends Controller
         $proveedor->reactivar();
 
         return back()->with('exito', "«{$proveedor->razon_social}» vuelve a estar en operación.");
-    }
-
-    /**
-     * Un unico domicilio fiscal por proveedor.
-     *
-     * La tabla admite varios —es la misma que usan clientes, que sí necesitan
-     * varias direcciones de envio—, pero para un proveedor alcanza con uno y
-     * un CRUD anidado seria ruido. updateOrCreate sobre el tipo fiscal
-     * reemplaza el existente en lugar de acumular.
-     */
-    private function guardarDireccion(Proveedor $proveedor, ?array $datos): void
-    {
-        if ($datos === null) {
-            return; // no cargaron domicilio: no se toca el que pudiera existir
-        }
-
-        $proveedor->direcciones()->updateOrCreate(
-            ['tipo' => TipoDireccion::Fiscal->value],
-            $datos + ['es_predeterminada' => true],
-        );
     }
 
     /** @return array<string, mixed> */

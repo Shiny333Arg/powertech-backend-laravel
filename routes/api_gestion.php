@@ -3,12 +3,15 @@
 use App\Http\Controllers\Api\V1\Gestion\Acciones\AjustarStockController;
 use App\Http\Controllers\Api\V1\Gestion\Acciones\CambiarEstadoCategoriaController;
 use App\Http\Controllers\Api\V1\Gestion\Acciones\CambiarEstadoProductoController;
+use App\Http\Controllers\Api\V1\Gestion\Acciones\CambiarEstadoProveedorController;
 use App\Http\Controllers\Api\V1\Gestion\Acciones\CambiarPublicacionProductoController;
 use App\Http\Controllers\Api\V1\Gestion\CategoriaController;
 use App\Http\Controllers\Api\V1\Gestion\ProductoController;
+use App\Http\Controllers\Api\V1\Gestion\ProveedorController;
 use App\Http\Controllers\Api\V1\Gestion\StockController;
 use App\Models\Categoria;
 use App\Models\Producto;
+use App\Models\Proveedor;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -203,6 +206,67 @@ Route::prefix('v1/gestion')
                     ->whereNumber('producto')
                     ->middleware('can:ajustarStock,producto')
                     ->name('stock.ajustes');
+            });
+
+        // ============================================================
+        // PROVEEDORES
+        // ============================================================
+        //
+        // <b>No hay DELETE, y la ausencia es la regla.</b> El proveedor esta
+        // referenciado por productos y por ordenes de compra: la orden dice a
+        // quien se le compro, asi que eliminar al proveedor dejaria esa
+        // historia sin sujeto. ProveedorPolicy no tiene metodo delete() —nunca
+        // lo tuvo—, la ruta web tampoco existe y el guard del modelo rechazaria
+        // el delete() igual. Es el mismo criterio que productos, y la razon por
+        // la que categorias si lo admite esta explicada mas arriba: ahi el
+        // borrado solo pasa si nadie la referencia.
+        //
+        // Dos endpoints de escritura y dos permisos distintos, porque son dos
+        // decisiones distintas:
+        //
+        //   PUT   /{proveedor}         datos del proveedor   proveedor.editar
+        //   PATCH /{proveedor}/estado  ¿opera?               proveedor.baja
+        //
+        // <b>Un solo endpoint de estado para las dos direcciones</b>, mientras
+        // el panel tiene dos rutas (/baja y /reactivar). No es una divergencia
+        // de criterio: es la misma policy y el mismo permiso, y la diferencia
+        // esta en que un formulario Blade no puede mandar un booleano en el
+        // cuerpo y un cliente JSON si.
+        //
+        // <b>El domicilio fiscal viaja en el cuerpo del alta y de la edicion</b>
+        // bajo la clave 'direccion', igual que en el formulario, y no tiene
+        // endpoint propio: es uno solo por proveedor y un CRUD anidado para una
+        // fila seria ruido. Lo guarda App\Support\DomicilioFiscal, el mismo que
+        // usa el controlador web.
+
+        Route::prefix('proveedores')
+            ->name('proveedores.')
+            ->group(function () {
+
+                Route::get('/', [ProveedorController::class, 'index'])
+                    ->middleware('can:viewAny,'.Proveedor::class)
+                    ->name('index');
+
+                Route::post('/', [ProveedorController::class, 'store'])
+                    ->middleware('can:create,'.Proveedor::class)
+                    ->name('store');
+
+                Route::get('/{proveedor}', [ProveedorController::class, 'show'])
+                    ->whereNumber('proveedor')
+                    ->middleware('can:view,proveedor')
+                    ->name('show');
+
+                Route::put('/{proveedor}', [ProveedorController::class, 'update'])
+                    ->whereNumber('proveedor')
+                    ->middleware('can:update,proveedor')
+                    ->name('update');
+
+                // Baja logica y reactivacion en un solo endpoint: son la misma
+                // decision —y el mismo permiso— mirada desde los dos lados.
+                Route::patch('/{proveedor}/estado', CambiarEstadoProveedorController::class)
+                    ->whereNumber('proveedor')
+                    ->middleware('can:cambiarEstado,proveedor')
+                    ->name('estado');
             });
 
         // ============================================================
