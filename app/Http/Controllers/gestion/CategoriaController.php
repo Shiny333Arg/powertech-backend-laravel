@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\gestion;
 
+use App\Exceptions\EntidadNoEliminableException;
 use App\Http\Requests\CategoriaRequest;
 use App\Models\Categoria;
 use Illuminate\Database\QueryException;
@@ -12,12 +13,6 @@ use Illuminate\View\View;
 
 class CategoriaController extends Controller
 {
-    /**
-     * Codigos de error del motor para "hay filas hijas que referencian esta".
-     * 1451 es el de MySQL/MariaDB al borrar el padre con ON DELETE RESTRICT.
-     */
-    private const ERRORES_CLAVE_FORANEA = [1451, 1217];
-
     public function __construct()
     {
         // Descomentar cuando exista el login. Mapea cada accion del recurso a
@@ -133,7 +128,11 @@ class CategoriaController extends Controller
         try {
             $categoria->delete();
         } catch (QueryException $e) {
-            if (! $this->esViolacionDeClaveForanea($e)) {
+            // La lista de codigos vive en la excepcion de dominio, porque la
+            // API hace la misma pregunta para responder 409. Misma regla, un
+            // solo lugar; lo que cambia es la traduccion: alla una excepcion,
+            // aca el mensaje en pantalla de siempre.
+            if (! EntidadNoEliminableException::esRechazoDeClaveForanea($e)) {
                 throw $e; // cualquier otro error de base no se disimula
             }
 
@@ -143,10 +142,5 @@ class CategoriaController extends Controller
         return redirect()
             ->route('gestion.categorias.index')
             ->with('exito', "Se eliminó la categoría «{$nombre}».");
-    }
-
-    private function esViolacionDeClaveForanea(QueryException $e): bool
-    {
-        return in_array((int) ($e->errorInfo[1] ?? 0), self::ERRORES_CLAVE_FORANEA, true);
     }
 }

@@ -18,9 +18,11 @@ use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Route;
 use Laravel\Sanctum\Exceptions\MissingAbilityException;
 use Laravel\Sanctum\Http\Middleware\CheckAbilities;
 use Laravel\Sanctum\Http\Middleware\CheckForAnyAbility;
+use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 //use Throwable;
 
 return Application::configure(basePath: dirname(__DIR__))
@@ -34,6 +36,25 @@ return Application::configure(basePath: dirname(__DIR__))
 
         commands: __DIR__ . '/../routes/console.php',
         health: '/up',
+
+        // El ambito de gestion de la API. withRouting() acepta UN solo archivo
+        // en 'api:', asi que el segundo se carga desde este cierre, que corre
+        // despues de registrar los anteriores.
+        //
+        // Se le pone a mano lo que 'api:' pone solo: el grupo de middleware
+        // 'api' —y con el ForzarRespuestaJson, que va prepend mas abajo— y el
+        // prefijo 'api'. Por eso routes/api_gestion.php empieza en 'v1/gestion'
+        // y las URL finales quedan /api/v1/gestion/...
+        //
+        // Va aca y no con un require dentro de routes/api.php: el archivo de la
+        // tienda no tiene por que saber que existe el de gestion, y una
+        // dependencia escondida entre dos archivos de rutas es de las que
+        // aparecen cuando alguien reordena un grupo.
+        then: function (): void {
+            Route::middleware('api')
+                ->prefix('api')
+                ->group(base_path('routes/api_gestion.php'));
+        },
     )
     ->withMiddleware(function (Middleware $middleware): void {
 
@@ -153,20 +174,45 @@ return Application::configure(basePath: dirname(__DIR__))
                 return null;
             }
 
-            // Ability insuficiente. Va aparte del match porque lleva un
-            // 'codigo' y el mensaje del paquete viene en ingles.
+            // ----------------------------------------------------------
+            // Los dos 403 de autorizacion, con 'codigo' estable
+            // ----------------------------------------------------------
             //
-            // MissingAbilityException extiende AuthorizationException, asi que
-            // sin esta rama sale como 403 con "This action is unauthorized." y
-            // sin codigo: es exactamente el caso que hacia que Flutter
-            // interpretara el 403 como perdida de acceso y descartara el token.
-            // Con el codigo estable puede distinguir sin comparar textos.
+            // <b>Hay que mirar AccessDeniedHttpException y no las clases de
+            // autorizacion.</b> Handler::render() llama a prepareException()
+            // ANTES de recorrer estos cierres, y ahi tanto AuthorizationException
+            // como MissingAbilityException —que extiende a la primera— quedan
+            // convertidas en AccessDeniedHttpException, con la original colgada
+            // como previous. Una rama escrita contra MissingAbilityException no
+            // se ejecuta nunca: el framework ya no esta pasando ese objeto.
+            // (Es lo que pasaba desde F2; se descubrio al cubrirlo con una
+            // prueba en F3, y de ahi que la respuesta saliera en ingles.)
             //
-            // 403 y NO revoca: la credencial es buena pero no alcanza.
-            if ($e instanceof MissingAbilityException) {
+            // Son dos casos distintos y por eso llevan codigos distintos:
+            //
+            //   ABILITY_INSUFICIENTE  el token no se emitio para esta app
+            //   PERMISO_INSUFICIENTE  el rol no tiene el permiso de la policy
+            //
+            // Los dos responden 403 y NINGUNO revoca: la credencial es buena,
+            // lo que no alcanza es su alcance. Flutter ya trata cualquier 403
+            // desconocido como acceso denegado, asi que agregar el codigo no le
+            // cambia el comportamiento; el panel, en cambio, muestra el mensaje
+            // tal cual —ver tratar() en resources/js/gestion/api.js—, y un
+            // "This action is unauthorized." en pantalla no sirve a nadie.
+            //
+            // El 403 de ambito (AMBITO_INCORRECTO) no pasa por aca: lo devuelve
+            // VerificarAmbitoApi como JsonResponse, sin excepcion.
+            if ($e instanceof AccessDeniedHttpException) {
+                if ($e->getPrevious() instanceof MissingAbilityException) {
+                    return response()->json([
+                        'message' => 'Tu credencial no tiene permiso para esta operación.',
+                        'codigo'  => 'ABILITY_INSUFICIENTE',
+                    ], 403);
+                }
+
                 return response()->json([
-                    'message' => 'Tu credencial no tiene permiso para esta operación.',
-                    'codigo'  => 'ABILITY_INSUFICIENTE',
+                    'message' => 'No tenés permiso para esta operación.',
+                    'codigo'  => 'PERMISO_INSUFICIENTE',
                 ], 403);
             }
 
