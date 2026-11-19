@@ -5,7 +5,7 @@
 reglas de negocio y la misma forma de respuesta; lo que cambia es quién entra y
 qué ve.
 
-Estado: **Entrega A — categorías** y **Entrega B — productos**.
+Estado: **Entrega A — categorías**, **Entrega B — productos** y **Entrega C.2 — stock**.
 
 ---
 
@@ -250,9 +250,124 @@ cambio, siempre está permitido: sacar algo de la vitrina no puede quedar bloque
 
 ---
 
-## 6. Pendiente
+## 6. Stock
 
-- Las rutas web de `/gestion/category/*` y `/gestion/item/*` siguen en pie y operando por
-  Blade. Se retirarán cuando las pantallas consuman estos endpoints.
-- Ajuste de stock, kardex y el resto de los módulos (ventas, compras, clientes,
-  proveedores, promociones, empleados) siguen sin endpoint.
+Tres endpoints: dos de consulta y uno de escritura. **El ajuste es la única operación de toda
+la API que modifica inventario.**
+
+| Método | Ruta | Permiso |
+|---|---|---|
+| `GET` | `/api/v1/gestion/stock/movimientos` | `stock.ver` |
+| `GET` | `/api/v1/gestion/productos/{id}/stock` | `stock.ver` |
+| `POST` | `/api/v1/gestion/productos/{id}/stock/ajustes` | `stock.ajustar` |
+
+Por rol: **administrador** y **administrativo** tienen los dos permisos; el **vendedor** tiene
+`stock.ver` y no `stock.ajustar` —mira el kardex y no puede tocar un saldo—; el **cajero** no
+tiene ninguno de los dos.
+
+Los dos endpoints que cuelgan del producto se autorizan con `ProductoPolicy::verStock()` y
+`::ajustarStock()`, que devuelven exactamente esos permisos: el criterio es el mismo que aplica
+el panel.
+
+### Renglón del kardex
+
+```json
+{
+  "id": 42,
+  "tipo": "ajuste",
+  "tipo_etiqueta": "Ajuste de inventario",
+  "cantidad_fisico": -2,
+  "cantidad_comprometido": 0,
+  "stock_fisico_resultante": 8,
+  "stock_comprometido_resultante": 0,
+  "motivo": "Rotura en depósito",
+  "origen": null,
+  "producto": { "id": 1, "codigo": "MON-1", "nombre": "Monitor 24" },
+  "usuario": { "id": 3, "nombre": "Ana Pérez" },
+  "registrado_el": "2026-11-19T18:40:11-03:00"
+}
+```
+
+Se lee como un extracto bancario: cada fila trae el delta y el **saldo resultante**, que es lo
+que permite reconstruir la historia sin volver a sumar. Viajan los dos saldos —físico y
+comprometido— porque una reserva por venta no cambia la mercadería que hay en el depósito pero
+sí lo disponible.
+
+`origen` es `null` en el ajuste manual, que es el único movimiento sin documento que lo
+explique; ahí la explicación es el `motivo`. En los demás apunta a la venta, la orden de compra
+o el comprobante que lo originó. `producto` viaja solo en el kardex global, y `usuario` es
+`null` en los movimientos que dispara el sistema.
+
+Los tipos son `inicial`, `compra`, `reserva`, `entrega`, `liberacion`, `devolucion` y `ajuste`.
+
+### GET `/api/v1/gestion/stock/movimientos`
+
+El histórico de todos los productos, del más reciente al más viejo. Query string:
+`producto_id`, `tipo`, `desde`, `hasta` (inclusive, por fecha) y `por_pagina` (1 a 100, 20 por
+defecto).
+
+A diferencia del panel —donde el tipo sale de un `<select>`— acá `tipo` se valida contra el
+enum: un filtro mal escrito responde **422** en vez de una lista vacía que parezca «no hay
+movimientos». Un rango invertido también es 422.
+
+### GET `/api/v1/gestion/productos/{id}/stock`
+
+La situación del producto y su histórico en una sola respuesta:
+
+```json
+{
+  "data": [ ...renglones del kardex de ese producto... ],
+  "producto": { ...el mismo recurso de producto del catálogo... },
+  "links": {...}, "meta": {...},
+  "filtros": { "tipo": null, "desde": null, "hasta": null }
+}
+```
+
+`producto` trae los tres saldos, `en_preventa`, el punto de reposición y la cantidad a
+reponer: es lo que se mira al decidir un ajuste.
+
+**`producto_id` no se acepta acá**: el filtro lo impone la ruta. Mandarlo por query string no
+hace nada, para que no se puedan pedir los movimientos de un producto ajeno desde la URL de
+este.
+
+### POST `/api/v1/gestion/productos/{id}/stock/ajustes` → 201
+
+```json
+{ "cantidad": -2, "motivo": "Rotura en depósito" }
+```
+
+`cantidad` va **con signo** —un ajuste resta tanto como suma— y no puede ser cero. `motivo` es
+obligatorio.
+
+**El producto sale de la ruta.** Si el cuerpo trae `producto_id`, se pisa: no hay forma de
+ajustar el stock de un producto distinto del que dice la URL.
+
+La respuesta trae el movimiento registrado en `data`, la situación actualizada en `producto`, y
+`ventas_liberadas`: un ajuste positivo puede destrabar ventas que estaban esperando mercadería,
+y ese número es el que el panel muestra como «N venta(s) pendientes de stock pasaron a
+preparación».
+
+Un ajuste negativo que dejaría el stock físico bajo cero responde **409**: una faltante mayor
+al saldo indica que el error está en un movimiento anterior, no en el ajuste. Es 409 y no 422
+porque el cuerpo está bien formado; lo que no da es el estado del sistema.
+
+Se puede ajustar un producto dado de baja: sigue teniendo existencias que pueden tener que
+corregirse.
+
+### Lo que no se expone
+
+- **La carga inicial del conteo** queda solo en el panel: es una operación de puesta en marcha
+  que se hace una vez.
+- **No hay `POST /stock/*` suelto.** Toda escritura de inventario cuelga de un producto, y pasa
+  por `StockService`. Los movimientos de venta, entrega, reserva y recepción los generan sus
+  propias operaciones, no un endpoint de stock.
+
+---
+
+## 7. Pendiente
+
+- Las rutas web de `/gestion/category/*`, `/gestion/item/*` y `/gestion/stock/*` siguen en pie
+  y operando por Blade. Se retirarán cuando las pantallas consuman estos endpoints.
+- **Entrega D**: proveedores. **Entrega E**: compras (listado, detalle, borrador, y las
+  transiciones con la recepción de mercadería).
+- Ventas, clientes, promociones, empleados y comprobantes siguen sin endpoint.

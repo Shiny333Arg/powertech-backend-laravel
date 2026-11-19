@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Models\Producto;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -18,12 +19,44 @@ use Illuminate\Validation\Rule;
  * no existia y cualquier ajuste moria con «Undefined array key». Validarlo acá
  * —y no leerlo crudo del request en el controlador— es ademas lo que garantiza
  * que el id exista antes de llegar al servicio.
+ *
+ * <b>Sirve a los dos clientes.</b> El formulario del panel manda el producto en
+ * el cuerpo; la API lo lleva en la ruta
+ * (`POST /api/v1/gestion/productos/{producto}/stock/ajustes`). Lo unifica
+ * `prepareForValidation()`, de modo que la validacion, los mensajes y el
+ * contrato con `StockService` sean uno solo para las dos pantallas.
  */
 class AjusteStockRequest extends FormRequest
 {
     public function authorize(): bool
     {
         return true; // ProductoPolicy::ajustarStock
+    }
+
+    /**
+     * Cuando el producto viene en la ruta, manda la ruta.
+     *
+     * Dos consecuencias buscadas:
+     *
+     * 1. En la API el cuerpo no necesita `producto_id`, y si lo manda igual
+     *    —por copiar el ejemplo del panel, o a proposito— <b>se pisa</b>: no
+     *    hay forma de ajustar el stock de un producto distinto del que dice la
+     *    URL. Es la misma precaucion que ya toma el kardex de un producto al
+     *    no aceptar `producto_id` por query string.
+     * 2. El formulario web no tiene parametro `producto` en su ruta, asi que
+     *    no entra por aca y sigue exactamente igual que antes.
+     *
+     * El binding ya resolvio el modelo (404 si no existe), de modo que a la
+     * regla `exists` le llega siempre un id real; la regla se conserva porque
+     * es la que cubre el camino del formulario.
+     */
+    protected function prepareForValidation(): void
+    {
+        $producto = $this->route('producto');
+
+        if ($producto instanceof Producto) {
+            $this->merge(['producto_id' => $producto->getKey()]);
+        }
     }
 
     public function rules(): array

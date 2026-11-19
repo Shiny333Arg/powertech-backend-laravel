@@ -1,10 +1,12 @@
 <?php
 
+use App\Http\Controllers\Api\V1\Gestion\Acciones\AjustarStockController;
 use App\Http\Controllers\Api\V1\Gestion\Acciones\CambiarEstadoCategoriaController;
 use App\Http\Controllers\Api\V1\Gestion\Acciones\CambiarEstadoProductoController;
 use App\Http\Controllers\Api\V1\Gestion\Acciones\CambiarPublicacionProductoController;
 use App\Http\Controllers\Api\V1\Gestion\CategoriaController;
 use App\Http\Controllers\Api\V1\Gestion\ProductoController;
+use App\Http\Controllers\Api\V1\Gestion\StockController;
 use App\Models\Categoria;
 use App\Models\Producto;
 use Illuminate\Support\Facades\Route;
@@ -174,5 +176,57 @@ Route::prefix('v1/gestion')
                     ->whereNumber('producto')
                     ->middleware('can:publicar,producto')
                     ->name('publicacion');
+
+                // ----------------------------------------------------
+                // Stock de un producto
+                // ----------------------------------------------------
+                //
+                // Cuelgan del producto y no de /stock porque son sobre UN
+                // producto, y asi el id sale de la URL en lugar del cuerpo:
+                // no hay forma de consultar —ni de ajustar— un producto
+                // distinto del que dice la ruta.
+                //
+                // Permisos por policy y no por el middleware 'permiso:', a
+                // diferencia del kardex global: aca hay un modelo, asi que se
+                // usan `ProductoPolicy::verStock()` y `::ajustarStock()`, que
+                // estaban escritas desde siempre y no las llamaba nadie. Las
+                // dos devuelven exactamente `tienePermiso('stock.ver')` y
+                // `tienePermiso('stock.ajustar')`, de modo que el criterio es
+                // identico al del panel.
+
+                Route::get('/{producto}/stock', [StockController::class, 'show'])
+                    ->whereNumber('producto')
+                    ->middleware('can:verStock,producto')
+                    ->name('stock');
+
+                Route::post('/{producto}/stock/ajustes', AjustarStockController::class)
+                    ->whereNumber('producto')
+                    ->middleware('can:ajustarStock,producto')
+                    ->name('stock.ajustes');
+            });
+
+        // ============================================================
+        // STOCK (KARDEX GLOBAL)
+        // ============================================================
+        //
+        // El historico de todos los productos, que es lo que se mira para
+        // auditar: quien movio que, cuando y por que.
+        //
+        // <b>Solo lectura.</b> La unica escritura de inventario de toda la API
+        // es el ajuste, y cuelga del producto. No hay un POST /stock/*: un
+        // movimiento suelto, sin producto en la URL, es la clase de endpoint
+        // que invita a escribir saldos a mano por fuera de los servicios.
+        //
+        // Se protege con el middleware 'permiso:' y no con 'can:' porque no
+        // hay modelo sobre el cual pedir una policy. Es la misma clave que
+        // exige el panel.
+
+        Route::prefix('stock')
+            ->name('stock.')
+            ->group(function () {
+
+                Route::get('/movimientos', [StockController::class, 'movimientos'])
+                    ->middleware('permiso:stock.ver')
+                    ->name('movimientos');
             });
     });
