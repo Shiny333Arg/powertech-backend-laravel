@@ -77,7 +77,7 @@ function movimientoDePrueba(
 // ==================================================================
 
 test('el kardex de un producto filtra por tipo de movimiento', function () {
-    $this->actingAs($this->administrativo);
+    comoEmpleado($this->administrativo);
 
     $producto = productoDePrueba();
 
@@ -94,7 +94,7 @@ test('el kardex de un producto filtra por tipo de movimiento', function () {
 });
 
 test('el kardex de un producto filtra por rango de fechas', function () {
-    $this->actingAs($this->administrativo);
+    comoEmpleado($this->administrativo);
 
     $producto = productoDePrueba();
 
@@ -110,7 +110,7 @@ test('el kardex de un producto filtra por rango de fechas', function () {
 });
 
 test('el kardex de un producto combina tipo y fechas', function () {
-    $this->actingAs($this->administrativo);
+    comoEmpleado($this->administrativo);
 
     $producto = productoDePrueba();
 
@@ -126,7 +126,7 @@ test('el kardex de un producto combina tipo y fechas', function () {
 });
 
 test('el kardex de un producto no mezcla los movimientos de otro', function () {
-    $this->actingAs($this->administrativo);
+    comoEmpleado($this->administrativo);
 
     $producto = productoDePrueba();
     $otro = productoDePrueba(['codigo' => 'OTRO-001']);
@@ -144,7 +144,7 @@ test('el kardex de un producto no mezcla los movimientos de otro', function () {
  * Mandarlo por query string no debe cambiar lo que se ve.
  */
 test('el kardex de un producto ignora un producto_id en la query string', function () {
-    $this->actingAs($this->administrativo);
+    comoEmpleado($this->administrativo);
 
     $producto = productoDePrueba();
     $otro = productoDePrueba(['codigo' => 'OTRO-002']);
@@ -160,7 +160,7 @@ test('el kardex de un producto ignora un producto_id en la query string', functi
 });
 
 test('el kardex de un producto deja los filtros marcados en el formulario', function () {
-    $this->actingAs($this->administrativo);
+    comoEmpleado($this->administrativo);
 
     $producto = productoDePrueba();
 
@@ -181,7 +181,7 @@ test('el kardex de un producto deja los filtros marcados en el formulario', func
 });
 
 test('el kardex de un producto conserva los filtros al paginar', function () {
-    $this->actingAs($this->administrativo);
+    comoEmpleado($this->administrativo);
 
     $producto = productoDePrueba();
 
@@ -201,7 +201,7 @@ test('el kardex de un producto conserva los filtros al paginar', function () {
 });
 
 test('el kardex de un producto rechaza un rango de fechas invertido', function () {
-    $this->actingAs($this->administrativo);
+    comoEmpleado($this->administrativo);
 
     $producto = productoDePrueba();
 
@@ -210,7 +210,7 @@ test('el kardex de un producto rechaza un rango de fechas invertido', function (
 });
 
 test('el cajero no entra al kardex de un producto ni con filtros', function () {
-    $this->actingAs(User::factory()->empleado('cajero')->create());
+    comoEmpleado(User::factory()->empleado('cajero')->create());
 
     $producto = productoDePrueba();
 
@@ -222,7 +222,7 @@ test('el cajero no entra al kardex de un producto ni con filtros', function () {
 // ==================================================================
 
 test('el kardex global sigue filtrando por producto', function () {
-    $this->actingAs($this->administrativo);
+    comoEmpleado($this->administrativo);
 
     $producto = productoDePrueba();
     $otro = productoDePrueba(['codigo' => 'OTRO-003']);
@@ -238,7 +238,7 @@ test('el kardex global sigue filtrando por producto', function () {
 });
 
 test('el kardex global sigue filtrando por tipo y fechas', function () {
-    $this->actingAs($this->administrativo);
+    comoEmpleado($this->administrativo);
 
     $producto = productoDePrueba();
 
@@ -262,7 +262,7 @@ test('el kardex global sigue filtrando por tipo y fechas', function () {
 });
 
 test('el kardex global conserva los filtros al paginar', function () {
-    $this->actingAs($this->administrativo);
+    comoEmpleado($this->administrativo);
 
     $producto = productoDePrueba();
 
@@ -276,7 +276,7 @@ test('el kardex global conserva los filtros al paginar', function () {
 });
 
 test('el kardex global rechaza un rango de fechas invertido', function () {
-    $this->actingAs($this->administrativo);
+    comoEmpleado($this->administrativo);
 
     $this->get(route('gestion.stock.index').'?desde=2026-03-20&hasta=2026-03-10')
         ->assertSessionHasErrors('hasta');

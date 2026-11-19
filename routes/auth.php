@@ -32,10 +32,26 @@ Route::middleware('guest')->group(function () {
 
     Route::post('register', [RegisteredUserController::class, 'store']);
 
+    // Ingreso del storefront (clientes). POST tradicional, sin JavaScript y
+    // sin emitir ningun token: no cambio nada respecto de la Etapa 2.
     Route::get('login', [AuthenticatedSessionController::class, 'create'])
         ->name('login');
 
     Route::post('login', [AuthenticatedSessionController::class, 'store']);
+
+    // Ingreso del panel (empleados). Misma tarjeta, otro mecanismo: el
+    // formulario envia las credenciales por JS a POST /api/v1/auth/login y
+    // despues intercambia el token por sesion en POST /gestion/sesion.
+    //
+    // <b>La URL lleva el prefijo pero la ruta NO pertenece al grupo
+    // prefix('gestion') de routes/web.php</b>, y no puede: ese grupo tiene
+    // 'auth' y en este momento no hay sesion. Vive aca, bajo 'guest', junto al
+    // otro ingreso.
+    //
+    // Solo GET. No hay POST propio porque las credenciales viajan a un unico
+    // lugar en todo el sistema, que es el endpoint compartido de la API.
+    Route::get('gestion/login', [AuthenticatedSessionController::class, 'createGestion'])
+        ->name('gestion.login');
 
     // "Olvidé mi contraseña", para empleados y clientes.
     Route::get('forgot-password', [PasswordResetLinkController::class, 'create'])

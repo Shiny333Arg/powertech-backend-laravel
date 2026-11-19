@@ -49,6 +49,17 @@
     ¿Todavía no tenés cuenta en la tienda?
     <a href="{{ route('register') }}" class="fw-semibold">Creá una</a>
 </p>
+
+{{--
+    El panel tiene su propio ingreso desde F2. Un empleado que entre por acá
+    igual termina derivado —AuthenticatedSessionController::store() lo manda a
+    /gestion/login en vez de abrirle sesión sin token—, pero tendría que tipear
+    las credenciales dos veces. Este enlace es para que eso sea raro.
+--}}
+<p class="text-center small mt-2 mb-0 text-body-secondary">
+    ¿Trabajás en PowerTech?
+    <a href="{{ route('gestion.login') }}">Ingresá al panel de gestión</a>
+</p>
 <div>
     <hr class="my-4">
     <p class="fw-semibold text-center my-4">Cuentas de prueba:</p>

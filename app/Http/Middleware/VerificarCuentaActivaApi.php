@@ -2,41 +2,44 @@
 
 namespace App\Http\Middleware;
 
+use App\Actions\RevocarTokenDeAcceso;
 use Closure;
 use Illuminate\Http\Request;
+use Laravel\Sanctum\PersonalAccessToken;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
- * Equivalente de VerificarCuentaActiva para la API.
+ * La cuenta se dio de baja despues de emitir el token.
  *
- * <b>Es un archivo aparte y no una rama dentro del middleware web.</b> El
- * criterio es el mismo —una cuenta dada de baja no sigue operando— pero las
- * dos respuestas no se parecen en nada: aquel cierra la sesion, invalida la
- * cookie y redirige al login; aca no hay sesion que cerrar, hay un token que
- * revocar. Mezclar las dos en un `if ($request->expectsJson())` obligaria a
- * tocar un archivo del circuito web para resolver un problema del movil.
+ * <b>Es el unico caso de la API que revoca</b>, y por eso contesta 401 y no
+ * 403: la credencial dejo de valer, no es que no alcance. Ver la regla completa
+ * en VerificarAmbitoApi.
  *
- * <b>Revoca solo el token con el que llego el request.</b> Dar de baja una
- * cuenta es una decision de un administrativo, y ahi corresponde borrarle
- * todos los tokens de una. Esto es la red de seguridad para el token que se
- * emitio ANTES de la baja y todavia no vencio: el corte es inmediato en la
- * proxima llamada, igual que en la web es inmediato en el proximo clic.
- *
- * <b>401 y no 403.</b> Despues de revocar, el token efectivamente no vale: la
- * app tiene que descartarlo y volver al login. Un 403 le diria que la
- * credencial sigue siendo buena pero le falta permiso, que no es el caso.
+ * El borrado pasa por RevocarTokenDeAcceso, que es el unico lugar del sistema
+ * donde se borra un token, y esta acotado a los tokens del propio usuario. De
+ * paso, el instanceof evita el 500 que produciria un TransientToken, que no
+ * implementa delete(): con config('sanctum.guard') vacio no deberia aparecer
+ * nunca, pero el chequeo es gratis y no depende de ese valor.
  */
 class VerificarCuentaActivaApi
 {
+    public function __construct(private readonly RevocarTokenDeAcceso $revocar) {}
+
     public function handle(Request $request, Closure $next): Response
     {
         $user = $request->user();
 
         if ($user && ! $user->activo) {
-            $user->currentAccessToken()?->delete();
+
+            $token = $user->currentAccessToken();
+
+            if ($token instanceof PersonalAccessToken) {
+                ($this->revocar)($user, $token->getKey());
+            }
 
             return response()->json([
                 'message' => __('auth.inactive'),
+                'codigo'  => 'CUENTA_INACTIVA',
             ], 401);
         }
 

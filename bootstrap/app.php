@@ -5,6 +5,7 @@ use App\Exceptions\FacturacionException;
 use App\Exceptions\PasarelaPagoException;
 use App\Exceptions\StockInsuficienteException;
 use App\Exceptions\TransicionNoPermitidaException;
+use App\Enums\AmbitoRol;
 use App\Http\Middleware\ForzarRespuestaJson;
 use App\Http\Middleware\VerificarAmbito;
 use App\Http\Middleware\VerificarAmbitoApi;
@@ -12,10 +13,14 @@ use App\Http\Middleware\VerificarCuentaActiva;
 use App\Http\Middleware\VerificarCuentaActivaApi;
 use App\Http\Middleware\VerificarEmailVerificadoApi;
 use App\Http\Middleware\VerificarPermiso;
+use App\Http\Middleware\VerificarTokenDeSesionGestion;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
+use Laravel\Sanctum\Exceptions\MissingAbilityException;
+use Laravel\Sanctum\Http\Middleware\CheckAbilities;
+use Laravel\Sanctum\Http\Middleware\CheckForAnyAbility;
 //use Throwable;
 
 return Application::configure(basePath: dirname(__DIR__))
@@ -70,8 +75,22 @@ return Application::configure(basePath: dirname(__DIR__))
             'ambito'  => VerificarAmbito::class,
             'permiso' => VerificarPermiso::class,
 
+            // En cada request a /gestion/*: la sesion web y el token que la
+            // origino siguen siendo coherentes, o la sesion se cierra. Va
+            // despues de 'auth' y de 'ambito:gestion'; ver la clase.
+            'gestion.token' => VerificarTokenDeSesionGestion::class,
+
             'api.activo' => VerificarCuentaActivaApi::class,
             'api.ambito' => VerificarAmbitoApi::class,
+
+            // Las abilities de Sanctum. <b>Hay que registrarlas a mano:</b>
+            // SanctumServiceProvider no llama a aliasMiddleware en ninguna
+            // parte —solo registra la ruta sanctum.csrf-cookie—, asi que las
+            // clases existen pero sin estos alias no se pueden usar desde una
+            // ruta. Es lo que deja cerrado el ambito ajeno: 'abilities:tienda'
+            // rechaza un token de gestion sin enumerar que no puede hacer.
+            'abilities' => CheckAbilities::class,
+            'ability'   => CheckForAnyAbility::class,
 
             // El 'verified' de la app. Mismo criterio que el nativo —y que el
             // bloque 'verified' de routes/web.php—, pero con mensaje propio y
@@ -80,12 +99,20 @@ return Application::configure(basePath: dirname(__DIR__))
             'api.verificado' => VerificarEmailVerificadoApi::class,
         ]);
 
-        // Un invitado que pide una pagina protegida va al login (hay uno solo).
+        // Un invitado que pide una pagina protegida va al login de SU ambito.
+        //
+        // Desde F2 hay dos puertas —/login para el storefront y /gestion/login
+        // para el panel—, asi que el destino se decide por la URL pedida con el
+        // mismo enum que ya usa AuthenticatedSessionController para url.intended.
+        // Sin esto, un empleado que pega una URL de /gestion/... caeria en el
+        // formulario del storefront, que no emite token y lo rebotaria.
         //
         // Esto NO afecta a la API: Laravel solo usa este destino cuando el
         // request no espera JSON, y ForzarRespuestaJson garantiza que todo
         // request de /api/* lo espere. Ahi sale un 401 limpio.
-        $middleware->redirectGuestsTo(fn() => route('login'));
+        $middleware->redirectGuestsTo(fn(Request $request) => AmbitoRol::deUrl($request->fullUrl()) === AmbitoRol::Gestion
+            ? route('gestion.login')
+            : route('login'));
 
         // Un usuario ya logueado que abre el login o el registro va al inicio
         // de su ambito.
@@ -124,6 +151,23 @@ return Application::configure(basePath: dirname(__DIR__))
 
             if (! $request->is('api/*')) {
                 return null;
+            }
+
+            // Ability insuficiente. Va aparte del match porque lleva un
+            // 'codigo' y el mensaje del paquete viene en ingles.
+            //
+            // MissingAbilityException extiende AuthorizationException, asi que
+            // sin esta rama sale como 403 con "This action is unauthorized." y
+            // sin codigo: es exactamente el caso que hacia que Flutter
+            // interpretara el 403 como perdida de acceso y descartara el token.
+            // Con el codigo estable puede distinguir sin comparar textos.
+            //
+            // 403 y NO revoca: la credencial es buena pero no alcanza.
+            if ($e instanceof MissingAbilityException) {
+                return response()->json([
+                    'message' => 'Tu credencial no tiene permiso para esta operación.',
+                    'codigo'  => 'ABILITY_INSUFICIENTE',
+                ], 403);
             }
 
             $codigo = match (true) {

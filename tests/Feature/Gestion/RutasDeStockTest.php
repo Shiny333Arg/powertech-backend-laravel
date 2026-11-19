@@ -64,7 +64,7 @@ test('el stock sigue teniendo su kardex, su ajuste y su carga inicial', function
 
 /** Si el enlace "Historial de stock" quedara colgado, esto explota al renderizar. */
 test('la pantalla de edicion de un producto se renderiza', function () {
-    $this->actingAs(User::factory()->empleado('administrativo')->create());
+    comoEmpleado(User::factory()->empleado('administrativo')->create());
 
     $producto = productoDePrueba();
 
@@ -75,7 +75,7 @@ test('la pantalla de edicion de un producto se renderiza', function () {
 
 /** Lo mismo para el formulario de filtros del kardex. */
 test('el kardex de un producto se renderiza', function () {
-    $this->actingAs(User::factory()->empleado('administrativo')->create());
+    comoEmpleado(User::factory()->empleado('administrativo')->create());
 
     $producto = productoDePrueba();
 
@@ -91,7 +91,7 @@ test('el kardex de un producto se renderiza', function () {
  * cae.
  */
 test('aplicar un filtro en el kardex no rompe', function () {
-    $this->actingAs(User::factory()->empleado('administrativo')->create());
+    comoEmpleado(User::factory()->empleado('administrativo')->create());
 
     $producto = productoDePrueba();
 
@@ -100,7 +100,7 @@ test('aplicar un filtro en el kardex no rompe', function () {
 });
 
 test('el cajero no entra al kardex', function () {
-    $this->actingAs(User::factory()->empleado('cajero')->create());
+    comoEmpleado(User::factory()->empleado('cajero')->create());
 
     $producto = productoDePrueba();
 

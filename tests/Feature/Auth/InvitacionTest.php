@@ -215,7 +215,7 @@ test('el administrativo puede reenviar una invitacion pendiente', function () {
         'fecha_ingreso' => now()->toDateString(),
     ]);
 
-    $this->actingAs(User::factory()->empleado('administrativo')->create());
+    comoEmpleado(User::factory()->empleado('administrativo')->create());
 
     $this->post(route('gestion.empleados.reenviarInvitacion', $empleado))
         ->assertRedirect()
@@ -238,7 +238,7 @@ test('no se reenvia la invitacion de una cuenta ya activada', function () {
         'fecha_ingreso' => now()->toDateString(),
     ]);
 
-    $this->actingAs(User::factory()->empleado('administrativo')->create());
+    comoEmpleado(User::factory()->empleado('administrativo')->create());
 
     $this->post(route('gestion.empleados.reenviarInvitacion', $empleado))
         ->assertRedirect()

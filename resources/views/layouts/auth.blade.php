@@ -43,6 +43,16 @@
         </div>
     </main>
 
+    {{--
+        Scripts propios de una vista, con el mismo contrato que
+        layouts/gestion.blade.php: una vista los agrega con
+        @push('scripts') ... @endpush.
+
+        Lo usa auth/login-gestion.blade.php, que es el unico ingreso
+        asincronico. Las demas pantallas de acceso no empujan nada y no cambian.
+    --}}
+    @stack('scripts')
+
 </body>
 
 </html>

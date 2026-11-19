@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Api;
 
+use App\Enums\AmbitoRol;
 use App\Models\User;
 use Illuminate\Auth\Events\Lockout;
 use Illuminate\Foundation\Http\FormRequest;
@@ -59,7 +60,26 @@ class LoginMovilRequest extends FormRequest
             // adelante, una pantalla de "sesiones activas" con revocacion
             // individual. Opcional: si no viene, se usa un nombre generico.
             'dispositivo' => ['nullable', 'string', 'max:120'],
+
+            // A que aplicacion entra este ingreso.
+            //
+            // Opcional a proposito: las versiones de Flutter ya instaladas no
+            // lo envian y tienen que seguir funcionando igual. Ausente —que es
+            // lo que manda el ingreso del panel— el ambito se deriva del rol.
+            // Presente, tiene que coincidir con el rol. Ver
+            // AuthController::ambitoDelIngreso().
+            'ambito' => ['nullable', 'string', 'in:tienda,gestion'],
         ];
+    }
+
+    /** El ambito pedido explicitamente, o null si no vino. */
+    public function ambitoSolicitado(): ?AmbitoRol
+    {
+        $ambito = $this->input('ambito');
+
+        return is_string($ambito) && $ambito !== ''
+            ? AmbitoRol::tryFrom($ambito)
+            : null;
     }
 
     /**

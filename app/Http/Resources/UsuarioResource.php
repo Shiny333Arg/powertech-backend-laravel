@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Enums\AmbitoRol;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -48,6 +49,33 @@ class UsuarioResource extends JsonResource
             // mostrar la pantalla de "verifica tu correo" en lugar de un
             // error.
             'email_verificado' => $this->email_verified_at !== null,
+
+            // El rol viaja para los dos ambitos: el requisito 6 pide que el
+            // endpoint compartido devuelva "el usuario autenticado y sus
+            // permisos", y el ambito es lo que le dice al cliente a que
+            // aplicacion pertenece la cuenta.
+            'rol' => $this->rol ? [
+                'id'     => $this->rol->id,
+                'nombre' => $this->rol->nombre,
+                'ambito' => $this->rol->ambito?->value,
+            ] : null,
+
+            // Los permisos solo en gestion: un cliente no tiene ninguno y
+            // mandarle una lista vacia solo agregaria ruido.
+            //
+            // <b>Son una ayuda para pintar la interfaz, no una autorizacion.</b>
+            // El requisito 7 es explicito: los cambios de permisos deben
+            // reflejarse en las solicitudes posteriores aunque el token siga
+            // valido, y no se debe confiar exclusivamente en los permisos
+            // almacenados en el cliente. Quien autoriza sigue siendo el
+            // servidor, por request, con el middleware 'permiso' y las
+            // policies. Esta lista se lee de la base en cada llamada, sin
+            // cache, asi que un permiso quitado desaparece de la respuesta
+            // siguiente.
+            'permisos' => $this->when(
+                $this->ambitoRol() === AmbitoRol::Gestion,
+                fn () => $this->rol?->permisos->pluck('clave')->values()->all() ?? [],
+            ),
 
             'cliente' => $cliente ? [
                 'id'           => $cliente->id,

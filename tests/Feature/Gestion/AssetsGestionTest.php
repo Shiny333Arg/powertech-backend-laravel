@@ -41,7 +41,10 @@ beforeEach(function () {
         AlicuotaIvaSeeder::class,
     ]);
 
-    $this->actingAs(User::factory()->empleado('administrativo')->create());
+    // Desde F2 entrar al panel necesita sesion web MAS el token que la origino:
+    // lo exige el middleware 'gestion.token'. Ver comoEmpleado() en
+    // tests/Apoyo/fabricas.php.
+    comoEmpleado(User::factory()->empleado('administrativo')->create());
 });
 
 $faltaElManifest = fn (): bool => ! file_exists(public_path('build/manifest.json'));

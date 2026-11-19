@@ -60,7 +60,7 @@ function actuandoComo(string $rol): User
 {
     $user = User::factory()->empleado($rol)->create();
 
-    test()->actingAs($user);
+    comoEmpleado($user);
 
     return $user;
 }
@@ -403,7 +403,11 @@ test('el administrador puede cambiar el estado de cualquier recurso', function (
 test('un invitado no llega a las acciones de estado', function () {
     $producto = productoDePrueba();
 
-    $this->patch("/gestion/item/{$producto->id}/baja")->assertRedirect(route('login'));
+    // Desde F2 el panel tiene su propia puerta de ingreso y redirectGuestsTo
+    // decide el destino segun la URL pedida: un empleado que pega una URL de
+    // /gestion/... cae en el formulario del panel y no en el del storefront,
+    // que no emite token y lo rebotaria.
+    $this->patch("/gestion/item/{$producto->id}/baja")->assertRedirect(route('gestion.login'));
 });
 
 test('un cliente no entra al ambito de gestion', function () {

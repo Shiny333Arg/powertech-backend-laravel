@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\V1\CompraController;
 use App\Http\Controllers\Api\V1\DatosFiscalesController;
 use App\Http\Controllers\Api\V1\PasswordRecuperacionController;
 use App\Http\Controllers\Api\V1\PerfilController;
+use App\Http\Middleware\AutenticarCierreDeSesion;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -112,14 +113,55 @@ Route::prefix('v1')
         // middlewares: una cuenta puede estar activa y no corresponder a
         // esta aplicacion, o corresponder y estar dada de baja.
 
-        Route::middleware(['auth:sanctum', 'api.activo', 'api.ambito:tienda'])
+        // ------------------------------------------------------------
+        // Sesion en curso: COMPARTIDO por los dos clientes
+        // ------------------------------------------------------------
+        //
+        // El requisito 6 de la consigna pide que Flutter y la administracion
+        // usen "los mismos endpoints" para iniciar sesion, consultar el usuario
+        // y sus permisos, y cerrar sesion. Estas dos rutas son la segunda y la
+        // tercera; la primera es auth/login, mas arriba.
+        //
+        // <b>Por eso NO llevan 'api.ambito' ni filtro de ability.</b> Estaban
+        // dentro del grupo 'api.ambito:tienda', que las volvia inalcanzables
+        // para una cuenta de gestion: con un token de gestion, la llamada que
+        // sirve para identificar al usuario era justamente la que lo dejaba
+        // afuera. La separacion por ambito se aplica en los endpoints de
+        // NEGOCIO, no en los de sesion.
+
+        Route::middleware(['auth:sanctum', 'api.activo'])
             ->group(function () {
 
                 Route::get('auth/yo', [AuthController::class, 'yo'])
                     ->name('auth.yo');
+            });
 
-                Route::post('auth/logout', [AuthController::class, 'logout'])
-                    ->name('auth.logout');
+        // El cierre de sesion es el unico endpoint de revocacion del sistema y
+        // atiende a los dos clientes en dos modos: Flutter por Bearer, el panel
+        // por la cookie de sesion. De elegir el modo —y de armar el pipeline de
+        // sesion y CSRF solo cuando corresponde— se ocupa el middleware; ver
+        // AutenticarCierreDeSesion.
+        //
+        // <b>No lleva 'auth:sanctum'</b> porque el modo cookie no se autentica
+        // por token, y <b>no lleva 'api.activo'</b> a proposito: un empleado al
+        // que acaban de desactivar tiene que poder cerrar su sesion. El acceso
+        // al panel ya se lo corta VerificarCuentaActiva en el grupo 'web'.
+
+        Route::post('auth/logout', [AuthController::class, 'logout'])
+            ->middleware(AutenticarCierreDeSesion::class)
+            ->name('auth.logout');
+
+        // ------------------------------------------------------------
+        // Sesion en curso: SOLO TIENDA
+        // ------------------------------------------------------------
+        //
+        // El reenvio del correo de verificacion no es parte del contrato
+        // compartido: la verificacion es un circuito de clientes. Queda con la
+        // cadena completa, incluida la ability, y asi un token de gestion no
+        // entra.
+
+        Route::middleware(['auth:sanctum', 'api.activo', 'api.ambito:tienda', 'abilities:tienda'])
+            ->group(function () {
 
                 // Manda un correo: throttle propio, igual que verification.send
                 // en routes/auth.php.
@@ -194,7 +236,7 @@ Route::prefix('v1')
         // quien trae el token. Lo que si lleva id es la linea, y se valida
         // contra ese carrito: una linea ajena da 404.
 
-        Route::middleware(['auth:sanctum', 'api.activo', 'api.ambito:tienda', 'api.verificado'])
+        Route::middleware(['auth:sanctum', 'api.activo', 'api.ambito:tienda', 'abilities:tienda', 'api.verificado'])
             ->prefix('carrito')
             ->name('carrito.')
             ->group(function () {
@@ -241,7 +283,7 @@ Route::prefix('v1')
         // por el webhook que ya funciona. La preferencia de pago
         // —POST /checkout/pagar y GET /checkout/estado— es el paso 10.
 
-        Route::middleware(['auth:sanctum', 'api.activo', 'api.ambito:tienda', 'api.verificado'])
+        Route::middleware(['auth:sanctum', 'api.activo', 'api.ambito:tienda', 'abilities:tienda', 'api.verificado'])
             ->prefix('checkout')
             ->name('checkout.')
             ->group(function () {
@@ -291,7 +333,7 @@ Route::prefix('v1')
         // numero de pedido existe. Un presupuesto recibe el mismo 404, porque
         // no es una compra. Ver App\Support\CompraDelCliente.
 
-        Route::middleware(['auth:sanctum', 'api.activo', 'api.ambito:tienda'])
+        Route::middleware(['auth:sanctum', 'api.activo', 'api.ambito:tienda', 'abilities:tienda'])
             ->prefix('compras')
             ->name('compras.')
             ->group(function () {
@@ -326,7 +368,7 @@ Route::prefix('v1')
         // validaciones distintas: una puede fallar sin arrastrar a la otra. El
         // verbo de la contraseña es PUT, igual que en routes/auth.php.
 
-        Route::middleware(['auth:sanctum', 'api.activo', 'api.ambito:tienda'])
+        Route::middleware(['auth:sanctum', 'api.activo', 'api.ambito:tienda', 'abilities:tienda'])
             ->prefix('perfil')
             ->name('perfil.')
             ->group(function () {

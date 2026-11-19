@@ -44,3 +44,31 @@ Schedule::command(RevisarReposicion::class)
 Schedule::command('queue:work --stop-when-empty --queue=reposicion,default')
     ->everyFiveMinutes()
     ->withoutOverlapping();
+
+// ------------------------------------------------------------
+// Limpieza de tokens vencidos
+// ------------------------------------------------------------
+//
+// <b>Es contabilidad, no control de acceso, y la diferencia importa.</b> Un
+// token vencido hace diez minutos ya esta rechazado antes de que este cron
+// exista: en la API por Guard::isValidAccessToken(), en el intercambio por la
+// validacion de expires_at de SesionController y en el panel por el chequeo 4
+// de VerificarTokenDeSesionGestion. Si la fila fuera lo unico que corta el
+// acceso, cada carga de pagina del panel dependeria de la ultima corrida de una
+// tarea programada.
+//
+// Lo unico que hace es que la tabla no crezca para siempre.
+//
+// <b>No puede borrar un token vigente.</b> La unica pasada que corre siempre es
+// where('expires_at', '<', now()->subHours($hours))->delete(). Hay una segunda,
+// por created_at, que se ejecuta solo si config('sanctum.expiration') no es
+// null, y ese valor esta en null a proposito (ver config/sanctum.php). Asi que
+// ni los 30 dias de Flutter ni las 8 horas de gestion corren riesgo.
+//
+// --hours=24 deja las filas vencidas un dia mas: alcanza para responder una
+// consulta de soporte del tipo "¿cuándo se le venció la sesión?". Diaria basta,
+// con el mismo onOneServer() que la reposicion.
+Schedule::command('sanctum:prune-expired --hours=24')
+    ->daily()
+    ->withoutOverlapping()
+    ->onOneServer();

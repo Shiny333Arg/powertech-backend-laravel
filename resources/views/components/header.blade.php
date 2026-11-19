@@ -509,10 +509,32 @@ $secciones = [
                             <li>
 
                                 {{-- El logout es POST: un enlace GET permitiría
-                                     cerrar la sesión de alguien con una imagen o un link. --}}
+                                     cerrar la sesión de alguien con una imagen o un link.
+
+                                     Apunta al ENDPOINT COMPARTIDO de la API, el
+                                     mismo que usa Flutter, porque el requisito 6
+                                     pide que ambos clientes cierren sesión por
+                                     los mismos endpoints. No hay ninguna otra
+                                     ruta en el sistema capaz de revocar un
+                                     token.
+
+                                     No manda Bearer, y es a propósito: sin esa
+                                     cabecera el endpoint se autentica por la
+                                     cookie de sesión, y entonces revoca el
+                                     token Y destruye la sesión en la misma
+                                     operación. Con Bearer solo revocaría.
+
+                                     Funciona sin JavaScript: es un POST real con
+                                     CSRF. En ese caso el navegador muestra el
+                                     JSON de la respuesta en lugar de redirigir
+                                     —el requisito 5 prohíbe que un endpoint
+                                     redirija al login—, pero el empleado salió y
+                                     el token quedó revocado. Con JS, el script
+                                     de abajo intercepta y redirige limpio. --}}
 
                                 <form method="POST"
-                                    action="{{ route('logout') }}">
+                                    id="form-cerrar-sesion"
+                                    action="{{ url('/api/v1/auth/logout') }}">
 
                                     @csrf
 
@@ -552,3 +574,40 @@ $secciones = [
         </div>
     </nav>
 </header>
+
+@push('scripts')
+<script type="module">
+    import { cerrarSesion, tratar } from '{{ Vite::asset('resources/js/gestion/api.js') }}';
+
+    const form = document.getElementById('form-cerrar-sesion');
+
+    form?.addEventListener('submit', async (evento) => {
+        // Sin JavaScript este listener no existe y el formulario postea solo al
+        // mismo endpoint, con el mismo resultado: el token se revoca y la sesión
+        // se destruye. Interceptar es solo para redirigir limpio en lugar de
+        // dejar el JSON en pantalla.
+        evento.preventDefault();
+
+        const boton = form.querySelector('button[type="submit"]');
+        if (boton) boton.disabled = true;
+
+        try {
+            const salida = await cerrarSesion();
+
+            window.location.assign(salida?.redirigir_a ?? '{{ route('gestion.login') }}');
+
+        } catch (error) {
+            // Si la revocación falló, el backend NO destruyó la sesión: el
+            // empleado sigue adentro y puede reintentar, en lugar de quedarse
+            // afuera con el token vivo. Se le avisa y se reactiva el botón.
+            if (boton) boton.disabled = false;
+
+            const mensaje = tratar(error);
+
+            if (mensaje !== null) {
+                alert(`No pudimos cerrar tu sesión: ${mensaje}`);
+            }
+        }
+    });
+</script>
+@endpush

@@ -23,6 +23,7 @@ use App\Http\Controllers\gestion\ProductoController;
 use App\Http\Controllers\gestion\PromocionController;
 use App\Http\Controllers\gestion\ProveedorController;
 use App\Http\Controllers\gestion\RecepcionController;
+use App\Http\Controllers\gestion\SesionController;
 use App\Http\Controllers\gestion\StockController;
 use App\Http\Controllers\gestion\VentaController;
 use Illuminate\Support\Facades\Route;
@@ -246,9 +247,27 @@ Route::middleware(['auth', 'ambito:tienda'])
 //
 // Solo empleados logueados. Un cliente que abre /gestion vuelve a la tienda.
 
+// Intercambio del token de gestion por la sesion Blade.
+//
+// <b>FUERA del grupo de abajo, y tiene que estar fuera.</b> La URL lleva el
+// prefijo /gestion/ pero la ruta no pertenece al grupo: ese grupo tiene 'auth'
+// y en este momento todavia no hay sesion —es justo la peticion que la crea—,
+// asi que adentro 'auth' correria primero y redirigiria al login devolviendole
+// HTML al AJAX.
+//
+// Pertenece al grupo 'web', que es lo que le da sesion y CSRF. El CSRF se
+// valida con el <meta name="csrf-token"> que ya imprime layouts/auth.blade.php;
+// NO va en la lista de excepciones de bootstrap/app.php. Throttle propio: es
+// una puerta de entrada.
+//
+// No acepta credenciales: lo unico que recibe es un Bearer. Ver SesionController.
+Route::post('gestion/sesion', [SesionController::class, 'store'])
+    ->middleware('throttle:10,1')
+    ->name('gestion.sesion');
+
 Route::prefix('gestion')
     ->name('gestion.')
-    ->middleware(['auth', 'ambito:gestion'])
+    ->middleware(['auth', 'ambito:gestion', 'gestion.token'])
     ->group(function () {
 
 
