@@ -5,7 +5,7 @@
 reglas de negocio y la misma forma de respuesta; lo que cambia es quién entra y
 qué ve.
 
-Estado: **Entrega A — categorías**. Productos va en la Entrega B.
+Estado: **Entrega A — categorías** y **Entrega B — productos**.
 
 ---
 
@@ -149,8 +149,110 @@ no se puede eliminar.
 
 ---
 
-## 5. Pendiente
+## 5. Productos
 
-- **Entrega B**: productos (alta, edición, estado y publicación en la tienda).
-- Las rutas web de `/gestion/category/*` siguen en pie y operando por Blade. Se
-  retirarán cuando las pantallas consuman estos endpoints.
+Recurso: `id`, `codigo`, `nombre`, `marca`, `descripcion`, `imagen_url`, `precio`, `costo`,
+`stock_fisico`, `stock_comprometido`, `stock_disponible`, `en_preventa`,
+`punto_reposicion`, `cantidad_reposicion`, `reposicion_automatica`, `peso_gramos`,
+`activo`, `publicado_app`, `destacado`, y los objetos `categoria`, `proveedor` y
+`alicuota_iva`.
+
+`costo`, `stock_fisico`, `stock_comprometido` y `proveedor` **no existen en el recurso de
+la tienda**: son datos de la empresa. Por eso son dos resources distintos y no uno que
+decida por request.
+
+| Método | Ruta | Permiso |
+|---|---|---|
+| `GET` | `/api/v1/gestion/productos` | `producto.ver` |
+| `POST` | `/api/v1/gestion/productos` | `producto.crear` |
+| `GET` | `/api/v1/gestion/productos/{id}` | `producto.ver` |
+| `PUT` | `/api/v1/gestion/productos/{id}` | `producto.editar` |
+| `PATCH` | `/api/v1/gestion/productos/{id}/estado` | `producto.baja` |
+| `PATCH` | `/api/v1/gestion/productos/{id}/publicacion` | `producto.publicar` |
+
+Por rol: **administrador** y **administrativo** tienen los cinco permisos; **vendedor** y
+**cajero** solo `producto.ver`.
+
+**No hay `DELETE`, y la ausencia es la regla.** Un producto está referenciado por líneas de
+venta, de comprobante, de orden de compra y por los movimientos de stock: eliminarlo
+dejaría esa historia sin sujeto. La única baja es `PATCH .../estado` con `activo: false`.
+
+### GET `/api/v1/gestion/productos`
+
+Query string: `q` (busca en código, nombre y marca), `categoria_id`, `estado`
+(`todos` por defecto, `activos`, `inactivos`), `stock` (`todos`, `reponer`, `preventa`),
+`por_pagina` (1 a 100, 15 por defecto). Son los mismos filtros del listado del panel.
+
+`stock=reponer` trae los que están en el punto de reposición o por debajo —la comparación
+es `<=`, el umbral es un piso, no un valor al que llegar y quedarse—; `stock=preventa`,
+los que tienen disponible negativo.
+
+### POST `/api/v1/gestion/productos` → 201
+
+`application/json`, o **`multipart/form-data` si trae imagen**.
+
+Obligatorios: `codigo` (único), `nombre`, `categoria_id`, `alicuota_iva_id`, `precio`,
+`punto_reposicion`, `cantidad_reposicion`. Opcionales: `marca`, `descripcion`, `costo`,
+`proveedor_id`, `peso_gramos`, `reposicion_automatica`, `publicado_app`, `imagen`,
+`stock_inicial`.
+
+Tres reglas que conviene tener presentes, todas heredadas del formulario web:
+
+- **`stock_inicial` no es la columna de stock**: es la cantidad de un movimiento de tipo
+  `inicial`, que se registra en la misma transacción que el alta. Fuera del alta el campo
+  está prohibido (422): el saldo se corrige con un ajuste de inventario, nunca editando el
+  producto.
+- **`activo` está prohibido** (422). El producto nace activo y el estado se cambia por su
+  endpoint, que tiene otro permiso.
+- **Con `reposicion_automatica: true`** hacen falta `proveedor_id` y
+  `cantidad_reposicion >= 1`, o la respuesta es 422. Sin proveedor no hay a quién emitirle
+  la orden, y en cero cada venta generaría un pedido nuevo.
+
+`destacado` viaja de solo lectura: lo escribe un proceso por volumen de venta y no se edita
+a mano.
+
+### PUT `/api/v1/gestion/productos/{id}` → 200
+
+Reemplazo completo, mismo cuerpo del alta. No toca las columnas de stock, ni el estado, ni
+la publicación.
+
+**Para mandar imagen hay que usar `POST` con `_method=PUT`**: PHP no parsea el cuerpo
+multipart de un `PUT`. Es la misma convención que usa el formulario Blade con
+`@method('PUT')`, así que no hay una ruta aparte. La imagen anterior se borra recién
+después de guardar la nueva.
+
+La imagen se valida como `jpg`, `jpeg`, `png` o `webp`, hasta 2 MB, y se guarda en
+`storage/app/public/productos` (requiere `php artisan storage:link`).
+
+### PATCH `/api/v1/gestion/productos/{id}/estado` → 200
+
+```json
+{ "activo": false }
+```
+
+Baja lógica y reactivación. **No toca `publicado_app`**: la vitrina filtra por activo *y*
+publicado, así que un producto dado de baja ya no se ve, y conservar la decisión de
+publicación evita tener que volver a tomarla si se reactiva.
+
+### PATCH `/api/v1/gestion/productos/{id}/publicacion` → 200
+
+```json
+{ "publicado_app": true }
+```
+
+Publicar o retirar de la tienda. Es una pregunta distinta de la baja y tiene permiso propio:
+un producto activo que se vende en mostrador y no se publica —reservado, de exhibición, a
+pedido— es un caso normal.
+
+**Un producto dado de baja no se puede publicar**: responde 422 con
+«Un producto dado de baja no se puede publicar. Reactivalo primero.». Despublicar, en
+cambio, siempre está permitido: sacar algo de la vitrina no puede quedar bloqueado.
+
+---
+
+## 6. Pendiente
+
+- Las rutas web de `/gestion/category/*` y `/gestion/item/*` siguen en pie y operando por
+  Blade. Se retirarán cuando las pantallas consuman estos endpoints.
+- Ajuste de stock, kardex y el resto de los módulos (ventas, compras, clientes,
+  proveedores, promociones, empleados) siguen sin endpoint.

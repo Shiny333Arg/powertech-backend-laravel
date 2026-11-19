@@ -8,12 +8,11 @@ use App\Models\Categoria;
 use App\Models\Producto;
 use App\Models\Proveedor;
 use App\Services\StockService;
+use App\Support\ImagenProducto;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
 
 /**
@@ -27,9 +26,6 @@ use Illuminate\View\View;
  */
 class ProductoController extends Controller
 {
-    /** Carpeta del disco publico donde vive la foto del producto. */
-    private const DIRECTORIO_IMAGENES = 'productos';
-
     public function __construct(private readonly StockService $stock)
     {
         // Descomentar cuando exista el login:
@@ -103,7 +99,7 @@ class ProductoController extends Controller
             $datos['activo'] = true;
 
             if ($request->hasFile('imagen')) {
-                $datos['imagen'] = $this->guardarImagen($request->file('imagen'));
+                $datos['imagen'] = ImagenProducto::guardar($request->file('imagen'));
             }
 
             $producto = Producto::create($datos);
@@ -138,10 +134,10 @@ class ProductoController extends Controller
 
         if ($request->hasFile('imagen')) {
             $imagenAnterior   = $producto->imagen;
-            $datos['imagen']  = $this->guardarImagen($request->file('imagen'));
+            $datos['imagen']  = ImagenProducto::guardar($request->file('imagen'));
 
             $producto->update($datos);
-            $this->borrarImagen($imagenAnterior); // recien despues de guardar la nueva
+            ImagenProducto::borrar($imagenAnterior); // recien despues de guardar la nueva
 
             return redirect()->route('gestion.items.index')
                 ->with('exito', "Se guardaron los cambios en «{$producto->nombre}».");
@@ -231,16 +227,9 @@ class ProductoController extends Controller
         ];
     }
 
-    /** Requiere `php artisan storage:link`. Guarda la ruta relativa en la columna. */
-    private function guardarImagen(UploadedFile $archivo): string
-    {
-        return $archivo->store(self::DIRECTORIO_IMAGENES, 'public');
-    }
-
-    private function borrarImagen(?string $ruta): void
-    {
-        if ($ruta && Storage::disk('public')->exists($ruta)) {
-            Storage::disk('public')->delete($ruta);
-        }
-    }
+    /*
+     * Guardar y borrar la imagen viven en App\Support\ImagenProducto: ahora
+     * tambien las sube la API de gestion y el directorio de destino tiene que
+     * ser uno solo. El comportamiento es el mismo de antes.
+     */
 }

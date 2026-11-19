@@ -1,8 +1,12 @@
 <?php
 
 use App\Http\Controllers\Api\V1\Gestion\Acciones\CambiarEstadoCategoriaController;
+use App\Http\Controllers\Api\V1\Gestion\Acciones\CambiarEstadoProductoController;
+use App\Http\Controllers\Api\V1\Gestion\Acciones\CambiarPublicacionProductoController;
 use App\Http\Controllers\Api\V1\Gestion\CategoriaController;
+use App\Http\Controllers\Api\V1\Gestion\ProductoController;
 use App\Models\Categoria;
+use App\Models\Producto;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -110,5 +114,65 @@ Route::prefix('v1/gestion')
                     ->whereNumber('categoria')
                     ->middleware('can:delete,categoria')
                     ->name('destroy');
+            });
+
+        // ============================================================
+        // PRODUCTOS
+        // ============================================================
+        //
+        // <b>No hay DELETE, y la ausencia es la regla.</b> Un producto esta
+        // referenciado por lineas de venta, de comprobante, de orden de compra
+        // y por los movimientos de stock: eliminarlo dejaria esa historia sin
+        // sujeto. La unica baja es PATCH .../estado con activo=false.
+        //
+        // Tres endpoints de escritura y tres permisos distintos, porque son
+        // tres decisiones distintas:
+        //
+        //   PUT   /{producto}              datos del producto   producto.editar
+        //   PATCH /{producto}/estado       ¿opera?              producto.baja
+        //   PATCH /{producto}/publicacion  ¿se ve en la tienda? producto.publicar
+        //
+        // Separar publicacion de estado no es ceremonia: 'producto.publicar' lo
+        // tienen el administrador y el administrativo, y no el vendedor ni el
+        // cajero. Si publicar fuera un campo mas del PUT, cualquiera que pueda
+        // editar precios podria publicar.
+        //
+        // <b>Imagenes.</b> El alta y la edicion aceptan multipart/form-data.
+        // Para mandar archivo en la edicion hay que usar POST con _method=PUT:
+        // PHP no parsea el cuerpo multipart de un PUT. Es la misma convencion
+        // del formulario Blade con @method('PUT'), asi que no hace falta
+        // declarar una ruta aparte.
+
+        Route::prefix('productos')
+            ->name('productos.')
+            ->group(function () {
+
+                Route::get('/', [ProductoController::class, 'index'])
+                    ->middleware('can:viewAny,'.Producto::class)
+                    ->name('index');
+
+                Route::post('/', [ProductoController::class, 'store'])
+                    ->middleware('can:create,'.Producto::class)
+                    ->name('store');
+
+                Route::get('/{producto}', [ProductoController::class, 'show'])
+                    ->whereNumber('producto')
+                    ->middleware('can:view,producto')
+                    ->name('show');
+
+                Route::put('/{producto}', [ProductoController::class, 'update'])
+                    ->whereNumber('producto')
+                    ->middleware('can:update,producto')
+                    ->name('update');
+
+                Route::patch('/{producto}/estado', CambiarEstadoProductoController::class)
+                    ->whereNumber('producto')
+                    ->middleware('can:cambiarEstado,producto')
+                    ->name('estado');
+
+                Route::patch('/{producto}/publicacion', CambiarPublicacionProductoController::class)
+                    ->whereNumber('producto')
+                    ->middleware('can:publicar,producto')
+                    ->name('publicacion');
             });
     });
