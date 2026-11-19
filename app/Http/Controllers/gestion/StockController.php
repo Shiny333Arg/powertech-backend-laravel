@@ -24,12 +24,19 @@ use Illuminate\View\View;
  * con facturacion electronica de por medio, las diferencias de inventario hay
  * que poder explicarlas.
  *
- * <b>Supuesto:</b> `AjusteStockRequest` valida `producto_id`, `cantidad` (con
- * signo) y `motivo`. Si usa otros nombres, cambiar solo `ajustar()`.
+ * <b>Entradas:</b> `AjusteStockRequest` valida `producto_id`, `cantidad` (con
+ * signo) y `motivo`.
  *
- * <b>Contrato asumido de StockService:</b>
+ * <b>Contrato de StockService</b>, verificado contra el servicio:
  *   ajustar(Producto $p, int $delta, string $motivo, ?User $usuario)
- *   inicial(Producto $p, int $cantidad, ?User $usuario)
+ *   cargaInicial(Producto $p, int $cantidad, ?User $usuario)
+ *
+ * Los dos eran supuestos escritos de memoria y los dos estaban mal: el request
+ * no validaba `producto_id` —asi que `validated()` no lo traia y `ajustar()`
+ * moria leyendo una clave inexistente— y el servicio nunca tuvo un metodo
+ * `inicial()`. Las dos pantallas respondian 500. Quedan corregidas y cubiertas
+ * por `tests/Feature/Gestion/StockAjusteTest.php`; el contrato de arriba ahora
+ * se corresponde con el codigo y no con la intencion.
  */
 class StockController extends Controller
 {
@@ -155,7 +162,7 @@ class StockController extends Controller
                 }
 
                 if ((int) $conteo['cantidad'] > 0) {
-                    $this->stock->inicial($producto, (int) $conteo['cantidad'], $request->user());
+                    $this->stock->cargaInicial($producto, (int) $conteo['cantidad'], $request->user());
                 }
             }
         });
