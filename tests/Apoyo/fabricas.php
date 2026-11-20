@@ -10,6 +10,7 @@ use App\Models\Promocion;
 use App\Models\Proveedor;
 use App\Models\TipoDocumento;
 use App\Models\User;
+use App\Models\Venta;
 use Laravel\Sanctum\Sanctum;
 
 /*
@@ -372,6 +373,73 @@ function pedidoDeUnProveedor(
     lineaCrudaEn($orden, productoPedible($proveedor), $cantidad, $recibida);
 
     return $orden->fresh('lineas');
+}
+
+/**
+ * Pedido ya enviado al proveedor, con N renglones distintos: el estado de
+ * partida de cualquier recepcion.
+ *
+ * Se arma a mano —sin pasar por el circuito— a proposito: llegar a 'enviada'
+ * aprobando y enviando haria que las pruebas de la recepcion dependieran de las
+ * operaciones de E.2.a, que ya tienen las suyas.
+ */
+function pedidoListoParaRecibir(
+    int $renglones = 2,
+    ?Proveedor $proveedor = null,
+    int $cantidad = 10,
+    array $atributos = [],
+): OrdenCompra {
+    $proveedor ??= proveedorConCasilla();
+
+    $orden = ordenDeCompraDePrueba(array_merge([
+        'proveedor_id' => $proveedor->id,
+        'estado'       => 'enviada',
+    ], $atributos));
+
+    for ($i = 0; $i < $renglones; $i++) {
+        lineaCrudaEn($orden, productoPedible($proveedor), $cantidad);
+    }
+
+    return $orden->fresh('lineas.producto');
+}
+
+/**
+ * Venta pagada que quedo esperando mercaderia.
+ *
+ * Es la preventa: el cliente ya pago y el deposito no tenia stock, asi que la
+ * venta espera en 'pendiente_stock' a que entre algo. Cuando entra, la cola de
+ * EntregaService la pasa a preparacion por antiguedad. Es lo que hace que una
+ * recepcion no sea solo un alta de inventario.
+ *
+ * Se arma a mano y no por VentaService porque lo que la prueba necesita es el
+ * estado de partida, no el camino que lleva hasta el.
+ */
+function ventaEnPreventa(Producto $producto, int $cantidad = 5): Venta
+{
+    static $siguiente = 0;
+
+    $venta = Venta::create([
+        'numero'       => 9_000_000 + ++$siguiente,
+        'canal'        => 'mostrador',
+        'estado'       => 'pendiente_stock',
+        'modo_entrega' => 'retiro',
+        'fecha'        => now(),
+        'subtotal'     => 1000 * $cantidad,
+        'total'        => 1000 * $cantidad,
+    ]);
+
+    $venta->lineas()->create([
+        'producto_id'     => $producto->id,
+        'descripcion'     => $producto->nombre,
+        'cantidad'        => $cantidad,
+        'precio_unitario' => 1000,
+        'alicuota_iva'    => 21,
+        'neto'            => 1000 * $cantidad,
+        'iva'             => 0,
+        'total'           => 1000 * $cantidad,
+    ]);
+
+    return $venta->fresh('lineas');
 }
 
 /**

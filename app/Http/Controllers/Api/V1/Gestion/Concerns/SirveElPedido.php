@@ -46,6 +46,21 @@ trait SirveElPedido
             'usuarioAprobo',
             'hijas.proveedor',
             'padre:id,numero',
+
+            // El historial de entregas de mercadería, desde E.2.b. No hay tabla
+            // de recepciones: cada entrada ES un movimiento de stock con origen
+            // en esta orden y el remito del proveedor en 'motivo'.
+            //
+            // Se carga SIEMPRE, aunque el pedido esté en borrador y no tenga
+            // ninguna: la respuesta del detalle tiene la misma forma sea cual
+            // sea el estado del documento, igual que 'hijas' y 'padre'. En un
+            // pedido sin entregas cuesta una consulta que devuelve cero filas.
+            //
+            // 'nombres,apellido' y no 'usuario': MovimientoStockResource arma el
+            // nombre con el accessor nombre_completo, que sale de esas dos
+            // columnas. Es el mismo select que usa AjustarStockController.
+            'recepciones.producto:id,codigo,nombre',
+            'recepciones.usuario:id,nombres,apellido',
         ]);
     }
 
@@ -88,16 +103,25 @@ trait SirveElPedido
      * @template T
      *
      * @param  Closure(OrdenCompra): T  $operacion  Recibe el pedido ya releído.
+     * @param  int  $segundos  Vida del candado. 30 alcanza para mover el
+     *                         documento; la recepción pide 60 — ver abajo.
      * @return T
      *
      * @throws TransicionNoPermitidaException
      */
-    protected function enTransicion(OrdenCompra $orden, Closure $operacion): mixed
+    protected function enTransicion(OrdenCompra $orden, Closure $operacion, int $segundos = 30): mixed
     {
         // 30 segundos de vida para el candado y 10 de espera: el envío manda un
-        // correo sincrónico, que es lo más lento del circuito, y una madre con
-        // varios proveedores manda uno por cada uno.
-        $candado = Cache::lock("orden-compra:transicion:{$orden->getKey()}", 30);
+        // correo sincrónico, que es lo más lento de mover el documento, y una
+        // madre con varios proveedores manda uno por cada uno.
+        //
+        // <b>La recepción pide más.</b> Retiene el candado durante la
+        // liberación de preventas, que corre después del commit y recorre la
+        // cola de ventas de cada producto que entró: con muchos renglones y
+        // mucha preventa, 30 segundos pueden quedar cortos y el candado vencería
+        // con el trabajo todavía en curso. Por eso el TTL es un parámetro y no
+        // una constante.
+        $candado = Cache::lock("orden-compra:transicion:{$orden->getKey()}", $segundos);
 
         try {
             return $candado->block(10, function () use ($orden, $operacion) {

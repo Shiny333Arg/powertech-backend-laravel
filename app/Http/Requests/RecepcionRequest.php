@@ -65,9 +65,7 @@ class RecepcionRequest extends FormRequest
     public function withValidator(Validator $validator): void
     {
         $validator->after(function (Validator $validator) {
-            $cantidades = $this->cantidades();
-
-            if ($cantidades === []) {
+            if ($this->cantidades() === []) {
                 $validator->errors()->add(
                     'cantidades',
                     'Cargá al menos una cantidad para registrar la entrega.'
@@ -76,18 +74,54 @@ class RecepcionRequest extends FormRequest
                 return;
             }
 
-            $excedidos = $this->lineasExcedidas($cantidades);
+            $aviso = $this->avisoDeExcedente();
 
-            if ($excedidos->isNotEmpty() && ! $this->boolean('confirmar_excedente')) {
-                $validator->errors()->add(
-                    // 'cantidades',
-                    'confirmar_excedente',
-                    'Estás recibiendo más de lo pedido en '
-                    .$excedidos->implode(', ')
-                    .'. Si el proveedor mandó de más está bien registrarlo: confirmalo abajo y volvé a guardar.'
-                );
+            if ($aviso !== null) {
+                $validator->errors()->add('confirmar_excedente', $aviso);
             }
         });
+    }
+
+    /**
+     * El aviso de que esta entrega se pasa de lo pedido, o null si no hay nada
+     * que confirmar.
+     *
+     * <b>Es publico y no parte de withValidator() porque se consulta dos
+     * veces.</b> La validacion del FormRequest corre ANTES del cuerpo del
+     * controlador, es decir FUERA del candado que serializa las operaciones
+     * sobre el pedido: lee el acumulado de cada renglon en un momento en que
+     * otra entrega del mismo pedido todavia puede estar por aplicarse. El
+     * controlador de la API lo vuelve a preguntar ya con el candado tomado, que
+     * es cuando el dato es firme.
+     *
+     * Devuelve el mensaje en lugar de un booleano para que las dos llamadas
+     * digan exactamente lo mismo: el texto que ve el operador del panel y el que
+     * recibe el cliente de la API salen de esta unica linea.
+     *
+     * El panel no cambia: withValidator() hace la misma pregunta que hacia
+     * antes y agrega el mismo error sobre el mismo campo.
+     */
+    public function avisoDeExcedente(): ?string
+    {
+        if ($this->boolean('confirmar_excedente')) {
+            return null;
+        }
+
+        $cantidades = $this->cantidades();
+
+        if ($cantidades === []) {
+            return null;
+        }
+
+        $excedidos = $this->lineasExcedidas($cantidades);
+
+        if ($excedidos->isEmpty()) {
+            return null;
+        }
+
+        return 'Estás recibiendo más de lo pedido en '
+            .$excedidos->implode(', ')
+            .'. Si el proveedor mandó de más está bien registrarlo: confirmalo abajo y volvé a guardar.';
     }
 
     /**

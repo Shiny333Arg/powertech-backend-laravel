@@ -18,20 +18,21 @@ use Illuminate\Http\Resources\Json\JsonResource;
  * que el listado tiene su propia clase: la grilla no muestra renglones y
  * traerlos multiplicaria por quince el peso de cada pagina.
  *
- * <b>Lo que NO sale de aca todavia: el historial de recepciones.</b> Las
- * entradas de mercaderia son movimientos de stock con origen en la orden
- * —OrdenCompra::recepciones()—, porque el modelo de datos decidio no tener
- * tabla de recepciones. Lo que si sale es cuanto se recibio y cuanto falta de
- * cada renglon, que son columnas del pedido. El historial de movimientos entra
- * con el endpoint de recepcion, en E.2.
+ * <b>El historial de recepciones entra desde E.2.b</b>, y sale de donde ya
+ * estaba: las entradas de mercaderia son movimientos de stock con origen en la
+ * orden —OrdenCompra::recepciones()—, porque el modelo de datos decidio no
+ * tener tabla de recepciones. No se creo ninguna tabla ni ningun Resource para
+ * esto: lo sirve MovimientoStockResource, que ya publica el remito en 'motivo',
+ * el usuario, el producto, la cantidad y la fecha.
  *
  * <b>Tampoco salen</b> usuario_creo_id ni usuario_aprobo_id pelados —van como
  * objeto con el nombre, que es lo que la pantalla muestra— ni proveedor_id ni
  * orden_padre_id, que estan representados por 'proveedor' y 'padre'.
  *
  * Exige cargados: 'proveedor', 'lineas.producto', 'lineas.proveedor',
- * 'usuarioCreo', 'usuarioAprobo', 'hijas.proveedor' y 'padre'. Son los mismos
- * que carga el show del panel.
+ * 'usuarioCreo', 'usuarioAprobo', 'hijas.proveedor', 'padre' y
+ * 'recepciones.producto' + 'recepciones.usuario'. Los carga
+ * SirveElPedido::recargar().
  *
  * @mixin \App\Models\OrdenCompra
  */
@@ -112,6 +113,26 @@ class OrdenCompraDetalleResource extends JsonResource
                 'recibidas'  => $this->unidadesRecibidas(),
                 'pendientes' => $this->unidadesPendientes(),
             ],
+
+            // ----------------------------------------------------------
+            // Historial de entregas
+            // ----------------------------------------------------------
+            //
+            // Cada entrada de mercaderia contra este pedido, de la mas nueva a
+            // la mas vieja. <b>No hay tabla de recepciones:</b> cada entrada ES
+            // un movimiento de stock de tipo 'compra' con origen en la orden, y
+            // el numero de remito viaja en su 'motivo' —una orden puede recibir
+            // tres remitos distintos, asi que el dato tiene que vivir con la
+            // entrada y no con el documento—.
+            //
+            // <b>Un movimiento por renglon recibido</b>, no uno por entrega: el
+            // libro mayor de stock es por producto. Los de una misma entrega
+            // comparten remito, usuario e instante; ese remito es, en los
+            // hechos, lo que agrupa una entrega.
+            //
+            // Viaja siempre, vacio incluido: la respuesta tiene la misma forma
+            // sea cual sea el estado del pedido.
+            'recepciones' => MovimientoStockResource::collection($this->recepciones)->toArray($request),
 
             // ----------------------------------------------------------
             // Quienes

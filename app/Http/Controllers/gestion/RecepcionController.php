@@ -43,7 +43,8 @@ class RecepcionController extends Controller
             // cada entrada es un movimiento de stock, con su fecha, su autor y
             // el remito del proveedor en 'motivo'.
             'recepciones.producto:id,codigo,nombre',
-            'recepciones.usuario:id,usuario',
+            // 'recepciones.usuario:id,usuario',
+            'recepciones.usuario:id,nombres,apellido',
         ]);
 
         return view('gestion.compras.recibir', ['orden' => $orden]);

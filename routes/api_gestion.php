@@ -7,7 +7,9 @@ use App\Http\Controllers\Api\V1\Gestion\Acciones\CambiarEstadoProductoController
 use App\Http\Controllers\Api\V1\Gestion\Acciones\CambiarEstadoProveedorController;
 use App\Http\Controllers\Api\V1\Gestion\Acciones\CambiarPublicacionProductoController;
 use App\Http\Controllers\Api\V1\Gestion\Acciones\CancelarOrdenCompraController;
+use App\Http\Controllers\Api\V1\Gestion\Acciones\CerrarOrdenCompraController;
 use App\Http\Controllers\Api\V1\Gestion\Acciones\EnviarOrdenCompraController;
+use App\Http\Controllers\Api\V1\Gestion\Acciones\RegistrarRecepcionController;
 use App\Http\Controllers\Api\V1\Gestion\CategoriaController;
 use App\Http\Controllers\Api\V1\Gestion\OrdenCompraController;
 use App\Http\Controllers\Api\V1\Gestion\ProductoController;
@@ -275,7 +277,7 @@ Route::prefix('v1/gestion')
             });
 
         // ============================================================
-        // COMPRAS (PEDIDOS A PROVEEDORES) — E.1 + E.2.a
+        // COMPRAS (PEDIDOS A PROVEEDORES) — E.1 + E.2
         // ============================================================
         //
         // <b>El prefijo es 'compras' para que coincida con el del panel</b>
@@ -293,6 +295,8 @@ Route::prefix('v1/gestion')
         //   POST /compras/{orden}/aprobacion    aprobar     compra.aprobar
         //   POST /compras/{orden}/envio         enviar      compra.enviar
         //   POST /compras/{orden}/cancelacion   cancelar    compra.cancelar
+        //   POST /compras/{orden}/recepciones   recibir     compra.recibir
+        //   POST /compras/{orden}/cierre        cerrar      compra.recibir
         //
         // <b>Las acciones son sub-recursos sustantivados y no verbos en la
         // URL</b> —/aprobacion y no /aprobar—: es el criterio que fijo el plan
@@ -307,16 +311,16 @@ Route::prefix('v1/gestion')
         // recibir mueve inventario—. Un solo PATCH las esconderia detras de un
         // campo y haria imposible darles permisos separados.
         //
-        // <b>Lo que falta y es E.2.b:</b> POST /{orden}/recepciones y
-        // POST /{orden}/cierre. La ausencia es deliberada: la policy ya tiene
-        // recibir() y cerrar(), y los dos usan 'compra.recibir', que ya existe
-        // en PermisoSeeder. Lo unico que falta es la ruta, asi que esas URL
-        // responden 404 y no 403.
+        // <b>'compra.recibir' cubre las dos ultimas, y no es un descuido.</b>
+        // Recibir mercaderia y dar por cerrado lo que no vino son la misma
+        // tarea mirada desde los dos lados, la decide el deposito y ninguna de
+        // las dos mueve dinero ni autoriza nada. Es lo que ya dice la
+        // descripcion del permiso en PermisoSeeder y lo que ya hacia el panel.
         //
-        // <b>E.2.a no toca el inventario.</b> La compra afecta el stock en un
-        // solo punto del circuito —la recepcion de mercaderia, RecepcionService
-        // con StockService— y ese punto es E.2.b. Aprobar, enviar y cancelar
-        // mueven el documento y nada mas.
+        // <b>La recepcion es el UNICO endpoint de la API que toca el
+        // inventario.</b> La compra afecta el stock en un solo punto del
+        // circuito —RecepcionService con StockService— y es este. Aprobar,
+        // enviar, cancelar y cerrar mueven el documento y nada mas.
         //
         // <b>Sin PUT todavia.</b> La edicion del detalle existe en el panel y
         // tiene su permiso ('compra.editar'), pero no entra en esta entrega.
@@ -385,6 +389,40 @@ Route::prefix('v1/gestion')
                     ->whereNumber('orden')
                     ->middleware('can:cancelar,orden')
                     ->name('cancelacion');
+
+                // ----------------------------------------------------
+                // Entrada de mercaderia — E.2.b
+                // ----------------------------------------------------
+                //
+                // <b>En plural y con POST porque es una coleccion de verdad:</b>
+                // cada peticion agrega una entrega al pedido, y un pedido puede
+                // recibir tres remitos distintos. Por eso responde 201 y por eso
+                // el historial de lo que ya entro viaja en el detalle, en
+                // 'data.recepciones'.
+                //
+                // <b>No es un PUT sobre la orden</b>, y el panel tomo la misma
+                // decision: lo que se crea es un movimiento de stock. La orden
+                // cambia de estado como consecuencia del acumulado, no porque
+                // alguien le mande un estado.
+                //
+                // <b>La policy mira mas que el permiso:</b> recibir() exige
+                // esRecibible(), que deja afuera el borrador, la aprobada sin
+                // enviar, la ya recibida, la cancelada y el pedido repartido
+                // —la mercaderia se recibe en la orden de cada proveedor—.
+
+                Route::post('/{orden}/recepciones', RegistrarRecepcionController::class)
+                    ->whereNumber('orden')
+                    ->middleware('can:recibir,orden')
+                    ->name('recepciones');
+
+                // Da por terminado un pedido que quedo a medio recibir. Sin
+                // esto, una orden en 'recibida_parcial' bloquea la reposicion
+                // de sus productos para siempre: ese estado es ABIERTO y el
+                // restock da el faltante por pedido.
+                Route::post('/{orden}/cierre', CerrarOrdenCompraController::class)
+                    ->whereNumber('orden')
+                    ->middleware('can:cerrar,orden')
+                    ->name('cierre');
             });
 
         // ============================================================

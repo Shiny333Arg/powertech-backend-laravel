@@ -439,10 +439,13 @@ it('sirve el detalle de una hija y la deja volver a su pedido', function () {
         ->assertJsonCount(0, 'data.hijas');
 });
 
-it('no publica el historial de recepciones todavia', function () {
-    // Las entradas de mercaderia son movimientos de stock con origen en la
-    // orden, y viajan con el endpoint de recepcion, en E.2. Lo que si viaja es
-    // cuanto se recibio de cada renglon.
+it('trae el historial de recepciones junto con lo recibido de cada renglon', function () {
+    // <b>Actualizada en E.2.b.</b> Hasta E.2.a el detalle no publicaba el
+    // historial: no habia endpoint que lo generara. Ahora si viaja, y sale de
+    // donde ya estaba —los movimientos de stock con origen en la orden—, sin
+    // tabla nueva. Lo que el historial contiene lo prueba OrdenCompraRecepcionTest;
+    // acá se fija que la clave viaja y que no reemplaza al acumulado por
+    // renglon, que es otro dato y sigue en su lugar.
     Sanctum::actingAs(administrativoDeCompras(), ['gestion']);
 
     $orden = ordenDeCompraDePrueba(['estado' => 'recibida_parcial']);
@@ -450,9 +453,11 @@ it('no publica el historial de recepciones todavia', function () {
 
     $this->getJson(route('api.v1.gestion.compras.show', $orden))
         ->assertOk()
-        ->assertJsonMissingPath('data.recepciones')
-        ->assertJsonMissingPath('data.movimientos')
-        ->assertJsonPath('data.lineas.0.cantidad_recibida', 4);
+        ->assertJsonPath('data.lineas.0.cantidad_recibida', 4)
+        // Este pedido se armó a mano, sin pasar por la recepción, así que no
+        // tiene movimientos: la clave viaja igual y vacía.
+        ->assertJsonPath('data.recepciones', [])
+        ->assertJsonMissingPath('data.movimientos');
 });
 
 it('responde 404 por un pedido que no existe', function () {
@@ -841,39 +846,34 @@ it('refleja el permiso quitado al rol con el mismo token', function () {
 // El limite del alcance: que sigue sin existir
 // ============================================================
 
-it('no expone todavia la recepcion de mercaderia', function () {
-    // <b>Actualizada en E.2.a.</b> Aprobar, enviar y cancelar ya tienen
-    // endpoint —son /aprobacion, /envio y /cancelacion, y las prueba
-    // OrdenCompraTransicionesTest—. Lo que sigue sin existir es la recepcion:
-    // POST /{orden}/recepciones y POST /{orden}/cierre son E.2.b.
-    //
-    // <b>Ni siquiera con el administrador</b>, que tiene los ocho permisos de
-    // compras: lo que falta no es permiso, es la ruta. OrdenCompraPolicy ya
-    // tiene recibir() y cerrar(), y PermisoSeeder ya sembro 'compra.recibir'.
+it('no expone verbos en la URL ni la edicion del detalle', function () {
+    // <b>Actualizada en E.2.b.</b> El circuito ya está completo: aprobar,
+    // enviar, cancelar, recibir y cerrar tienen endpoint, y los prueban
+    // OrdenCompraTransicionesTest y OrdenCompraRecepcionTest. Lo que esta
+    // prueba sigue fijando son los dos límites que no se mueven.
     Sanctum::actingAs(User::factory()->empleado('administrador')->create(), ['gestion']);
 
     $orden = ordenDeCompraDePrueba();
 
-    // 404 y no 403: estas URL no existen. Un 403 significaria «existe pero no
-    // podes», que es lo que contesta la policy cuando la ruta si esta.
-    foreach (['recepciones', 'cierre'] as $accion) {
-        $this->postJson("/api/v1/gestion/compras/{$orden->id}/{$accion}")
-            ->assertNotFound();
-    }
-
-    // Las URL con el verbo tampoco existen, y no van a existir: el contrato son
-    // los sub-recursos sustantivados.
-    foreach (['aprobar', 'enviar', 'recibir', 'cancelar'] as $verbo) {
+    // <b>Uno: el contrato son los sub-recursos sustantivados.</b> Las URL con
+    // el verbo no existen y no van a existir. 404 y no 403: un 403 significaría
+    // «existe pero no podés», que es lo que contesta la policy cuando la ruta
+    // sí está.
+    foreach (['aprobar', 'enviar', 'recibir', 'cancelar', 'cerrar'] as $verbo) {
         $this->postJson("/api/v1/gestion/compras/{$orden->id}/{$verbo}")
             ->assertNotFound();
     }
 
-    // El detalle tampoco se edita por ahora: no hay PUT. Acá si es 405 y no
-    // 404, porque la URL existe —la sirve el GET del detalle— y lo que no
-    // existe es el metodo.
+    // <b>Dos: el detalle no se edita.</b> La edición existe en el panel y tiene
+    // su permiso ('compra.editar'), pero no hay PUT en la API. Acá sí es 405 y
+    // no 404, porque la URL existe —la sirve el GET del detalle— y lo que no
+    // existe es el método.
     $this->putJson("/api/v1/gestion/compras/{$orden->id}", [
         'lineas' => [renglonDePedido(productoPedible())],
     ])->assertStatus(405);
+
+    // Y sin DELETE, nunca: la orden de compra no se elimina.
+    $this->deleteJson("/api/v1/gestion/compras/{$orden->id}")->assertStatus(405);
 
     $this->assertDatabaseHas('ordenes_compra', ['id' => $orden->id, 'estado' => 'borrador']);
 });
