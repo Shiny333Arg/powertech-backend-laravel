@@ -260,6 +260,138 @@ function ordenDeCompraDePrueba(array $atributos = []): OrdenCompra
     ], $atributos));
 }
 
+/*
+|--------------------------------------------------------------------------
+| Compras a proveedores
+|--------------------------------------------------------------------------
+|
+| <b>Vivian dentro de OrdenCompraTest.</b> Se movieron aca en E.2.a, cuando las
+| paso a necesitar tambien la prueba de las transiciones: Pest carga todos los
+| archivos en el mismo proceso, asi que declararlas dos veces no compila, y una
+| segunda copia con otro nombre es de las que despues divergen. Es la misma
+| regla que explica la cabecera de este archivo y el comentario de
+| proveedorDePrueba().
+|
+*/
+
+/**
+ * Rol con los permisos de compras, menos 'compra.aprobar_propias'.
+ *
+ * Segun la matriz real de rol_permiso, vendedor y cajero no tienen ninguno de
+ * los ocho permisos de compras. El administrativo tiene siete: todos menos
+ * 'compra.aprobar_propias', que es del administrador. Esa diferencia es la que
+ * hace cumplir la separacion de funciones: quien carga un pedido por la API no
+ * lo puede aprobar el mismo.
+ */
+function administrativoDeCompras(): User
+{
+    return User::factory()->empleado('administrativo')->create();
+}
+
+/**
+ * Producto pedible: con proveedor y con costo.
+ *
+ * Las dos cosas hacen falta. Sin proveedor, OrdenCompraRequest rechaza el
+ * renglon —no hay a quien pedirselo— y sin costo el total estimado del pedido
+ * siempre da cero, que es justo lo que varias pruebas verifican.
+ */
+function productoPedible(?Proveedor $proveedor = null, array $cambios = []): Producto
+{
+    $proveedor ??= proveedorDePrueba();
+
+    return productoDePrueba(array_merge([
+        'proveedor_id' => $proveedor->id,
+        'costo'        => 1500.00,
+    ], $cambios));
+}
+
+/**
+ * Renglon del cuerpo del alta, con la forma que espera OrdenCompraRequest.
+ *
+ * @return array<string, mixed>
+ */
+function renglonDePedido(Producto $producto, int $cantidad = 2): array
+{
+    return [
+        'producto_id'     => $producto->id,
+        'cantidad_pedida' => $cantidad,
+    ];
+}
+
+/** Le agrega un renglon a una orden cruda, sin pasar por el servicio. */
+function lineaCrudaEn(OrdenCompra $orden, Producto $producto, int $cantidad = 2, int $recibida = 0): void
+{
+    $orden->lineas()->create([
+        'producto_id'       => $producto->id,
+        'proveedor_id'      => $producto->proveedor_id,
+        'cantidad_pedida'   => $cantidad,
+        'cantidad_recibida' => $recibida,
+        'costo_unitario'    => $producto->costo ?? 0,
+    ]);
+
+    $orden->recalcularTotalEstimado();
+}
+
+/**
+ * Proveedor al que SE LE PUEDE mandar el remito.
+ *
+ * proveedorDePrueba() deja el canal en 'email' pero no carga casilla, y
+ * OrdenCompraService::exigirCanalEmail() exige las dos cosas: el pedido se
+ * aprueba igual, pero no se puede enviar. Las pruebas del envio necesitan un
+ * proveedor completo, y las del envio fallido necesitan justamente el otro.
+ */
+function proveedorConCasilla(array $atributos = []): Proveedor
+{
+    return proveedorDePrueba(array_merge([
+        'email' => 'pedidos'.fake()->unique()->numberBetween(1000, 9999).'@proveedor.test',
+    ], $atributos));
+}
+
+/**
+ * Pedido de UN proveedor, con un renglon cargado y en el estado que se pida.
+ *
+ * Se arma a mano —sin pasar por OrdenCompraService— a proposito: las pruebas de
+ * las transiciones necesitan partir de un pedido ya 'aprobada' o 'enviada', y
+ * llegar ahi por el circuito completo las haria depender de las operaciones que
+ * estan probando.
+ */
+function pedidoDeUnProveedor(
+    string $estado = 'borrador',
+    ?Proveedor $proveedor = null,
+    array $atributos = [],
+    int $cantidad = 2,
+    int $recibida = 0,
+): OrdenCompra {
+    $proveedor ??= proveedorConCasilla();
+
+    $orden = ordenDeCompraDePrueba(array_merge([
+        'proveedor_id' => $proveedor->id,
+        'estado'       => $estado,
+    ], $atributos));
+
+    lineaCrudaEn($orden, productoPedible($proveedor), $cantidad, $recibida);
+
+    return $orden->fresh('lineas');
+}
+
+/**
+ * Pedido mezclado en borrador: un renglon por proveedor, sin destinatario
+ * propio. Es la madre que al aprobarse se reparte en una orden por proveedor.
+ */
+function pedidoMezcladoEnBorrador(int $proveedores = 2, array $atributos = []): OrdenCompra
+{
+    $orden = ordenDeCompraDePrueba(array_merge([
+        'proveedor_id' => null,
+        'estado'       => 'borrador',
+    ], $atributos));
+
+    for ($i = 0; $i < $proveedores; $i++) {
+        lineaCrudaEn($orden, productoPedible(proveedorConCasilla()));
+    }
+
+    return $orden->fresh('lineas');
+}
+
 /** Promocion vigente del canal online aplicada a un producto. */
 function promocionSobre(Producto $producto, array $atributos = []): Promocion
 {

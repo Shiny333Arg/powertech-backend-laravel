@@ -52,55 +52,10 @@ beforeEach(function () {
     ]);
 });
 
-/** Rol con los permisos de compras, menos 'compra.aprobar_propias'. */
-function administrativoDeCompras(): User
-{
-    return User::factory()->empleado('administrativo')->create();
-}
-
-/**
- * Producto pedible: con proveedor y con costo.
- *
- * Las dos cosas hacen falta. Sin proveedor, OrdenCompraRequest rechaza el
- * renglon —no hay a quien pedirselo— y sin costo el total estimado del pedido
- * siempre da cero, que es justo lo que varias de estas pruebas verifican.
- */
-function productoPedible(?Proveedor $proveedor = null, array $cambios = []): Producto
-{
-    $proveedor ??= proveedorDePrueba();
-
-    return productoDePrueba(array_merge([
-        'proveedor_id' => $proveedor->id,
-        'costo'        => 1500.00,
-    ], $cambios));
-}
-
-/**
- * Renglon del cuerpo del alta, con la forma que espera OrdenCompraRequest.
- *
- * @return array<string, mixed>
- */
-function renglonDePedido(Producto $producto, int $cantidad = 2): array
-{
-    return [
-        'producto_id'     => $producto->id,
-        'cantidad_pedida' => $cantidad,
-    ];
-}
-
-/** Le agrega un renglon a una orden cruda, sin pasar por el servicio. */
-function lineaCrudaEn(OrdenCompra $orden, Producto $producto, int $cantidad = 2, int $recibida = 0): void
-{
-    $orden->lineas()->create([
-        'producto_id'       => $producto->id,
-        'proveedor_id'      => $producto->proveedor_id,
-        'cantidad_pedida'   => $cantidad,
-        'cantidad_recibida' => $recibida,
-        'costo_unitario'    => $producto->costo ?? 0,
-    ]);
-
-    $orden->recalcularTotalEstimado();
-}
+// administrativoDeCompras(), productoPedible(), renglonDePedido() y
+// lineaCrudaEn() se movieron a tests/Apoyo/fabricas.php en E.2.a: las necesita
+// tambien OrdenCompraTransicionesTest, y Pest carga todos los archivos en el
+// mismo proceso, asi que declararlas dos veces no compila.
 
 // ============================================================
 // Las tres capas de acceso
@@ -883,27 +838,38 @@ it('refleja el permiso quitado al rol con el mismo token', function () {
 });
 
 // ============================================================
-// El limite del alcance: E.2 todavia no existe
+// El limite del alcance: que sigue sin existir
 // ============================================================
 
-it('no expone todavia las transiciones del circuito', function () {
-    // Aprobar, enviar, recibir y cancelar son E.2, y nada de eso se puede hacer
-    // por API en esta entrega. <b>Ni siquiera con el administrador</b>, que
-    // tiene los ocho permisos de compras: lo que falta no es permiso, es la
-    // ruta. La policy ya tiene los metodos y PermisoSeeder ya los sembro.
+it('no expone todavia la recepcion de mercaderia', function () {
+    // <b>Actualizada en E.2.a.</b> Aprobar, enviar y cancelar ya tienen
+    // endpoint —son /aprobacion, /envio y /cancelacion, y las prueba
+    // OrdenCompraTransicionesTest—. Lo que sigue sin existir es la recepcion:
+    // POST /{orden}/recepciones y POST /{orden}/cierre son E.2.b.
+    //
+    // <b>Ni siquiera con el administrador</b>, que tiene los ocho permisos de
+    // compras: lo que falta no es permiso, es la ruta. OrdenCompraPolicy ya
+    // tiene recibir() y cerrar(), y PermisoSeeder ya sembro 'compra.recibir'.
     Sanctum::actingAs(User::factory()->empleado('administrador')->create(), ['gestion']);
 
     $orden = ordenDeCompraDePrueba();
 
     // 404 y no 403: estas URL no existen. Un 403 significaria «existe pero no
-    // podes», que es lo que va a contestar en E.2 cuando el permiso falte.
-    foreach (['aprobar', 'enviar', 'recibir', 'cancelar'] as $accion) {
+    // podes», que es lo que contesta la policy cuando la ruta si esta.
+    foreach (['recepciones', 'cierre'] as $accion) {
         $this->postJson("/api/v1/gestion/compras/{$orden->id}/{$accion}")
             ->assertNotFound();
     }
 
-    // El detalle tampoco se edita por ahora: en E.1 no hay PUT. Acá si es 405 y
-    // no 404, porque la URL existe —la sirve el GET del detalle— y lo que no
+    // Las URL con el verbo tampoco existen, y no van a existir: el contrato son
+    // los sub-recursos sustantivados.
+    foreach (['aprobar', 'enviar', 'recibir', 'cancelar'] as $verbo) {
+        $this->postJson("/api/v1/gestion/compras/{$orden->id}/{$verbo}")
+            ->assertNotFound();
+    }
+
+    // El detalle tampoco se edita por ahora: no hay PUT. Acá si es 405 y no
+    // 404, porque la URL existe —la sirve el GET del detalle— y lo que no
     // existe es el metodo.
     $this->putJson("/api/v1/gestion/compras/{$orden->id}", [
         'lineas' => [renglonDePedido(productoPedible())],

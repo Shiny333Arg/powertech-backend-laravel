@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1\Gestion;
 
 use App\Enums\EstadoOrdenCompra;
 use App\Enums\OrigenOrdenCompra;
+use App\Http\Controllers\Api\V1\Gestion\Concerns\SirveElPedido;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\OrdenCompraRequest;
 use App\Http\Resources\Gestion\OrdenCompraDetalleResource;
@@ -33,10 +34,11 @@ use Illuminate\Validation\Rule;
  * de compra; lo unico que cambia en la base son la orden, sus renglones y el
  * total estimado.
  *
- * <b>Alcance de E.1.</b> Aprobar, enviar, recibir y cancelar NO tienen endpoint
- * todavia: son E.2. La ausencia es deliberada y no un olvido —la policy ya
- * tiene los metodos y los permisos ya existen—, asi que esas rutas responden
- * 405 y no 403. Lo mismo vale para la edicion del detalle: en E.1 no hay PUT.
+ * <b>Alcance.</b> Este controlador es el de consulta y alta: listar, ver el
+ * detalle y crear un borrador. Las transiciones del documento —aprobar, enviar
+ * y cancelar— son controladores de accion unica aparte, en Acciones\, desde
+ * E.2.a; recibir y cerrar con faltante son E.2.b y todavia no tienen ruta. Lo
+ * que sigue sin existir es la edicion del detalle: no hay PUT.
  *
  * <b>La autorizacion esta en las rutas, no en el constructor.</b> A diferencia
  * del controlador web, que usa authorizeResource(): ver el comentario de
@@ -44,6 +46,12 @@ use Illuminate\Validation\Rule;
  */
 class OrdenCompraController extends Controller
 {
+    // recargar() y detalle() viven en el concern: desde E.2.a los comparte con
+    // los controladores de las transiciones, que devuelven el mismo detalle.
+    // La lista de relaciones que exige OrdenCompraDetalleResource tiene que
+    // estar en un solo lugar.
+    use SirveElPedido;
+
     /** Mismo tamaño de pagina que el panel; el tope es para que nadie pida 10.000. */
     private const POR_PAGINA = 15;
 
@@ -143,7 +151,7 @@ class OrdenCompraController extends Controller
      */
     public function show(OrdenCompra $orden): OrdenCompraDetalleResource
     {
-        return new OrdenCompraDetalleResource($this->recargar($orden));
+        return $this->detalle($orden);
     }
 
     /**
@@ -179,29 +187,8 @@ class OrdenCompraController extends Controller
             $request->validated('observaciones'),
         );
 
-        return (new OrdenCompraDetalleResource($this->recargar($orden)))
+        return $this->detalle($orden)
             ->response()
             ->setStatusCode(Response::HTTP_CREATED);
-    }
-
-    /**
-     * Relee la orden con todo lo que el detalle serializa.
-     *
-     * Son las mismas relaciones que carga el show del panel. El proveedor va
-     * completo y no con select acotado porque el detalle muestra su contacto y
-     * su casilla; las hijas y el padre van siempre, aunque esten vacios, para
-     * que la respuesta tenga la misma forma sea cual sea la forma del documento.
-     */
-    private function recargar(OrdenCompra $orden): OrdenCompra
-    {
-        return $orden->refresh()->load([
-            'proveedor',
-            'lineas.producto',
-            'lineas.proveedor',
-            'usuarioCreo',
-            'usuarioAprobo',
-            'hijas.proveedor',
-            'padre:id,numero',
-        ]);
     }
 }

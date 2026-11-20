@@ -1,10 +1,13 @@
 <?php
 
 use App\Http\Controllers\Api\V1\Gestion\Acciones\AjustarStockController;
+use App\Http\Controllers\Api\V1\Gestion\Acciones\AprobarOrdenCompraController;
 use App\Http\Controllers\Api\V1\Gestion\Acciones\CambiarEstadoCategoriaController;
 use App\Http\Controllers\Api\V1\Gestion\Acciones\CambiarEstadoProductoController;
 use App\Http\Controllers\Api\V1\Gestion\Acciones\CambiarEstadoProveedorController;
 use App\Http\Controllers\Api\V1\Gestion\Acciones\CambiarPublicacionProductoController;
+use App\Http\Controllers\Api\V1\Gestion\Acciones\CancelarOrdenCompraController;
+use App\Http\Controllers\Api\V1\Gestion\Acciones\EnviarOrdenCompraController;
 use App\Http\Controllers\Api\V1\Gestion\CategoriaController;
 use App\Http\Controllers\Api\V1\Gestion\OrdenCompraController;
 use App\Http\Controllers\Api\V1\Gestion\ProductoController;
@@ -272,19 +275,8 @@ Route::prefix('v1/gestion')
             });
 
         // ============================================================
-        // COMPRAS (PEDIDOS A PROVEEDORES) — E.1
+        // COMPRAS (PEDIDOS A PROVEEDORES) — E.1 + E.2.a
         // ============================================================
-        //
-        // <b>Tres endpoints y nada mas: consultar, ver el detalle y crear un
-        // borrador.</b> Aprobar, enviar, recibir y cancelar son E.2. La
-        // ausencia es deliberada: la policy ya tiene esos metodos y los
-        // permisos ya existen en PermisoSeeder, asi que lo unico que falta es
-        // la ruta. Por eso un POST a /{orden}/aprobar responde 405 y no 403.
-        //
-        // <b>Crear un borrador no toca el inventario.</b> La compra afecta el
-        // stock en un solo punto del circuito, que es la recepcion de
-        // mercaderia —RecepcionService con StockService—, y en E.1 ese punto no
-        // tiene endpoint. Un borrador es una intencion de compra.
         //
         // <b>El prefijo es 'compras' para que coincida con el del panel</b>
         // (/gestion/compras) y con el modulo de los permisos. No hay que
@@ -293,13 +285,40 @@ Route::prefix('v1/gestion')
         // distintos que en castellano se llaman igual, viven en archivos de
         // rutas distintos y no comparten ni modelo ni Resource.
         //
-        // Dos permisos, uno por operacion:
+        // Un permiso por operacion, y cada uno es una decision distinta:
         //
-        //   GET  /compras           listar          compra.ver
-        //   GET  /compras/{orden}   detalle         compra.ver
-        //   POST /compras           crear borrador  compra.crear
+        //   GET  /compras                       listar      compra.ver
+        //   GET  /compras/{orden}               detalle     compra.ver
+        //   POST /compras                       borrador    compra.crear
+        //   POST /compras/{orden}/aprobacion    aprobar     compra.aprobar
+        //   POST /compras/{orden}/envio         enviar      compra.enviar
+        //   POST /compras/{orden}/cancelacion   cancelar    compra.cancelar
         //
-        // <b>Sin PUT en E.1.</b> La edicion del detalle existe en el panel y
+        // <b>Las acciones son sub-recursos sustantivados y no verbos en la
+        // URL</b> —/aprobacion y no /aprobar—: es el criterio que fijo el plan
+        // de la etapa para todo el circuito comercial, y el que deja que
+        // /recepciones sea lo que realmente es, una coleccion a la que cada
+        // entrega agrega un elemento.
+        //
+        // <b>POST y no PATCH /estado</b>, a diferencia de categorias, productos
+        // y proveedores. Alla el estado es un campo que el cuerpo fija; aca
+        // cada transicion tiene reglas, efectos y permisos propios —aprobar
+        // reparte por proveedor y anula borradores, enviar manda un correo,
+        // recibir mueve inventario—. Un solo PATCH las esconderia detras de un
+        // campo y haria imposible darles permisos separados.
+        //
+        // <b>Lo que falta y es E.2.b:</b> POST /{orden}/recepciones y
+        // POST /{orden}/cierre. La ausencia es deliberada: la policy ya tiene
+        // recibir() y cerrar(), y los dos usan 'compra.recibir', que ya existe
+        // en PermisoSeeder. Lo unico que falta es la ruta, asi que esas URL
+        // responden 404 y no 403.
+        //
+        // <b>E.2.a no toca el inventario.</b> La compra afecta el stock en un
+        // solo punto del circuito —la recepcion de mercaderia, RecepcionService
+        // con StockService— y ese punto es E.2.b. Aprobar, enviar y cancelar
+        // mueven el documento y nada mas.
+        //
+        // <b>Sin PUT todavia.</b> La edicion del detalle existe en el panel y
         // tiene su permiso ('compra.editar'), pero no entra en esta entrega.
         //
         // <b>Y sin DELETE, nunca.</b> La orden de compra no se elimina: su fin
@@ -326,6 +345,46 @@ Route::prefix('v1/gestion')
                     ->whereNumber('orden')
                     ->middleware('can:view,orden')
                     ->name('show');
+
+                // ----------------------------------------------------
+                // Transiciones del documento — E.2.a
+                // ----------------------------------------------------
+                //
+                // Las tres son controladores de accion unica, que es la forma
+                // del proyecto para las transiciones: con un solo __invoke no
+                // hay manera de que la operacion quede sin su linea de
+                // autorizacion, que es el agujero que F1 cerro en el panel.
+                //
+                // <b>El `can:` no es solo el permiso.</b> Los tres metodos de
+                // OrdenCompraPolicy miran ademas el estado, y aprobar() mira
+                // tambien quien creo el pedido: quien lo cargo no lo puede
+                // aprobar salvo que tenga 'compra.aprobar_propias', que solo
+                // tiene el administrador. Es la unica separacion de funciones
+                // del circuito de compras y responde 403, igual que en el
+                // panel. El 422 queda para la carrera: dos peticiones
+                // simultaneas pasan las dos por la policy y la segunda choca
+                // con el estado ya cambiado.
+
+                Route::post('/{orden}/aprobacion', AprobarOrdenCompraController::class)
+                    ->whereNumber('orden')
+                    ->middleware('can:aprobar,orden')
+                    ->name('aprobacion');
+
+                // Sobre un pedido repartido manda el remito de cada proveedor
+                // por separado, y un fallo no arrastra a los demas: la orden
+                // que no salio queda en 'aprobada' y se reintenta sola.
+                Route::post('/{orden}/envio', EnviarOrdenCompraController::class)
+                    ->whereNumber('orden')
+                    ->middleware('can:enviar,orden')
+                    ->name('envio');
+
+                // Lo que en otro CRUD seria la D. Conserva el numero y el
+                // historial, y vuelve a habilitar la reposicion automatica de
+                // los productos del pedido.
+                Route::post('/{orden}/cancelacion', CancelarOrdenCompraController::class)
+                    ->whereNumber('orden')
+                    ->middleware('can:cancelar,orden')
+                    ->name('cancelacion');
             });
 
         // ============================================================
