@@ -596,3 +596,333 @@ test('la pagina de rebote adapta el texto sin decidir nada', function () {
 
     expect(Venta::count())->toBe(0);
 });
+
+// ==================================================================
+// 11. El estado del pago sobrevive al carrito nuevo (regresión F8.3)
+// ==================================================================
+
+/*
+| El bug: `estado()` resolvía el intento con el ÚLTIMO carrito del usuario. Al
+| confirmarse una compra el carrito queda `convertido`, y la primera llamada
+| que resuelve el carrito abierto —`GET /carrito` o `GET /checkout`— crea uno
+| nuevo y vacío con id mayor y sin preferencia. Desde ese momento la consulta
+| contestaba `sin_pago` para una compra pagada y facturada.
+|
+| El disparador no es un caso raro: la app invalida el carrito justo al
+| aprobarse el pago, así que el carrito nuevo aparece solo. Y como la pantalla
+| de espera vuelve a consultar en cada `AppLifecycleState.resumed`, el cartel
+| de éxito se daba vuelta con sólo cambiar de aplicación y volver.
+|
+| `carritoDe()` y `acreditarPagoDe()` de más arriba usan `sole()` y
+| `latest('id')`, que no sirven con dos carritos en juego: los helpers de este
+| bloque son los equivalentes que sí nombran cuál.
+*/
+
+/** El carrito del último intento: el que tiene preferencia, no el más nuevo. */
+function carritoConPreferenciaDe(User $user): Carrito
+{
+    return Carrito::query()
+        ->where('user_id', $user->id)
+        ->whereNotNull('mp_preference_id')
+        ->latest('id')
+        ->firstOrFail();
+}
+
+/** Acredita el pago del carrito indicado, como lo haría el webhook. */
+function acreditarCarrito(Carrito $carrito, string $idPago = 'MP-1'): Venta
+{
+    $resumen = app(CarritoService::class)->resumen($carrito);
+
+    /** @var PasarelaFalsa $pasarela */
+    $pasarela = app(PasarelaPago::class);
+
+    $pago = $pasarela->acreditar($carrito, $resumen['total_centavos'], $idPago);
+
+    return app(CheckoutService::class)->confirmar($carrito, $pago);
+}
+
+/**
+ * Carga un producto y elige el retiro sobre el carrito abierto de ahora.
+ *
+ * Hace falta volver a elegir el modo de entrega: el carrito nuevo nace con
+ * `modo_entrega` en null y `pagar()` lo exige.
+ */
+function prepararOtroPedido(int $cantidad = 2): void
+{
+    test()->postJson('/api/v1/carrito', [
+        'producto_id' => productoDePrueba(['precio' => 100000])->id,
+        'cantidad'    => $cantidad,
+    ])->assertCreated();
+
+    test()->patchJson('/api/v1/checkout', ['modo_entrega' => 'retiro'])->assertOk();
+}
+
+test('el estado sigue aprobado despues de que la app pide el carrito nuevo', function () {
+
+    $user = clienteListoParaPagar();
+
+    $this->postJson('/api/v1/checkout/pagar', ['confirma' => true])->assertOk();
+
+    $venta = acreditarPagoDe($user);
+
+    comoCliente($user);
+
+    // Esto es exactamente lo que dispara el bug.
+    $this->getJson('/api/v1/carrito')
+        ->assertOk()
+        ->assertJsonPath('data.vacio', true);
+
+    expect(Carrito::query()->where('user_id', $user->id)->count())->toBe(2);
+
+    $this->getJson('/api/v1/checkout/estado')
+        ->assertOk()
+        ->assertJsonPath('data.estado', 'aprobado')
+        ->assertJsonPath('data.venta.id', $venta->id)
+        ->assertJsonPath('data.venta.total', 200000);
+});
+
+test('el estado sigue aprobado despues de que la app pide el checkout', function () {
+
+    $user = clienteListoParaPagar();
+
+    $this->postJson('/api/v1/checkout/pagar', ['confirma' => true])->assertOk();
+
+    $venta = acreditarPagoDe($user);
+
+    comoCliente($user);
+
+    // El otro camino que crea el carrito nuevo: `index()` también llama a
+    // `abiertoDe()`.
+    $this->getJson('/api/v1/checkout')->assertOk();
+
+    $this->getJson('/api/v1/checkout/estado')
+        ->assertOk()
+        ->assertJsonPath('data.estado', 'aprobado')
+        ->assertJsonPath('data.venta.id', $venta->id);
+});
+
+test('consultar el estado dos veces seguidas no cambia la respuesta', function () {
+
+    $user = clienteListoParaPagar();
+
+    $this->postJson('/api/v1/checkout/pagar', ['confirma' => true])->assertOk();
+
+    $venta = acreditarPagoDe($user);
+
+    comoCliente($user);
+
+    // La pantalla de espera consulta en cada vuelta al frente. Dos consultas
+    // seguidas tienen que decir lo mismo, y ninguna puede crear nada.
+    foreach (range(1, 3) as $vuelta) {
+        $this->getJson('/api/v1/checkout/estado')
+            ->assertOk()
+            ->assertJsonPath('data.estado', 'aprobado')
+            ->assertJsonPath('data.venta.id', $venta->id);
+    }
+
+    expect(Venta::count())->toBe(1);
+});
+
+test('un segundo pago en curso no se informa con la venta del primero', function () {
+
+    $user = clienteListoParaPagar();
+
+    $this->postJson('/api/v1/checkout/pagar', ['confirma' => true])->assertOk();
+
+    acreditarPagoDe($user);
+
+    comoCliente($user);
+
+    // Segunda compra: carrito nuevo, preferencia nueva y webhook que todavía
+    // no llegó. Es el caso que descarta "buscar el último pago del cliente":
+    // ese atajo contestaría `aprobado` con la venta vieja.
+    prepararOtroPedido();
+
+    $this->postJson('/api/v1/checkout/pagar', ['confirma' => true])->assertOk();
+
+    $this->pasarela->estadoDeReferencia = 'in_process';
+
+    $this->getJson('/api/v1/checkout/estado')
+        ->assertOk()
+        ->assertJsonPath('data.estado', 'pendiente')
+        ->assertJsonPath('data.venta', null);
+
+    expect(Venta::count())->toBe(1);
+});
+
+test('un segundo pago rechazado no se informa con la venta del primero', function () {
+
+    $user = clienteListoParaPagar();
+
+    $this->postJson('/api/v1/checkout/pagar', ['confirma' => true])->assertOk();
+
+    acreditarPagoDe($user);
+
+    comoCliente($user);
+
+    prepararOtroPedido();
+
+    $this->postJson('/api/v1/checkout/pagar', ['confirma' => true])->assertOk();
+
+    $this->pasarela->estadoDeReferencia = 'rejected';
+
+    $this->getJson('/api/v1/checkout/estado')
+        ->assertOk()
+        ->assertJsonPath('data.estado', 'rechazado')
+        ->assertJsonPath('data.venta', null);
+});
+
+test('con dos compras se informa la ultima y no la anterior', function () {
+
+    $user = clienteListoParaPagar();
+
+    $this->postJson('/api/v1/checkout/pagar', ['confirma' => true])->assertOk();
+
+    $primera = acreditarPagoDe($user, 'MP-PRIMERA');
+
+    comoCliente($user);
+
+    prepararOtroPedido(1);
+
+    $this->postJson('/api/v1/checkout/pagar', ['confirma' => true])->assertOk();
+
+    $segunda = acreditarCarrito(carritoConPreferenciaDe($user), 'MP-SEGUNDA');
+
+    comoCliente($user);
+
+    $this->getJson('/api/v1/checkout/estado')
+        ->assertOk()
+        ->assertJsonPath('data.estado', 'aprobado')
+        ->assertJsonPath('data.venta.id', $segunda->id);
+
+    expect($segunda->id)->not->toBe($primera->id)
+        ->and(Venta::count())->toBe(2);
+});
+
+test('reintentar el pago sobre el mismo carrito no pierde la venta', function () {
+
+    $user = clienteListoParaPagar();
+
+    $this->postJson('/api/v1/checkout/pagar', ['confirma' => true])->assertOk();
+
+    $carrito = carritoConPreferenciaDe($user);
+
+    // Contra Mercado Pago real, un segundo `pagar()` sobre el mismo carrito
+    // devuelve OTRA preferencia y pisa la columna. La pasarela falsa deriva el
+    // id del carrito, así que el reemplazo se fuerza acá.
+    //
+    // Que el emparejamiento aguante no es casualidad: `buscarPago()` devuelve
+    // `mpPreferenceId: null` siempre, así que `confirmar()` asienta en el pago
+    // la preferencia que el carrito tiene en ese momento —la misma que lee la
+    // consulta de estado—.
+    $carrito->update(['mp_preference_id' => 'PREF-REEMPLAZADA']);
+
+    $venta = acreditarCarrito($carrito->refresh(), 'MP-REINTENTO');
+
+    comoCliente($user);
+
+    $this->getJson('/api/v1/carrito')->assertOk();
+
+    $this->getJson('/api/v1/checkout/estado')
+        ->assertOk()
+        ->assertJsonPath('data.estado', 'aprobado')
+        ->assertJsonPath('data.venta.id', $venta->id);
+});
+
+test('un carrito con la preferencia en blanco no tapa al intento anterior', function () {
+
+    $user = clienteListoParaPagar();
+
+    $this->postJson('/api/v1/checkout/pagar', ['confirma' => true])->assertOk();
+
+    $venta = acreditarPagoDe($user);
+
+    comoCliente($user);
+
+    // `whereNotNull` por sí solo no descarta la cadena vacía, que es lo que
+    // `blank()` sí descartaba antes.
+    Carrito::create([
+        'user_id'          => $user->id,
+        'estado'           => EstadoCarrito::Activo,
+        'mp_preference_id' => '',
+    ]);
+
+    $this->getJson('/api/v1/checkout/estado')
+        ->assertOk()
+        ->assertJsonPath('data.estado', 'aprobado')
+        ->assertJsonPath('data.venta.id', $venta->id);
+});
+
+// ==================================================================
+// 12. Aislamiento: la venta del intento es del cliente del token
+// ==================================================================
+
+test('otro cliente con la misma preferencia no ve la venta ajena', function () {
+
+    $comprador = clienteListoParaPagar();
+
+    $this->postJson('/api/v1/checkout/pagar', ['confirma' => true])->assertOk();
+
+    $venta = acreditarPagoDe($comprador);
+
+    $preferencia = carritoConPreferenciaDe($comprador)->mp_preference_id;
+
+    // Caso defensivo: `carritos.mp_preference_id` no tiene índice único, así
+    // que se fuerza la colisión que Mercado Pago no debería producir. Sin
+    // acotar el pago al cliente del token, el `latest('id')` traía la venta
+    // del otro.
+    $otro = clienteDeTienda();
+
+    Carrito::create([
+        'user_id'          => $otro->id,
+        'estado'           => EstadoCarrito::EnCheckout,
+        'mp_preference_id' => $preferencia,
+    ]);
+
+    comoCliente($otro);
+
+    $this->pasarela->estadoDeReferencia = null;
+
+    $this->getJson('/api/v1/checkout/estado')
+        ->assertOk()
+        ->assertJsonPath('data.venta', null)
+        ->assertJsonPath('data.estado', 'sin_pago');
+
+    // Y la venta del comprador sigue intacta y visible para él.
+    expect(Venta::find($venta->id))->not->toBeNull();
+
+    comoCliente($comprador);
+
+    $this->getJson('/api/v1/checkout/estado')
+        ->assertJsonPath('data.venta.id', $venta->id);
+});
+
+test('un usuario sin ficha de cliente no recibe la venta de otro', function () {
+
+    $comprador = clienteListoParaPagar();
+
+    $this->postJson('/api/v1/checkout/pagar', ['confirma' => true])->assertOk();
+
+    acreditarPagoDe($comprador);
+
+    $preferencia = carritoConPreferenciaDe($comprador)->mp_preference_id;
+
+    // Sin fila en `clientes` no puede haber venta online: `confirmar()` la
+    // exige antes de tocar el pago.
+    $sinFicha = User::factory()->create();
+
+    Carrito::create([
+        'user_id'          => $sinFicha->id,
+        'estado'           => EstadoCarrito::EnCheckout,
+        'mp_preference_id' => $preferencia,
+    ]);
+
+    comoCliente($sinFicha);
+
+    $this->pasarela->estadoDeReferencia = null;
+
+    $this->getJson('/api/v1/checkout/estado')
+        ->assertOk()
+        ->assertJsonPath('data.venta', null)
+        ->assertJsonPath('data.estado', 'sin_pago');
+});

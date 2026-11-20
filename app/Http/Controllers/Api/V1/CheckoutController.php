@@ -12,10 +12,12 @@ use App\Http\Resources\CheckoutResource;
 use App\Models\Carrito;
 use App\Models\Pago;
 use App\Models\User;
+use App\Models\Venta;
 use App\Services\CarritoService;
 use App\Services\CheckoutService;
 use App\Services\Pagos\PasarelaPago;
 use App\Services\Pagos\ReferenciaCarrito;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -263,32 +265,26 @@ class CheckoutController extends Controller
      *
      * Si la pasarela no responde, se informa `pendiente`: no saber no es lo
      * mismo que saber que no hay pago.
+     *
+     * <b>Cuál es «el último intento» lo resuelve `ultimoIntentoDe()`, y no es
+     * el último carrito.</b> Después de una compra el carrito queda
+     * `convertido` y la app arranca uno nuevo y vacío, así que mirar el último
+     * carrito hacía desaparecer la venta recién creada. La venta del intento
+     * la busca `ventaDelIntento()`, acotada al cliente del token. Ver el
+     * detalle en esos dos métodos.
      */
     public function estado(Request $request): JsonResponse
     {
         /** @var User $usuario */
         $usuario = $request->user();
 
-        // El último carrito, abierto o ya convertido. `abiertoDe()` no sirve
-        // acá: después de una compra exitosa crearía uno nuevo y vacío, y se
-        // perdería de vista justamente la venta que se quiere reportar.
-        $carrito = Carrito::query()
-            ->where('user_id', $usuario->id)
-            ->latest('id')
-            ->first();
+        $carrito = $this->ultimoIntentoDe($usuario);
 
-        if (! $carrito || blank($carrito->mp_preference_id)) {
+        if (! $carrito) {
             return $this->respuestaEstado('sin_pago');
         }
 
-        // El pago se encuentra por la preferencia, que es el único dato que
-        // comparten el carrito y el pago: la venta todavía no existía cuando
-        // se creó la preferencia, así que no hay una FK que seguir.
-        $venta = Pago::query()
-            ->where('mp_preference_id', $carrito->mp_preference_id)
-            ->latest('id')
-            ->first()
-            ?->venta;
+        $venta = $this->ventaDelIntento($carrito, $usuario);
 
         if ($venta) {
             return $this->respuestaEstado('aprobado', [
@@ -314,6 +310,88 @@ class CheckoutController extends Controller
     // ==================================================================
     // Auxiliares
     // ==================================================================
+
+    /**
+     * El último carrito de este usuario que efectivamente fue a pagar.
+     *
+     * <b>Es el último que tiene `mp_preference_id`, no el último a secas, y la
+     * diferencia es el bug que esto corrige.</b> `abiertoDe()` crea un carrito
+     * nuevo y vacío cuando el anterior quedó `convertido`, que es exactamente
+     * lo que pasa después de una compra exitosa: la app pide `GET /carrito`
+     * —el globito de la barra se refresca solo al aprobarse el pago— y aparece
+     * un carrito con id mayor y sin preferencia. Mirando el último carrito, la
+     * consulta de estado dejaba de ver el intento que acababa de prosperar y
+     * contestaba `sin_pago` para una compra pagada y facturada. La pantalla de
+     * resultado se daba vuelta sola en cuanto la app volvía al frente.
+     *
+     * Filtrar por preferencia salta esos carritos nuevos sin inventar ningún
+     * vínculo que la base no tenga: el carrito que fue a pagar es, por
+     * definición, el que `pagar()` marcó con la preferencia.
+     *
+     * <b>Sigue siendo el ÚLTIMO intento y no el último aprobado.</b> Si el
+     * cliente compró, volvió a cargar el carrito y arrancó un segundo pago, lo
+     * que se reporta es el segundo: es lo que la app está esperando al volver
+     * del navegador. Devolver la venta anterior mostraría un cartel de éxito
+     * por una compra vieja.
+     *
+     * El `!= ''` acompaña al `whereNotNull` porque `blank()` —que es lo que
+     * filtraba antes— también descarta la cadena vacía, y conviene que la
+     * consulta descarte lo mismo: un carrito con la preferencia en blanco no
+     * es un intento, y si se colara taparía al intento real anterior.
+     */
+    private function ultimoIntentoDe(User $usuario): ?Carrito
+    {
+        return Carrito::query()
+            ->where('user_id', $usuario->id)
+            ->whereNotNull('mp_preference_id')
+            ->where('mp_preference_id', '!=', '')
+            ->latest('id')
+            ->first();
+    }
+
+    /**
+     * La venta que produjo este intento, si el webhook ya la creó.
+     *
+     * <b>Se busca por la preferencia, que es el único dato que comparten el
+     * carrito y el pago:</b> la venta todavía no existía cuando se creó la
+     * preferencia, así que no hay una FK que seguir (ver CheckoutService).
+     *
+     * El emparejamiento es estable incluso con varios intentos sobre el mismo
+     * carrito. `PasarelaMercadoPago::buscarPago()` devuelve
+     * `mpPreferenceId: null` siempre —la preferencia no viene en la respuesta
+     * del pago— así que `confirmar()` cae en el fallback y asienta en el pago
+     * la preferencia que el carrito tiene en ese momento, que es la misma que
+     * se lee acá.
+     *
+     * <b>La pertenencia se exige en la consulta, no después.</b> La venta tiene
+     * que ser de este cliente: `pagos` no guarda a quién le pertenece, lo
+     * guarda `ventas.cliente_id`. Los ids de preferencia de Mercado Pago son
+     * únicos, así que el cruce entre clientes es teórico, pero `carritos.
+     * mp_preference_id` no tiene índice único y un `latest()` sin acotar podría
+     * traer la fila de otro: filtrando en el `whereHas` esa fila no se
+     * considera siquiera, en lugar de descartarse al final.
+     *
+     * Un usuario sin ficha de cliente no puede tener una venta online
+     * —`confirmar()` la exige antes de tocar el pago— así que se corta acá.
+     */
+    private function ventaDelIntento(Carrito $carrito, User $usuario): ?Venta
+    {
+        $cliente = $usuario->cliente;
+
+        if (! $cliente) {
+            return null;
+        }
+
+        return Pago::query()
+            ->where('mp_preference_id', $carrito->mp_preference_id)
+            ->whereHas(
+                'venta',
+                fn (Builder $consulta) => $consulta->where('cliente_id', $cliente->id),
+            )
+            ->latest('id')
+            ->first()
+            ?->venta;
+    }
 
     /**
      * Traduce lo que dice la pasarela sobre esta referencia.
