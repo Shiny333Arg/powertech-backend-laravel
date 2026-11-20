@@ -1,457 +1,538 @@
-# PowerTech
+# PowerTech — Backend (Laravel)
 
-Sistema de gestión comercial y tienda online para una empresa de venta de tecnología. Reemplaza al sistema anterior —PHP a medida + Angular + MariaDB— por un sistema hecho con Laravel + Flutter + MariDB que cubre el circuito completo: catálogo, stock, ventas de mostrador y online, cobros, facturación electrónica, entregas y reposición automática de inventario.
+Sistema de gestión comercial y tienda online para una tienda informática. Cubre el circuito completo del negocio: catálogo, inventario, ventas de mostrador y online, cobros, facturación, entregas, compras a proveedores y reposición automática de stock.
 
-> **Estado del proyecto:** en desarrollo. El circuito de venta, stock, compras y reposición automática están implementados. La facturación electrónica corre hoy contra un autorizador simulado (`AutorizadorSimulado`); la integración real con los web services de ARCA/AFIP está pendiente.
+Este repositorio contiene **el backend y el panel de gestión web**. La aplicación móvil de clientes vive en el repositorio complementario [`powertech-frontend-flutter`](https://github.com/Shiny333Arg/powertech-frontend-flutter) y consume la API REST que se documenta acá.
+
+> **Estado del proyecto:** en desarrollo. La facturación electrónica funciona hoy contra un autorizador **simulado** (`FACTURACION_DRIVER=simulado`); la integración real con los web services de ARCA/AFIP está pendiente.
+
+---
+
+## Contexto académico
+
+| | |
+|---|---|
+| **Asignatura** | Laboratorio de Desarrollo de Aplicaciones |
+| **Carrera** | Ingeniería en Sistemas |
+| **Institución** | Universidad Nacional de la Patagonia Austral (UNPA) — Unidad Académica Caleta Olivia |
 
 ---
 
 ## Tabla de contenidos
 
-- [Descripción del sistema](#descripción-del-sistema)
-- [Conceptos de negocio que hay que entender antes de tocar el código](#conceptos-de-negocio-que-hay-que-entender-antes-de-tocar-el-código)
-- [Stack tecnológico](#stack-tecnológico)
+- [Descripción y alcance](#descripción-y-alcance)
+- [Funcionalidades principales](#funcionalidades-principales)
+- [Reglas de negocio que conviene conocer](#reglas-de-negocio-que-conviene-conocer)
+- [Tecnologías utilizadas](#tecnologías-utilizadas)
+- [Arquitectura general](#arquitectura-general)
 - [Requisitos previos](#requisitos-previos)
-- [Puesta en marcha](#puesta-en-marcha)
-- [Variables de entorno críticas](#variables-de-entorno-críticas)
-- [Carga inicial de datos](#carga-inicial-de-datos)
-- [Procesos de fondo](#procesos-de-fondo)
-- [Estructura del proyecto](#estructura-del-proyecto)
-- [Mapa de rutas](#mapa-de-rutas)
-- [Convenciones del código](#convenciones-del-código)
-- [Estado y pendientes](#estado-y-pendientes)
+- [Instalación desde cero](#instalación-desde-cero)
+- [Configuración del entorno](#configuración-del-entorno)
+- [Importación del respaldo SQL](#importación-del-respaldo-sql)
+- [Puesta en marcha diaria](#puesta-en-marcha-diaria)
+- [Mercado Pago y webhooks en desarrollo local](#mercado-pago-y-webhooks-en-desarrollo-local)
+- [Acceso al sistema](#acceso-al-sistema)
+- [Solución de problemas frecuentes](#solución-de-problemas-frecuentes)
 
 ---
 
-## Descripción del sistema
+## Descripción y alcance
 
 PowerTech es **un solo negocio con dos ámbitos de aplicación** que comparten catálogo, stock y numeración:
 
 | Ámbito | Ruta base | Quién entra |
 |---|---|---|
-| **Tienda** | `/` | Clientes (registrados o anónimos) |
+| **Tienda** | `/` | Clientes |
 | **Gestión** | `/gestion` | Empleados |
 
-El ámbito no se elige: lo determina el rol del usuario al autenticarse (`AmbitoRol`), y el middleware `ambito:gestion` / `ambito:tienda` impide que alguien abra una pantalla que no le corresponde.
+El ámbito no se elige: lo determina el rol del usuario al autenticarse (enum `AmbitoRol`), y los middlewares `ambito:gestion` / `ambito:tienda` impiden que alguien abra una pantalla que no le corresponde. En la API el equivalente son `api.ambito:*` y las *abilities* de Sanctum.
 
 ### Roles
 
-Cinco roles fijos, **uno solo por empleado** (no se acumulan):
+Cinco roles fijos, **uno solo por usuario** (no se acumulan). Están cargados en la tabla `roles` del respaldo SQL:
 
 | Rol | Ámbito | Alcance |
 |---|---|---|
 | **Administrador** | Gestión | Acceso completo, sin restricciones |
-| **Administrativo** | Gestión | Productos, categorías, proveedores, promociones, empleados, aprobación de órdenes de compra, ajustes de inventario, dashboard gerencial |
-| **Vendedor** | Gestión | Presupuestos y ventas de mostrador, validación de presupuestos, historial propio |
-| **Cajero** | Gestión | Cobros de ventas confirmadas, historial propio |
-| **Cliente** | Tienda | Carrito, compra online, pago con Mercado Pago, tracking de envíos, perfil |
+| **Administrativo** | Gestión | Datos maestros, promociones, empleados, compras y ajustes de inventario |
+| **Vendedor** | Gestión | Presupuestos y ventas de mostrador; validación de presupuestos |
+| **Cajero** | Gestión | Cobro de ventas confirmadas |
+| **Cliente** | Tienda | Compra en la tienda online |
 
-Los permisos son granulares (`tabla permisos` + `rol_permiso`) y se consultan con `$user->tienePermiso('clave')`. **Lo que no se asigna explícitamente, no se puede hacer.** Los proveedores *no* son usuarios: no tienen login.
+Los permisos son granulares (tablas `permisos` y `rol_permiso`) y se consultan con `$user->tienePermiso('clave')`: lo que no se asigna explícitamente, no se puede hacer. Los proveedores **no** son usuarios y no tienen acceso al sistema.
 
-### Módulos
+### Panel de gestión web vs. aplicación móvil
 
-- **Catálogo** — categorías planas, productos con una foto, marca como atributo, un proveedor por producto, punto y cantidad de reposición.
-- **Inventario** — tres valores de stock por producto, kardex completo de movimientos, ajustes con motivo obligatorio, carga inicial por conteo físico.
-- **Ventas** — presupuestos, ventas de mostrador y ventas online como una única entidad diferenciada por el atributo `canal`. Numeración interna correlativa y compartida entre ambos canales.
+| | Panel de gestión (este repo) | Aplicación móvil (repo Flutter) |
+|---|---|---|
+| Para quién | Empleados | Clientes |
+| Tecnología | Blade + Bootstrap 5, servido por Laravel | Flutter (Android) |
+| Acceso | `http://localhost:8000/gestion` | APK instalada en emulador o teléfono |
+| Alcance | Toda la gestión interna del negocio | Solo la experiencia de compra |
+| Autenticación | Sesión web + token Sanctum con ability `gestion` (8 h) | Token Sanctum con ability `tienda` (30 días) |
+
+La aplicación móvil **no** tiene pantallas de gestión: es exclusivamente el canal de venta al cliente.
+
+---
+
+## Funcionalidades principales
+
+**Gestión interna (panel web)**
+
+- **Catálogo** — categorías, productos con foto, marca como atributo, un proveedor por producto, punto y cantidad de reposición, publicación en la tienda.
+- **Inventario** — tres valores de stock por producto, kardex completo de movimientos, ajustes con motivo obligatorio y carga inicial por conteo físico.
+- **Ventas** — presupuestos, ventas de mostrador y ventas online como una única entidad diferenciada por el atributo `canal`, con numeración interna correlativa compartida. Transiciones de validación y cancelación.
 - **Cobros** — efectivo, tarjeta y transferencia en mostrador; Mercado Pago Checkout Pro en la tienda.
-- **Facturación electrónica** — factura A/B, notas de crédito y débito, IVA discriminado, log de cada solicitud a ARCA para poder reintentar sin duplicar.
-- **Entregas** — despacho a domicilio o retiro en local, con tracking para el cliente.
+- **Devoluciones** — nota de crédito con reingreso del stock físico.
+- **Comprobantes** — facturas A/B, notas de crédito y débito, IVA discriminado y registro de cada solicitud al organismo en `afip_solicitudes` para poder reintentar sin duplicar.
+- **Entregas** — despacho a domicilio o retiro en el local, con seguimiento para el cliente.
 - **Compras** — órdenes de compra a proveedores con aprobación obligatoria, envío del remito por correo y recepciones parciales.
 - **Reposición automática** — generación de órdenes en borrador cuando el stock disponible cruza el punto de reposición.
 - **Promociones** — los únicos descuentos del sistema; no existe el descuento manual.
+- **Clientes, empleados y proveedores** — alta, edición, baja lógica y reactivación. Los empleados se dan de alta por invitación por correo.
+- **Dashboard** — un solo tablero que arma sus bloques según los permisos de quien entra.
+
+**Tienda (web y API para la app móvil)**
+
+Vitrina, catálogo con filtros, detalle de producto, carrito, checkout con datos fiscales y de entrega, pago con Mercado Pago, historial de compras con seguimiento, perfil, registro con verificación de correo y recuperación de contraseña.
 
 ---
 
-## Conceptos de negocio que hay que entender antes de tocar el código
+## Reglas de negocio que conviene conocer
 
-Estas cuatro reglas explican por qué el código está como está. Ignorarlas lleva a "arreglar" cosas que no están rotas.
+Cuatro reglas explican por qué el sistema está hecho como está.
 
-### 1. El stock son tres números, no uno
+**1. El stock son tres números, no uno.** El **físico** son las unidades que están en el depósito y nunca es negativo. El **comprometido** son las unidades vendidas o reservadas que todavía no salieron, y tampoco es negativo. El **disponible** es `físico − comprometido`, es lo único que ve el vendedor y el cliente, y **sí puede ser negativo**: un disponible negativo no es un error, es una **preventa**, y mide cuántas unidades se le deben a clientes y todavía no se le compraron al proveedor. El stock físico baja cuando la mercadería sale del depósito, no cuando se cobra. Ninguna pantalla escribe el stock directamente: todo cambio deja un movimiento con tipo, cantidad, responsable y documento de origen.
 
-| Valor | Qué es | Signo |
+**2. Nada con historia se elimina.** Usuarios, productos y categorías tienen baja lógica (columna `activo`; no se usa `SoftDeletes`). Las ventas no se eliminan: se **cancelan** o se **devuelven** con nota de crédito. Órdenes de compra, pagos, comprobantes y movimientos de stock no se modifican ni se eliminan; un error se corrige con un movimiento inverso o una nota de crédito. Por eso **no hay rutas `DELETE`** para esas entidades.
+
+**3. Venta y comprobante no son la misma cosa.** Un presupuesto es una venta sin comprobante; una venta devuelta tiene dos. La numeración interna es correlativa, compartida por ambos canales y no cambia nunca; la numeración fiscal es independiente, por punto de venta y tipo de comprobante. Las facturas se emiten al acreditarse el pago, nunca antes.
+
+**4. El comprobante es inmutable una vez autorizado.** Toda corrección se resuelve emitiendo una nota de crédito asociada.
+
+---
+
+## Tecnologías utilizadas
+
+Versiones tomadas de `composer.json`, `composer.lock`, `package.json` y del encabezado del respaldo SQL.
+
+| Capa | Tecnología | Versión |
 |---|---|---|
-| **Físico** | Unidades que realmente están en el depósito | Nunca negativo |
-| **Comprometido** | Unidades vendidas o reservadas que todavía no salieron | Nunca negativo |
-| **Disponible** | `físico − comprometido`. Lo único que ve el vendedor y el cliente | **Puede ser negativo** |
+| Lenguaje | PHP | `^8.2` |
+| Framework | Laravel (estructura moderna: `bootstrap/app.php`, sin `Kernel.php`) | 12.67.0 |
+| Autenticación por token | Laravel Sanctum | 4.3.3 |
+| Scaffolding de autenticación | Laravel Breeze (stack Blade) | 2.4.2 |
+| Consola interactiva | Laravel Tinker | 2.11.1 |
+| Base de datos | MariaDB (origen del respaldo), InnoDB, `utf8mb4` / `utf8mb4_unicode_ci` | 10.4.32 |
+| ORM | Eloquent | — |
+| Vistas | Blade + Bootstrap + Bootstrap Icons | 5.3.8 / 1.13.1 |
+| Interactividad liviana | Alpine.js | `^3.4.2` |
+| Build de assets | Vite + `laravel-vite-plugin` | `^7.0.7` / `^2.0.0` |
+| CSS utilitario | Tailwind CSS (+ `@tailwindcss/forms`) | `^3.1.0` |
+| Orquestador de procesos | concurrently | `^9.0.1` |
+| Colas y caché | Driver `database` | — |
+| Pasarela de pago | Mercado Pago Checkout Pro | — |
+| Pruebas | Pest / PHPUnit | 3.8.7 / 11.5.56 |
+| Formateo | Laravel Pint | 1.30.4 |
 
-Un disponible negativo no es un bug: es una **preventa**, y mide exactamente cuántas unidades se le deben a clientes y todavía no se le compraron al proveedor.
+Notas sobre dependencias:
 
-**El stock físico baja cuando la mercadería sale del depósito, no cuando se cobra.** Cobrar una preventa no mueve nada: la venta queda pagada, facturada y comprometida, esperando la reposición.
-
-| Evento | Físico | Comprometido | Disponible |
-|---|---|---|---|
-| Carga inicial / recepción de compra | +q | — | +q |
-| Presupuesto emitido | — | — | — |
-| Venta confirmada | — | +q | −q |
-| Pago acreditado / factura emitida | — | — | — |
-| **Entrega de la mercadería** | −q | −q | — |
-| Venta cancelada o presupuesto vencido | — | −q | +q |
-| Devolución con nota de crédito | +q | — | +q |
-| Ajuste de inventario | ±q | — | ±q |
-
-Ninguna pantalla escribe `productos.stock_fisico` directamente: **todo cambio deja un movimiento de stock** con tipo, cantidad, responsable y documento de origen.
-
-### 2. Nada con historia se elimina
-
-- **Usuarios y productos:** solo baja lógica (`activo = false`). Borrarlos rompería la trazabilidad de ventas, cobros y comprobantes ya emitidos.
-- **Categorías:** baja lógica, o borrado físico únicamente si ningún producto las referencia. La FK con `ON DELETE RESTRICT` ya hace cumplir la regla en el motor; la aplicación solo traduce el rechazo a un mensaje entendible.
-- **Ventas:** no se eliminan ni se dan de baja. La que no prospera se **cancela**; la facturada que se revierte se **devuelve** con nota de crédito. Su fin de vida es siempre un estado, nunca una ausencia.
-- **Órdenes de compra, pagos, comprobantes y movimientos de stock:** no se modifican ni se eliminan. Un error se corrige con un movimiento inverso o una nota de crédito.
-
-Por eso **no hay rutas DELETE** para ventas, compras, pagos, comprobantes ni movimientos. No es un olvido.
-
-> **Baja lógica = desactivación.** Es un solo mecanismo, no dos. No se usa `deleted_at` ni el trait `SoftDeletes` en ninguna parte.
-
-### 3. Venta y comprobante no son la misma cosa
-
-Un presupuesto es una venta sin comprobante. Una venta devuelta tiene dos (factura + nota de crédito). La **numeración interna** de la venta se asigna al crear el documento, es correlativa, compartida por ambos canales y no cambia nunca; la **numeración fiscal** es independiente, por punto de venta y tipo de comprobante, y la autoriza ARCA.
-
-Las facturas se emiten **al acreditarse el pago**, nunca antes. Una venta facturada y no entregada es el caso normal de la preventa.
-
-### 4. El comprobante es inmutable una vez que tiene CAE
-
-Toda corrección se resuelve emitiendo una nota de crédito asociada. Cada intento contra ARCA queda registrado en `afip_solicitudes` con su request y su response.
+- **`mercadopago/dx-php ^3.16` está declarado en `composer.json`, pero la integración no usa el SDK.** `App\Services\Pagos\PasarelaMercadoPago` habla HTTP directo contra `https://api.mercadopago.com` usando el cliente `Http` de Laravel, por una decisión explicada en el propio archivo.
+- El servidor de correo de desarrollo (**Mailpit**) y el túnel (**ngrok**) son herramientas externas: no forman parte de las dependencias del proyecto y se instalan por separado.
 
 ---
 
-## Stack tecnológico
+## Arquitectura general
 
-| Capa | Tecnología |
-|---|---|
-| Framework | Laravel (estructura moderna: `bootstrap/app.php`, sin `Kernel.php`) |
-| Lenguaje | PHP 8.2+ |
-| Base de datos | MariaDB / MySQL |
-| ORM | Eloquent |
-| Autenticación | Laravel Breeze (stack Blade) |
-| Vistas | Blade + Bootstrap 5 |
-| Build de assets | Vite |
-| Colas y caché | Driver `database` (requerido, ver abajo) |
-| Pasarela de pago | Mercado Pago Checkout Pro |
-| Facturación | Web services ARCA/AFIP (hoy, autorizador simulado) |
+```
+Panel de gestión (Blade)  ─┐
+                           ├─→  Laravel 12  ─→  MariaDB
+App Flutter (tienda)  ─────┘      │
+                                  └─→  Mercado Pago (HTTP) / SMTP
+```
+
+**Capas.** Los controladores no contienen lógica de negocio: validan con un *Form Request*, autorizan con una *Policy* y delegan en un *Service*. Los services son los dueños de las transacciones y los únicos que escriben stock, numeración y comprobantes. Los eventos se emiten fuera de la transacción.
+
+**Dos superficies HTTP.**
+
+| Superficie | Archivo de rutas | Prefijo | Autenticación |
+|---|---|---|---|
+| Tienda web + panel de gestión | `routes/web.php` | `/` y `/gestion` | Sesión (guard `web`) |
+| Autenticación web | `routes/auth.php` | `/` | Breeze: login, registro, invitación, verificación, recupero |
+| API de tienda | `routes/api.php` | `/api/v1` | Bearer Sanctum, ability `tienda` |
+| API de gestión | `routes/api_gestion.php` | `/api/v1/gestion` | Bearer Sanctum, ability `gestion` |
+
+La **API de tienda** expone catálogo, vitrina, categorías, marcas, promociones, carrito, checkout, compras, perfil, datos fiscales, autenticación y recupero de contraseña. Es la que consume la aplicación Flutter.
+
+La **API de gestión** expone categorías, productos, stock (movimientos y ajustes), proveedores y órdenes de compra con sus transiciones (aprobación, envío, cancelación, cierre y recepciones). El panel web la consume desde `resources/js/gestion/api.js`, manteniendo el token **en memoria** (nunca en `localStorage`). Está documentada en [`docs/api-gestion.md`](docs/api-gestion.md), que detalla las capas de control, la forma de las respuestas y los endpoints de categorías, productos y stock.
+
+**Sanctum.** `config/sanctum.php` deja `'guard' => []` a propósito, de modo que `auth:sanctum` sea *Bearer-only*, y `'expiration' => null`, porque la vigencia se fija **por token**: 30 días para la tienda (`config/movil.php`) y 8 horas para gestión (`config/gestion.php`).
+
+**Procesos de fondo.** Tres disparadores terminan en la evaluación de reposición: el listener sobre cada movimiento de stock, el listener de cancelación de una orden y el barrido diario `compras:revisar-reposicion` de las 07:00 definido en `routes/console.php`. Los listeners del restock corren en la cola **`reposicion`**; las notificaciones por correo (invitaciones, aviso de pedido listo) corren en la cola `default`.
+
+En un servidor, todo esto requiere una sola entrada de cron:
+
+```cron
+* * * * * cd /ruta/al/proyecto && php artisan schedule:run >> /dev/null 2>&1
+```
 
 ---
 
 ## Requisitos previos
 
-- **PHP 8.2 o superior**, con las extensiones `bcmath`, `ctype`, `curl`, `dom`, `fileinfo`, `json`, `mbstring`, `openssl`, `pcre`, `pdo`, `pdo_mysql`, `tokenizer`, `xml`, `gd` (fotos de producto) y `soap` (web services de ARCA).
+- **PHP 8.2 o superior** con las extensiones que exigen las dependencias instaladas: `ctype`, `dom`, `fileinfo`, `filter`, `hash`, `iconv`, `json`, `libxml`, `mbstring`, `openssl`, `pcre`, `session` y `tokenizer`, más **`pdo_mysql`** por la conexión a la base.
 - **Composer 2.x**
-- **Node.js 18+** y npm
-- **MariaDB 10.6+** o **MySQL 8.0+**
-- Un servidor SMTP accesible (invitaciones de empleado, verificación de correo, recupero de contraseña y envío de remitos a proveedores).
+- **Node.js** y **npm**. El repositorio no fija una versión mínima; Vite 7 requiere una versión moderna de Node, así que conviene verificar con `node -v` y actualizar si el build falla.
+- **MariaDB o MySQL.** El respaldo se generó en MariaDB 10.4.32; no se probó la importación en otras versiones.
+- **Mailpit** — servidor SMTP de prueba, para ver los correos que emite el sistema en desarrollo.
+- **ngrok** (o otro túnel HTTP) — imprescindible para probar Mercado Pago. Ver [Mercado Pago y webhooks](#mercado-pago-y-webhooks-en-desarrollo-local).
+- **Git**
+
+> La extensión `gd` puede ser necesaria para el procesamiento de imágenes de productos y `soap` para la integración real con ARCA. Ninguna dependencia del proyecto las declara y, con el driver de facturación `simulado`, no se usan: habilitarlas es opcional.
 
 ---
 
-## Puesta en marcha
+## Instalación desde cero
 
-### 1. Clonar e instalar dependencias
+Todos los comandos se ejecutan **desde la raíz del repositorio** salvo que se indique otra cosa.
+
+### 1. Clonar el repositorio
 
 ```bash
-git clone <url-del-repositorio> powertech
-cd powertech
+git clone https://github.com/Shiny333Arg/powertech-backend-laravel.git
+cd powertech-backend-laravel
+git checkout etapa-03
+```
 
+### 2. Instalar dependencias
+
+```bash
 composer install
 npm install
 ```
 
-### 2. Configurar el entorno
+### 3. Crear el archivo de entorno y la clave de la aplicación
 
 ```bash
 cp .env.example .env
 php artisan key:generate
 ```
 
-Editar `.env` con los datos de la base y del correo. Ver [Variables de entorno críticas](#variables-de-entorno-críticas) — hay tres que **no son opcionales** y rompen el circuito de reposición si se dejan en su valor por defecto.
+En Windows (PowerShell), si `cp` no está disponible:
 
-### 3. Crear la base de datos
-
-El esquema se crea íntegramente con migraciones, sobre una **base nueva y vacía**. No se importa el esquema ni los datos del sistema anterior.
-
-```sql
-CREATE DATABASE powertech_laravel CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+```powershell
+Copy-Item .env.example .env
 ```
 
-### 4. Migrar y cargar los datos de configuración
+### 4. Configurar el entorno
 
-```bash
-php artisan migrate --seed
-```
+Editar `.env` antes de seguir. Ver [Configuración del entorno](#configuración-del-entorno).
 
-Esto crea las 31 tablas del modelo y carga, vía seeders, los datos sin los cuales el sistema no arranca: roles, permisos, asignación rol–permiso, tipos de documento, condiciones frente al IVA, alícuotas de IVA, tipos de comprobante y puntos de venta.
+### 5. Crear la base de datos e importar el respaldo
 
-### 5. Enlazar el almacenamiento público
+Ver [Importación del respaldo SQL](#importación-del-respaldo-sql). **La instalación usa el respaldo incluido en el repositorio**, no migraciones.
 
-Las fotos de productos y los banners de promociones viven en `storage/app/public`:
+### 6. Enlazar el almacenamiento público
+
+Las fotos de productos y los banners de promociones se sirven desde `storage/app/public`:
 
 ```bash
 php artisan storage:link
 ```
 
-### 6. Compilar los assets
+### 7. Compilar los assets
 
 ```bash
-npm run dev      # desarrollo, con recarga en caliente
-npm run build    # producción
+npm run build
 ```
 
-### 7. Levantar la aplicación
+En desarrollo no hace falta: `composer run dev` levanta Vite en modo recarga en caliente.
 
-En desarrollo hacen falta **tres procesos simultáneos**:
+### 8. Limpiar la configuración en caché
 
 ```bash
-# Terminal 1 — servidor web
-php artisan serve
-
-# Terminal 2 — assets
-npm run dev
-
-# Terminal 3 — worker de colas (la cola 'reposicion' hay que nombrarla)
-php artisan queue:work --queue=reposicion,default
+php artisan config:clear
 ```
 
-La aplicación queda en `http://localhost:8000`. El endpoint de salud es `/up`.
-
-> **Sin el worker corriendo, la reposición automática no genera órdenes de compra** hasta el barrido diario de las 7:00.
-
-### 8. Crear el primer administrador
-
-Los seeders cargan roles y permisos, pero no usuarios. Para el primer acceso, desde `php artisan tinker`:
-
-```php
-\App\Models\User::create([
-    'rol_id'            => \App\Models\Rol::where('clave', 'administrador')->value('id'),
-    'email'             => 'admin@powertech.local',
-    'password'          => 'una-clave-provisoria',
-    'nombres'           => 'Nombre',
-    'apellido'          => 'Apellido',
-    'activo'            => true,
-    'email_verified_at' => now(),
-]);
-```
-
-> Verificar el nombre exacto de la columna de clave del rol contra `RolSeeder` antes de ejecutarlo. A partir de ahí, el resto de los empleados se dan de alta desde `/gestion/empleado`, que les envía una invitación por correo para que elijan su propia contraseña.
+A partir de acá el sistema queda instalado. Para levantarlo, ver [Puesta en marcha diaria](#puesta-en-marcha-diaria).
 
 ---
 
-## Variables de entorno críticas
+## Configuración del entorno
 
-Más allá de lo habitual (`APP_*`, `DB_*`, `MAIL_*`), estas tres decisiones de infraestructura **no son negociables**:
+### Variables que hay que completar
+
+`.env.example` deja estos valores vacíos o con marcadores de posición:
 
 ```dotenv
-# El driver 'file' NO soporta Cache::lock() y rompe la reposición automática,
-# que serializa la evaluación por producto y por proveedor.
-CACHE_STORE=database
+APP_KEY=                      # la genera php artisan key:generate
 
-# La cola 'reposicion' es propia del circuito de compras.
-QUEUE_CONNECTION=database
+DB_USERNAME=                  # usuario de MariaDB/MySQL
+DB_PASSWORD=                  # su contraseña
 
-SESSION_DRIVER=database
+APP_URL=https://tu-tunel.ngrok-free.app   # reemplazar por la URL real del túnel
+
+MP_ACCESS_TOKEN=TEST-xxxxxxxx # credencial de prueba de Mercado Pago
+MP_PUBLIC_KEY=TEST-xxxxxxxx   # credencial de prueba de Mercado Pago
 ```
 
-Además:
+Las credenciales de Mercado Pago se obtienen en *mercadopago.com.ar/developers → Tus integraciones → Credenciales*. Las de prueba empiezan con `TEST-`. **El access token es un secreto de servidor: no se versiona ni se expone en el frontend.**
+
+`DB_DATABASE` ya viene con el valor correcto (`powertech_laravel`), que es el nombre que espera el respaldo.
+
+### Variables opcionales
+
+| Variable | Valor por defecto | Cuándo se necesita |
+|---|---|---|
+| `MP_WEBHOOK_SECRET` | vacío | Para verificar la firma del webhook. **Vacío, la verificación se saltea y queda un aviso en el log**: alcanza para la primera prueba local, nunca para producción |
+| `MP_AUTO_RETURN` | `true` | Poner en `false` si Mercado Pago rechaza las `back_urls` del túnel |
+| `MP_USAR_SANDBOX_INIT_POINT` | `false` | Poner en `true` si el redirect al checkout cae en un error de Mercado Pago |
+| `MP_TIMEOUT` | `15` | Segundos de espera de las llamadas a la API de Mercado Pago |
+| `MP_CUOTAS_MAXIMAS` | `12` | Máximo de cuotas ofrecidas |
+| `MP_MINUTOS_VIGENCIA` | `30` | Minutos que vive el link de pago |
+| `MP_EXCLUIR_TIPOS` | `ticket,atm` | Medios de pago excluidos (los diferidos están excluidos por diseño) |
+| `GESTION_TOKEN_HORAS` | `8` | Vigencia absoluta del token del panel |
+| `MOVIL_TOKEN_DIAS` | `30` | Vigencia del token de la app móvil |
+| `FACTURACION_DRIVER` | `simulado` | `simulado` asigna un CAE ficticio sin salir a la red. El driver real (`wsfe`) todavía no está implementado |
+
+### Valores que no conviene cambiar
 
 ```dotenv
-# Casilla de compras: va como replyTo en el remito que recibe el proveedor.
-# Requiere una clave 'compras' (address, name) en config/mail.php.
-MAIL_COMPRAS_ADDRESS=compras@powertech.com.ar
-MAIL_COMPRAS_NAME="PowerTech — Compras"
-
-# Login de clientes con cuenta de Google
-GOOGLE_CLIENT_ID=
-GOOGLE_CLIENT_SECRET=
-GOOGLE_REDIRECT_URI="${APP_URL}/auth/google/callback"
-
-# Mercado Pago Checkout Pro
-MERCADOPAGO_ACCESS_TOKEN=
-MERCADOPAGO_PUBLIC_KEY=
-MERCADOPAGO_WEBHOOK_SECRET=
-
-# ARCA / AFIP — facturación electrónica
-AFIP_CUIT=
-AFIP_ENTORNO=homologacion       # homologacion | produccion
-AFIP_CERT_PATH=storage/app/afip/cert.crt
-AFIP_KEY_PATH=storage/app/afip/private.key
-AFIP_PUNTO_VENTA=1
+QUEUE_CONNECTION=database     # la cola 'reposicion' del circuito de compras vive acá
+CACHE_STORE=database          # el driver 'file' no soporta Cache::lock(), que serializa
+                              # la evaluación de reposición por producto y proveedor
+MAIL_PORT=2526                # el puerto SMTP con el que se levanta Mailpit (ver más abajo)
 ```
 
-> Los certificados de ARCA y los tokens de Mercado Pago **nunca se versionan**. `storage/app/afip/` debe estar en `.gitignore`.
+### Correo
+
+`.env.example` queda apuntado a Mailpit en `127.0.0.1:2526`. El remitente por defecto es `no-reply@powertech.com.ar`.
+
+> **Observación.** `.env.example` define `MAIL_COMPRAS_ADDRESS`, que `App\Mail\RemitoDePedido` intenta leer como `config('mail.compras.address')` para usarla como `replyTo` del remito al proveedor. **Esa clave no existe hoy en `config/mail.php`**, por lo que la variable no tiene efecto y el remito se envía sin `replyTo`. No impide el envío. Requiere revisión del equipo.
 
 ---
 
-## Carga inicial de datos
+## Importación del respaldo SQL
 
-El sistema entra en producción recién cuando el conteo físico está cargado y conciliado. El orden es:
+La instalación **no** usa `php artisan migrate --seed`: parte del respaldo incluido en el repositorio, que ya trae la estructura y los datos necesarios para operar.
 
-| Paso | Origen | Contenido |
-|---|---|---|
-| 1 | Seeders (versionados) | Roles, permisos, rol–permiso, tipos de documento, condiciones de IVA, alícuotas, tipos de comprobante, puntos de venta |
-| 2 | Administrativo | Categorías, proveedores, productos (precio, costo, alícuota, punto y cantidad de reposición, foto), empleados con sus datos personales y fiscales |
-| 3 | Conteo físico | Stock inicial de cada producto, cargado como movimiento de tipo `inicial` desde `/gestion/stock/carga-inicial`. El comprometido arranca en cero |
+### Respaldo a utilizar
 
-A partir del go-live, el stock físico de la base debe coincidir con el depósito, y toda diferencia posterior se explica con un movimiento.
+**`database/powertech_laravel-11-16.sql`**
 
----
-
-## Procesos de fondo
-
-### Worker de colas
-
-```bash
-php artisan queue:work --queue=reposicion,default
-```
-
-> **Después de tocar código hay que reiniciar el worker.** `queue:work` conserva las clases en memoria y seguirá ejecutando la versión vieja.
-
-### Tareas programadas
-
-Definidas en `routes/console.php`. En producción, un único cron:
-
-```cron
-* * * * * cd /ruta/al/proyecto && php artisan schedule:run >> /dev/null 2>&1
-```
-
-| Comando | Horario | Qué hace |
-|---|---|---|
-| `compras:revisar-reposicion` | 07:00 diario | Barrido de respaldo del restock: detecta cambios de umbral, productos cargados ya en falta y eventos perdidos por un worker caído |
-
-### Cómo funciona la reposición automática
-
-Tres disparadores, ninguno redundante, los tres terminando en `ReposicionService::evaluarProducto()` (que es idempotente):
-
-| Disparador | Cuándo | Qué ve que los otros no |
-|---|---|---|
-| `MovimientoStockRegistrado` → `EvaluarReposicion` | Cada movimiento de stock | El faltante en el momento mismo de la venta |
-| `OrdenCompraCancelada` → `ReponerPorCancelacion` | Al cancelar un pedido | Cancelar no mueve stock, así que el reactivo es ciego a esto |
-| `compras:revisar-reposicion` | Diario, 07:00 | Cambios de umbral y eventos perdidos |
-
-Reglas: se evalúa si el producto está activo, tiene `reposicion_automatica`, tiene proveedor y `stock_disponible <= punto_reposicion`. La cantidad pedida es `(punto_reposicion − stock_disponible) + cantidad_reposicion`, de modo que un disponible negativo por preventa arrastra al pedido lo que se le debe a los clientes. Si ya hay un borrador abierto del mismo proveedor, se amplía (solo sube, nunca baja); si la orden ya fue aprobada o enviada, no se toca, y la pantalla avisa que lo pendiente dejó de alcanzar.
-
-Los enganches se registran **explícitamente** en `AppServiceProvider`, no por descubrimiento automático, para que quien lea ese archivo vea que mover stock puede terminar generando una orden de compra.
-
-> **Trampa conocida:** si se cancela una orden porque el proveedor discontinuó el producto, el sistema lo vuelve a pedir en el acto. Hay que apagarle `reposicion_automatica` al producto **antes** de cancelar. El modal de cancelación lo advierte.
-
----
-
-## Estructura del proyecto
-
-```
-app/
-├── Console/Commands/      RevisarReposicion (barrido diario de restock)
-├── Enums/                 AmbitoRol, EstadoOrdenCompra, TipoMovimientoStock,
-│                          OrigenOrdenCompra, ProveedorAuth…
-├── Events/                MovimientoStockRegistrado, OrdenCompraCancelada
-├── Http/
-│   ├── Controllers/
-│   │   ├── Auth/          Breeze + invitación de empleados + Google
-│   │   ├── gestion/       Todo el backoffice
-│   │   └── …              HomeController, HelpController, ProfileController
-│   ├── Middleware/        VerificarAmbito, VerificarCuentaActiva
-│   └── Requests/          Validación por entidad
-├── Listeners/             EvaluarReposicion, ReponerPorCancelacion
-├── Mail/                  RemitoDePedido
-├── Models/
-│   └── Concerns/          TieneBajaLogica, ProtegeContraBorrado
-├── Policies/              Una por entidad; definen qué puede cada rol
-├── Providers/             AppServiceProvider (eventos, gates, bindings)
-└── Services/
-    ├── Facturacion/       AutorizadorComprobante (contrato) y su implementación
-    ├── StockService       Único punto de escritura del stock
-    ├── VentaService       Circuito de venta
-    ├── OrdenCompraService Circuito de compras
-    └── ReposicionService  Lógica del restock
-resources/views/
-├── layouts/               auth, cliente, gestion
-├── gestion/               Una carpeta por módulo
-├── emails/                remito-pedido
-└── home/, help/           Tienda pública
-routes/
-├── web.php                Tienda + gestión
-├── auth.php               Breeze: login, registro, invitación, verificación
-└── console.php            Tareas programadas
-database/
-├── migrations/            El esquema completo, desde cero
-└── seeders/               RolSeeder, PermisoSeeder, RolPermisoSeeder,
-                           PermisosMostradorSeeder, tablas de referencia AFIP
-```
-
-### Capas
-
-Los controladores **no contienen lógica de negocio**: validan con un *Form Request*, autorizan con una *Policy* y delegan en un *Service*. Los services son los dueños de las transacciones y los únicos que escriben stock, numeración y comprobantes. Los eventos se emiten **fuera de la transacción**, para que un listener nunca vea un estado que todavía puede revertirse.
-
----
-
-## Mapa de rutas
-
-Todo el backoffice cuelga de `/gestion` con `['auth', 'ambito:gestion']`.
-
-| Módulo | Prefijo | Acciones propias del dominio |
-|---|---|---|
-| Dashboard | `/gestion` | Un solo tablero: arma sus bloques según los permisos de quien entra |
-| Categorías | `/gestion/category` | CRUD + baja / reactivar (+ `DELETE` solo sin productos) |
-| Productos | `/gestion/item` | CRUD + baja / reactivar + publicar / despublicar + movimientos |
-| Stock | `/gestion/stock` | Kardex, ajustes con motivo, carga inicial |
-| Ventas | `/gestion/sale` | Alta, edición solo de presupuestos, `validar`, `cancelar`. **Sin DELETE** |
-| Devoluciones | `/gestion/sale/{venta}/return` | Nota de crédito + reingreso de stock físico |
-| Cobros | `/gestion/payment` | Listado, pendientes y alta. Un pago no se edita ni se borra |
-| Entregas | `/gestion/delivery` | `lista-retiro`, `despachar`, `entregar`. Único lugar donde baja el físico |
-| Comprobantes | `/gestion/invoice` | Lectura y `reintentar`. Sin alta manual ni edición |
-| Órdenes de compra | `/gestion/purchase-order` | `aprobar`, `enviar`, `cancelar`, `recibir`, `cerrar`. **Sin DELETE** |
-| Clientes | `/gestion/customer` | CRUD + baja / reactivar |
-| Empleados | `/gestion/empleado` | CRUD + baja / reactivar + reenviar invitación |
-| Proveedores | `/gestion/proveedor` | CRUD + baja / reactivar |
-| Promociones | `/gestion/promotion` | CRUD + baja / reactivar |
-| Direcciones | `/gestion/{tipo}/{id}/address` | Tabla polimórfica para clientes, proveedores y empleados |
-| Búsqueda | `/gestion/search` | Autocompletado JSON de la pantalla de venta |
-
-### Criterio de verbos
-
-| Verbo | Significado | Ejemplos |
-|---|---|---|
-| `PUT` | Modifica el recurso | Editar un presupuesto, el detalle de un borrador de compra |
-| `PATCH` | Cambia un estado del recurso | `baja`, `reactivar`, `publicar` |
-| `POST` | Dispara una acción del circuito | `validar`, `cobrar`, `entregar`, `aprobar`, `enviar`, `cancelar` |
-| `DELETE` | Solo donde la entidad no es un documento | Direcciones, categorías sin productos |
-
-Las transiciones del circuito de venta son **acciones**, no ediciones: generan movimientos de stock y comprobantes, no actualizan una fila.
-
-### Direcciones: el dueño sale de la URL
-
-`{tipo}` es un discriminador restringido a `clientes|proveedores|empleados`, y nunca llega del cuerpo del formulario: si llegara, cualquiera podría colgarle una dirección fiscal a otro. Los envíos **copian** el domicilio en lugar de apuntar a él, para que editar un perfil no cambie el destino de un despacho ya salido.
-
----
-
-## Convenciones del código
-
-| Criterio | Decisión |
+| Dato | Valor |
 |---|---|
-| Nomenclatura en BD | `snake_case`, tablas en plural (Laravel infiere modelo, tabla y FK) |
-| Clave primaria | `id` BIGINT UNSIGNED |
-| Timestamps | `created_at` y `updated_at` en todas las tablas |
-| Dinero | `DECIMAL(12,2)`. Nunca `FLOAT` |
-| Porcentajes | `DECIMAL(4,2)` |
-| Stock | Físico y comprometido `INT UNSIGNED`; disponible `INT` con signo, columna generada |
-| Baja lógica | Columna `activo` BOOLEAN. **Nunca `SoftDeletes`** |
-| Integridad | `ON DELETE` explícito en toda FK: `RESTRICT` por defecto, `CASCADE` solo donde el padre puede desaparecer físicamente. Sin `SET NULL` |
-| Numeración | Correlativos de la tabla `numeradores`, tomados con bloqueo de fila dentro de la transacción del documento. Nunca `MAX(numero) + 1` |
-| Idioma | Dominio y vistas en español; API de Laravel en inglés |
+| Fecha del volcado | 17-11-2026 01:30 (generado con phpMyAdmin 5.2.1) |
+| Servidor de origen | MariaDB 10.4.32 |
+| Base que espera | `powertech_laravel` |
+| Tablas | 39, todas InnoDB con `utf8mb4` / `utf8mb4_unicode_ci` |
+| Contenido | Estructura y datos: catálogo, clientes, empleados, ventas, comprobantes, movimientos de stock, órdenes de compra, pagos, promociones, numeradores, roles, permisos y las tablas de referencia fiscales |
+
+En `database/` hay respaldos anteriores (`powertech_laravel-10_05.sql` y siguientes). **Son históricos: no usarlos.** El respaldo vigente es el del 11-16.
+
+Los otros dos archivos `.sql` del repositorio **no son respaldos y no hay que ejecutarlos** durante la instalación:
+
+- `database/permisos-unificacion.sql` — parche incremental de permisos, ya aplicado en el respaldo del 11-16.
+- `sql/verificacion_invariantes.sql` — script de prueba de los invariantes de stock. Crea y descarta su propia base `powertech_test`.
+
+### Procedimiento
+
+El respaldo **no** contiene `CREATE DATABASE` ni `USE`, así que la base hay que crearla y seleccionarla.
+
+**1. Crear la base de datos**
+
+```bash
+mysql -u root -p -e "CREATE DATABASE powertech_laravel CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+```
+
+**2. Importar el respaldo** (desde la raíz del repositorio)
+
+```bash
+mysql -u root -p powertech_laravel < database/powertech_laravel-11-16.sql
+```
+
+En PowerShell, el operador `<` no redirige entrada; usar:
+
+```powershell
+cmd /c "mysql -u root -p powertech_laravel < database/powertech_laravel-11-16.sql"
+```
+
+También puede importarse desde phpMyAdmin: crear la base `powertech_laravel` con el juego de caracteres `utf8mb4_unicode_ci` y usar *Importar* sobre el archivo.
+
+**3. Después de importar**
+
+```bash
+php artisan storage:link
+php artisan config:clear
+```
+
+**No hace falta ejecutar `php artisan migrate`.** Las 39 migraciones de `database/migrations/` figuran todas registradas en la tabla `migrations` del respaldo, por lo que no quedan migraciones pendientes. Tampoco hay que correr seeders: los datos de referencia ya vienen cargados.
+
+> **Las imágenes no están versionadas.** `storage/app/public/` está vacío en el repositorio, así que los productos del respaldo apuntan a archivos que no existen y sus fotos se verán rotas. No afecta el funcionamiento del sistema; las imágenes se vuelven a cargar desde el panel.
 
 ---
 
-## Estado y pendientes
+## Puesta en marcha diaria
 
-### Implementado
+Rutina de desarrollo en **Windows**, con cuatro procesos que quedan corriendo, cada uno en su propia terminal, más la aplicación Flutter.
 
-- Autenticación unificada con ámbitos, invitación de empleados y login con Google.
-- Catálogo, inventario con kardex, ajustes y carga inicial.
-- Circuito de venta completo: presupuesto → validación → cobro → facturación → entrega.
-- Devoluciones con nota de crédito.
-- Órdenes de compra con aprobación, envío por correo y recepciones parciales.
-- Reposición automática con sus tres disparadores.
+### 1. Mailpit — servidor de correo de prueba
 
-### Pendiente
+Desde la carpeta donde está el ejecutable de Mailpit:
 
-- **Integración real con ARCA/AFIP.** Hoy `AutorizadorComprobante` está bindeado a `AutorizadorSimulado` en `AppServiceProvider`. El contrato ya está definido: reemplazar la implementación no debería tocar nada más.
-- **Checkout de la tienda** con Mercado Pago Checkout Pro. Cuando exista, sus rutas llevan además el middleware `verified`: no se compra con un correo sin confirmar.
-- **Priorización por antigüedad al recibir mercadería.** Al entrar stock hay que recorrer las ventas en `pendiente_stock` de ese producto en orden de antigüedad y pasar a `en_preparacion` las que ya tengan cubiertas todas sus líneas. Sin ese orden explícito, dos preventas compiten por las unidades recién llegadas según lo que devuelva el motor, y quien pagó primero puede quedar esperando otro ciclo.
+```powershell
+.\mailpit.exe --smtp=0.0.0.0:2526 --listen=0.0.0.0:8025
+```
+
+Captura todos los correos que emite el sistema (invitaciones de empleado y cliente, verificación de cuenta, recupero de contraseña, remito al proveedor y aviso de pedido listo para retirar) en lugar de enviarlos de verdad. La bandeja se abre en **http://localhost:8025**. El puerto SMTP `2526` es el que espera `MAIL_PORT` en el `.env`.
+
+**Mantener activo** mientras se prueben acciones que mandan correo. No depende de ningún otro proceso.
+
+### 2. Servidor Laravel
+
+Desde la raíz del repositorio:
+
+```bash
+composer run dev
+```
+
+Levanta **tres procesos a la vez** con `concurrently`, identificados por color en la consola:
+
+| Proceso | Comando | Qué hace |
+|---|---|---|
+| `server` | `php artisan serve` | Servidor HTTP de desarrollo en `http://localhost:8000` |
+| `queue` | `php artisan queue:listen --tries=1 --timeout=0` | Procesa trabajos en cola recargando el código en cada trabajo |
+| `vite` | `npm run dev` | Compila y recarga assets en caliente |
+
+**Mantener activo** siempre. Es el proceso base: sin él no hay sistema.
+
+### 3. Túnel de ngrok
+
+```bash
+ngrok http 8000
+```
+
+Expone el servidor local en una URL pública `https://...ngrok-free.app`. **Es imprescindible para probar Mercado Pago**, que rechaza URL locales y necesita alcanzar el webhook desde internet. Ver [Mercado Pago y webhooks](#mercado-pago-y-webhooks-en-desarrollo-local).
+
+**Mantener activo** mientras se pruebe el pago online. Depende de que el servidor Laravel esté arriba (apunta al puerto 8000). Cada vez que se reinicia, la URL pública cambia.
+
+### 4. Trabajador de colas
+
+Desde la raíz del repositorio:
+
+```bash
+php artisan queue:work
+```
+
+Toma los trabajos encolados y los ejecuta. Es lo que permite que **salgan los correos a los clientes sobre el estado de sus pedidos**: las notificaciones del sistema se despachan en cola, no durante el request.
+
+**Mantener activo** mientras se prueben acciones que generan correos o trabajos de fondo. Depende de la base de datos (`QUEUE_CONNECTION=database`).
+
+> **Después de tocar código hay que reiniciar este proceso:** `queue:work` conserva las clases en memoria y seguiría ejecutando la versión anterior. (El proceso `queue` de `composer run dev` usa `queue:listen`, que recarga el código solo.)
+
+> **Observación sobre las colas.** Los listeners del circuito de reposición automática (`EvaluarReposicion`, `ReponerPorCancelacion`, `ReponerPorCierre`) declaran la cola `reposicion`, y un trabajador sin la opción `--queue` atiende únicamente la cola `default`. En un servidor esto lo cubre la tarea programada de `routes/console.php`, que cada cinco minutos drena `reposicion` y `default`; en desarrollo, con el planificador detenido, las órdenes de reposición automática pueden quedar encoladas hasta el barrido diario de las 07:00. Esto no afecta el envío de correos. Queda como observación pendiente de resolución por el equipo.
+
+### 5. Aplicación Flutter
+
+Desde la raíz del repositorio del frontend:
+
+```bash
+flutter run --dart-define=API_URL_BASE=http://10.0.2.2:8000
+```
+
+Detalles de este comando y de la configuración por dispositivo, en el [README del frontend](https://github.com/Shiny333Arg/powertech-frontend-flutter).
+
+### Orden recomendado
+
+Mailpit → `composer run dev` → ngrok → `php artisan queue:work` → Flutter.
+
+Cuando ngrok entrega una URL nueva, actualizar `APP_URL` en el `.env` y ejecutar `php artisan config:clear` antes de probar el pago.
+
+---
+
+## Mercado Pago y webhooks en desarrollo local
+
+### Por qué hace falta un túnel
+
+Mercado Pago rechaza las `back_urls` y la `notification_url` que apunten a `localhost`, a `127.0.0.1` o a un host sin DNS público. Para probar el pago en desarrollo hay que exponer el entorno local con un túnel (ngrok, expose, Cloudflare Tunnel).
+
+### La trampa importante: hay que navegar por la URL del túnel
+
+Durante un request HTTP, el helper `route()` de Laravel arma las URL con **el host del request entrante**, no con `APP_URL`. `APP_URL` es solo el valor de reserva para cuando no hay request (consola, colas, correos).
+
+**Consecuencia:** si se navega la tienda en `http://localhost:8000`, las `back_urls` salen apuntando a `localhost` por más que `APP_URL` apunte al túnel, y Mercado Pago rechaza la preferencia. Hay que **entrar a la tienda por la dirección de ngrok** y hacer el checkout desde ahí.
+
+`PasarelaMercadoPago` detecta este caso antes de llamar a la API y devuelve un mensaje explicando qué corregir, porque el error original de Mercado Pago es engañoso (ver [Solución de problemas](#solución-de-problemas-frecuentes)).
+
+> Verificar esto desde `php artisan tinker` no sirve: ahí no hay request, `route()` cae en `APP_URL` y muestra la URL correcta mientras el navegador sigue mandando la equivocada.
+
+### El webhook
+
+| | |
+|---|---|
+| Ruta | `POST /checkout/webhook` |
+| `notification_url` enviada a Mercado Pago | se arma con `route('cliente.checkout.webhook')` |
+| CSRF | exceptuada en `bootstrap/app.php` |
+| Firma | HMAC-SHA256 en la cabecera `x-signature`, verificada con `MP_WEBHOOK_SECRET` |
+
+El webhook es **el camino autoritativo del cobro**: la venta se crea cuando llega la notificación de pago acreditado, aunque el cliente cierre el navegador y no vuelva al sitio. Por eso la app móvil no necesita un *deep link*: consulta `GET /api/v1/checkout/estado`, que lee lo que dejó el webhook.
+
+Si `MP_WEBHOOK_SECRET` está vacío, la verificación de firma **se saltea** y queda un aviso en el log. Es aceptable para una primera prueba local; en producción, sin firma, cualquiera que conozca la URL podría avisar que un pago se acreditó.
+
+### Qué actualizar cuando cambia la URL del túnel
+
+Cada reinicio de ngrok entrega un subdominio nuevo. Hay que actualizar:
+
+1. **`APP_URL`** en el `.env`, y después `php artisan config:clear`.
+2. **La URL del webhook** configurada en el panel de Mercado Pago (*Tus integraciones → Webhooks*), apuntando a `https://<subdominio>.ngrok-free.app/checkout/webhook`.
+3. **El `--dart-define=API_URL_BASE`** de la aplicación Flutter, si se la prueba a través del túnel.
+4. La dirección por la que se navega la tienda, según la trampa descripta arriba.
+
+---
+
+## Acceso al sistema
+
+| Destino | URL local |
+|---|---|
+| Tienda | `http://localhost:8000` |
+| Panel de gestión | `http://localhost:8000/gestion` |
+| Bandeja de correo (Mailpit) | `http://localhost:8025` |
+| Estado de la aplicación | `http://localhost:8000/up` |
+| API de tienda | `http://localhost:8000/api/v1` |
+| API de gestión | `http://localhost:8000/api/v1/gestion` |
+
+Para probar el pago con Mercado Pago, entrar a la tienda por la URL de ngrok en lugar de `localhost`.
+
+**Usuarios.** El respaldo SQL incluye las cuentas de usuario con las que opera el sistema, con sus roles ya asignados. **Las contraseñas no están documentadas en el repositorio** —se almacenan como hash— por lo que las credenciales de acceso debe proporcionarlas el equipo del proyecto. Este README no incluye credenciales por seguridad.
+
+---
+
+## Solución de problemas frecuentes
+
+| Síntoma | Causa y solución |
+|---|---|
+| `auto_return invalid. back_url.success must be defined`, aunque la URL se esté mandando | Mercado Pago no puede alcanzar la `back_url`. Se está navegando por `localhost`: entrar por la URL de ngrok. Si el dominio del túnel sigue sin ser aceptado, poner `MP_AUTO_RETURN=false` |
+| `Mercado Pago no puede alcanzar «...»: necesita una URL pública` | Es la validación previa del propio proyecto avisando lo mismo que arriba, antes de llamar a la API |
+| `La URL «...» tiene un espacio` | Espacio sobrante al final de `APP_URL` en el `.env`. Corregirlo y ejecutar `php artisan config:clear` |
+| `Falta MP_ACCESS_TOKEN: la tienda no puede cobrar` | Falta completar la credencial en el `.env`, o quedó el marcador `TEST-xxxxxxxx`. Después de cambiarla, `php artisan config:clear` |
+| Aviso en el log: `Webhook de Mercado Pago sin verificar: falta MP_WEBHOOK_SECRET` | Esperado si no se configuró el secreto. Completar `MP_WEBHOOK_SECRET` para habilitar la verificación de firma |
+| El pago se acredita pero no aparece el pedido | El webhook no llegó. Verificar que ngrok esté activo, que la URL del panel de Mercado Pago sea la del túnel actual y revisar `storage/logs/laravel.log` |
+| Al redirigir al checkout aparece una pantalla de error de Mercado Pago | Probar con `MP_USAR_SANDBOX_INIT_POINT=true` |
+| No llega ningún correo | Mailpit no está levantado, o `MAIL_PORT` no coincide con el `--smtp` del comando. Revisar la bandeja en `http://localhost:8025` |
+| El correo aparece en Mailpit recién mucho después | El trabajo quedó en cola. Verificar que el trabajador de colas esté corriendo |
+| Las órdenes de reposición automática no aparecen | Ver la observación sobre colas en [Puesta en marcha diaria](#puesta-en-marcha-diaria) |
+| Un cambio de código no se refleja en los trabajos en cola | Reiniciar `php artisan queue:work` |
+| Un cambio en el frontend no se ve | Ejecutar `npm run build`, o verificar que el proceso `vite` de `composer run dev` esté activo |
+| `Vite manifest not found` | No se compilaron los assets: `npm run build`, o levantar `composer run dev` |
+| Las fotos de los productos no se ven | Falta `php artisan storage:link`, o las imágenes no están en `storage/app/public` (no se versionan, ver [Importación del respaldo SQL](#importación-del-respaldo-sql)) |
+| La aplicación Flutter no conecta al backend | Ver la guía de diagnóstico del [README del frontend](https://github.com/Shiny333Arg/powertech-frontend-flutter) |
+| Un cambio en el `.env` no surte efecto | `php artisan config:clear` |
+
+### Observación específica de un entorno de desarrollo
+
+Se reportó que, con el antivirus activo, **la comunicación con Mercado Pago no funciona correctamente**. No pudo determinarse la causa: el repositorio no contiene ninguna configuración relacionada con antivirus, certificados ni verificación TLS, y la única opción ajustable del cliente HTTP es el tiempo de espera (`MP_TIMEOUT`, 15 segundos por defecto).
+
+**Queda pendiente de verificación.** No se recomienda desactivar el antivirus ni se considera un requisito de instalación. Para diagnosticarlo, conviene reproducir el fallo y revisar el error exacto registrado en `storage/logs/laravel.log`.
 
 ---
 
@@ -459,7 +540,10 @@ Las transiciones del circuito de venta son **acciones**, no ediciones: generan m
 
 | Documento | Contenido |
 |---|---|
-| `Requerimientos_PowerTech.md` | Relevamiento cerrado: alcance, roles, circuito de venta, modelo de stock, reglas de persistencia |
-| `Modelo_Datos_PowerTech_final.md` | Diccionario de las 31 tablas con la justificación de cada decisión |
-| `der_powertech_final.puml` | Diagrama entidad-relación |
-| `claude/restock-automatico.md` | Decisiones y trampas del circuito de reposición |
+| [`docs/api-gestion.md`](docs/api-gestion.md) | API de gestión: autenticación, capas de control, forma de las respuestas y endpoints |
+| `Requerimientos_PowerTech.md` | Relevamiento: alcance, roles, circuito de venta, modelo de stock y reglas de persistencia |
+| `Modelo_Datos_PowerTech_final.md` | Diccionario de tablas con la justificación de cada decisión |
+| `der_powertech_final.txt` | Diagrama entidad-relación |
+| [Repositorio del frontend](https://github.com/Shiny333Arg/powertech-frontend-flutter) | Aplicación móvil de clientes |
+
+> Los documentos de relevamiento y modelo de datos se mantienen fuera de este repositorio, en la documentación del proyecto.
