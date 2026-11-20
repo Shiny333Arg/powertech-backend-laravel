@@ -4,6 +4,7 @@ use App\Models\AlicuotaIva;
 use App\Models\Categoria;
 use App\Models\Cliente;
 use App\Models\CondicionIva;
+use App\Models\OrdenCompra;
 use App\Models\Producto;
 use App\Models\Promocion;
 use App\Models\Proveedor;
@@ -212,6 +213,51 @@ function cuitValido(): string
     };
 
     return $base.$verificador;
+}
+
+/**
+ * Orden de compra cruda, en el estado que se le pida.
+ *
+ * <b>Vivia dentro de ProveedorTest como ordenAbiertaDe().</b> Se movio aca en
+ * la entrega E.1, cuando la paso a necesitar tambien la prueba de la API de
+ * compras: Pest carga todos los archivos en el mismo proceso, asi que
+ * declararla dos veces no compila. Es la regla que explica la cabecera de este
+ * archivo.
+ *
+ * <b>Escribe la orden directo y no pasa por OrdenCompraService.</b> Es a
+ * proposito: las pruebas necesitan pedidos ya aprobados, enviados o repartidos,
+ * y llegar a esos estados por el servicio obligaria a aprobar y enviar de
+ * verdad —con su correo al proveedor— para armar el escenario de un test que no
+ * es sobre eso. El alta por el servicio se prueba contra el endpoint, que es
+ * donde importa.
+ *
+ * Para armar una MADRE hay que pasar proveedor_id en null explicito: sin la
+ * clave, la fabrica le crea un proveedor, porque lo normal es un pedido con
+ * destinatario.
+ *
+ *   ordenDeCompraDePrueba()                           simple, borrador
+ *   ordenDeCompraDePrueba(['proveedor_id' => null])    madre
+ *   ordenDeCompraDePrueba(['estado' => 'enviada'])     simple, enviada
+ */
+function ordenDeCompraDePrueba(array $atributos = []): OrdenCompra
+{
+    static $siguiente = 0;
+
+    if (! array_key_exists('proveedor_id', $atributos)) {
+        $atributos['proveedor_id'] = proveedorDePrueba()->id;
+    }
+
+    // La serie arranca en 9.000.000 y no en 1 para no chocar con el indice
+    // unico de `numero` cuando el mismo test crea ordenes por el endpoint: esas
+    // las numera el Numerador real, que empieza en OC-0000001. El contador es
+    // estatico y no OrdenCompra::count() porque una madre y sus hijas comparten
+    // la cuenta y el +1 se repetiria.
+    return OrdenCompra::create(array_merge([
+        'numero'         => 'OC-'.str_pad((string) (9_000_000 + ++$siguiente), 7, '0', STR_PAD_LEFT),
+        'estado'         => 'borrador',
+        'origen'         => 'manual',
+        'total_estimado' => 0,
+    ], $atributos));
 }
 
 /** Promocion vigente del canal online aplicada a un producto. */

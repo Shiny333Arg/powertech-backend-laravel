@@ -6,10 +6,12 @@ use App\Http\Controllers\Api\V1\Gestion\Acciones\CambiarEstadoProductoController
 use App\Http\Controllers\Api\V1\Gestion\Acciones\CambiarEstadoProveedorController;
 use App\Http\Controllers\Api\V1\Gestion\Acciones\CambiarPublicacionProductoController;
 use App\Http\Controllers\Api\V1\Gestion\CategoriaController;
+use App\Http\Controllers\Api\V1\Gestion\OrdenCompraController;
 use App\Http\Controllers\Api\V1\Gestion\ProductoController;
 use App\Http\Controllers\Api\V1\Gestion\ProveedorController;
 use App\Http\Controllers\Api\V1\Gestion\StockController;
 use App\Models\Categoria;
+use App\Models\OrdenCompra;
 use App\Models\Producto;
 use App\Models\Proveedor;
 use Illuminate\Support\Facades\Route;
@@ -267,6 +269,63 @@ Route::prefix('v1/gestion')
                     ->whereNumber('proveedor')
                     ->middleware('can:cambiarEstado,proveedor')
                     ->name('estado');
+            });
+
+        // ============================================================
+        // COMPRAS (PEDIDOS A PROVEEDORES) — E.1
+        // ============================================================
+        //
+        // <b>Tres endpoints y nada mas: consultar, ver el detalle y crear un
+        // borrador.</b> Aprobar, enviar, recibir y cancelar son E.2. La
+        // ausencia es deliberada: la policy ya tiene esos metodos y los
+        // permisos ya existen en PermisoSeeder, asi que lo unico que falta es
+        // la ruta. Por eso un POST a /{orden}/aprobar responde 405 y no 403.
+        //
+        // <b>Crear un borrador no toca el inventario.</b> La compra afecta el
+        // stock en un solo punto del circuito, que es la recepcion de
+        // mercaderia —RecepcionService con StockService—, y en E.1 ese punto no
+        // tiene endpoint. Un borrador es una intencion de compra.
+        //
+        // <b>El prefijo es 'compras' para que coincida con el del panel</b>
+        // (/gestion/compras) y con el modulo de los permisos. No hay que
+        // confundirlo con el 'compras' de la tienda en routes/api.php, que es
+        // el historial de COMPRAS DEL CLIENTE —ventas—: son dos documentos
+        // distintos que en castellano se llaman igual, viven en archivos de
+        // rutas distintos y no comparten ni modelo ni Resource.
+        //
+        // Dos permisos, uno por operacion:
+        //
+        //   GET  /compras           listar          compra.ver
+        //   GET  /compras/{orden}   detalle         compra.ver
+        //   POST /compras           crear borrador  compra.crear
+        //
+        // <b>Sin PUT en E.1.</b> La edicion del detalle existe en el panel y
+        // tiene su permiso ('compra.editar'), pero no entra en esta entrega.
+        //
+        // <b>Y sin DELETE, nunca.</b> La orden de compra no se elimina: su fin
+        // de vida es un estado —'recibida' o 'cancelada'—, igual que el de una
+        // venta. OrdenCompraPolicy no tiene metodo delete() y la ruta web
+        // tampoco existe.
+
+        Route::prefix('compras')
+            ->name('compras.')
+            ->group(function () {
+
+                Route::get('/', [OrdenCompraController::class, 'index'])
+                    ->middleware('can:viewAny,'.OrdenCompra::class)
+                    ->name('index');
+
+                Route::post('/', [OrdenCompraController::class, 'store'])
+                    ->middleware('can:create,'.OrdenCompra::class)
+                    ->name('store');
+
+                // Sirve cualquier orden, incluida una hija del reparto: el
+                // listado muestra solo las raiz, pero una hija es una orden
+                // real y su detalle es donde se la mira.
+                Route::get('/{orden}', [OrdenCompraController::class, 'show'])
+                    ->whereNumber('orden')
+                    ->middleware('can:view,orden')
+                    ->name('show');
             });
 
         // ============================================================

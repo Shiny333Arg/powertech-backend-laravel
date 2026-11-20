@@ -80,14 +80,19 @@ function datosDeAltaDeProveedor(array $cambios = []): array
     ], $cambios);
 }
 
-/** Orden de compra en un estado abierto, que es lo que cuenta el listado. */
+/**
+ * Orden de compra en un estado abierto, que es lo que cuenta el listado.
+ *
+ * Envuelve a la fabrica compartida de tests/Apoyo/fabricas.php, que se movio
+ * alla en la entrega E.1 porque la prueba de la API de compras necesita la
+ * misma. Acá queda el nombre que leen los tests de abajo, que dice lo unico que
+ * importa en este archivo: la orden esta ABIERTA, y por eso suma al conteo.
+ */
 function ordenAbiertaDe(Proveedor $proveedor): OrdenCompra
 {
-    return OrdenCompra::create([
-        'numero'       => 'OC-'.str_pad((string) (OrdenCompra::count() + 1), 7, '0', STR_PAD_LEFT),
+    return ordenDeCompraDePrueba([
         'proveedor_id' => $proveedor->id,
         'estado'       => 'borrador',
-        'origen'       => 'manual',
     ]);
 }
 
