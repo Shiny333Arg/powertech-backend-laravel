@@ -12,7 +12,6 @@
 
     Recibe:
       $estadoSugerido   aprobado | pendiente | rechazado | desconocido
-      $esquema          esquema del deep link de la app (config movil.esquema)
 --}}
 <!DOCTYPE html>
 <html lang="es">
@@ -52,15 +51,6 @@
         .icono { font-size: 48px; line-height: 1; margin-bottom: 16px; }
         h1 { font-size: 20px; margin: 0 0 8px; }
         .detalle { font-size: 15px; line-height: 1.5; color: #52525b; margin: 0 0 24px; }
-        .boton {
-            display: block;
-            padding: 14px 20px;
-            border-radius: 10px;
-            background: #2563eb;
-            color: #fff;
-            text-decoration: none;
-            font-weight: 600;
-        }
         .nota { font-size: 13px; color: #71717a; margin: 16px 0 0; }
     </style>
 </head>
@@ -89,15 +79,14 @@
         @endif
 
         {{--
-            El deep link solo funciona si la app registro el esquema en
-            AndroidManifest.xml e Info.plist. Si no esta registrado, el enlace
-            no hace nada y el cliente vuelve con el gesto de siempre: el
-            circuito no depende de este boton.
+            Sin boton de deep link a proposito: la app no registra ningun
+            esquema en AndroidManifest.xml, asi que el enlace no abriria nada.
+            El circuito no lo necesita: PantallaEsperandoPago detecta
+            AppLifecycleState.resumed y vuelve a consultar GET
+            /api/v1/checkout/estado cuando el cliente regresa por su cuenta.
         --}}
-        <a class="boton" href="{{ $esquema }}://checkout/retorno">Volver a PowerTech</a>
-
         <p class="nota">
-            Si el botón no funciona, cerrá esta pestaña y volvé a la aplicación.
+            Cerrá esta pestaña y volvé a la aplicación.
         </p>
     </div>
 </body>

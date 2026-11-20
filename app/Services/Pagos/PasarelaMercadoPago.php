@@ -268,7 +268,6 @@ class PasarelaMercadoPago implements PasarelaPago
         }
 
         // El id que se firma es el de la query string, en minusculas.
-        //$idPago = $request->query('data.id') ?? $request->query('id');
         $idPago = $request->query('data.id')
             ?? $request->query('data_id')
             ?? $request->query('id');
@@ -312,10 +311,6 @@ class PasarelaMercadoPago implements PasarelaPago
             return null;
         }
 
-        // $id = $request->input('data.id')
-        //     ?? $request->query('data.id')
-        //     ?? $request->input('id')
-        //     ?? $request->query('id');
         $id = $request->input('data.id')
             ?? $request->query('data.id')
             ?? $request->query('data_id')

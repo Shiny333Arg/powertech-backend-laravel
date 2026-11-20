@@ -26,14 +26,16 @@ use Illuminate\View\View;
  * editable: un ?status=approved escrito a mano no puede hacer nada acá
  * porque acá no se decide nada.
  *
- * <b>El deep link es opcional y hoy no esta activo.</b> Si la app registra el
- * esquema `powertech://` en Android e iOS, esta pagina puede rebotar sola y
- * el cliente vuelve sin tocar nada. Eso exige editar AndroidManifest.xml e
- * Info.plist, que son archivos nativos; mientras no esten configurados, el
- * boton «Volver a PowerTech» de la vista intenta el esquema y, si no hay nada
- * registrado, el cliente vuelve a la app con el gesto de siempre. El circuito
- * funciona igual en los dos casos, porque la confirmacion no depende de este
- * rebote.
+ * <b>El deep link es opcional y hoy no esta activo.</b> La app no registra
+ * ningun esquema: su AndroidManifest.xml solo declara el intent-filter de
+ * arranque. Por eso la vista no ofrece un boton de volver —un enlace a
+ * `powertech://` no abriria nada— y el cliente regresa con el gesto de
+ * siempre. El circuito no se entera: `PantallaEsperandoPago` detecta
+ * `AppLifecycleState.resumed` y consulta `GET /api/v1/checkout/estado`.
+ *
+ * Si alguna vez se registra el esquema —editando AndroidManifest.xml, que es
+ * un archivo nativo—, esta pagina puede volver a ofrecer el rebote. El nombre
+ * previsto sigue en `config('movil.esquema')`.
  */
 class RetornoMovilController extends Controller
 {
@@ -43,9 +45,6 @@ class RetornoMovilController extends Controller
             // Solo para el texto de la pagina. No decide nada: el estado real
             // lo da la API cuando la app vuelve al frente.
             'estadoSugerido' => $this->estadoSugerido($request),
-
-            // El esquema propio de la app, para el boton de volver.
-            'esquema' => config('movil.esquema'),
         ]);
     }
 
