@@ -270,7 +270,7 @@ APP_KEY=                      # la genera php artisan key:generate
 DB_USERNAME=                  # usuario de MariaDB/MySQL
 DB_PASSWORD=                  # su contraseña
 
-APP_URL=https://tu-tunel.ngrok-free.app   # reemplazar por la URL real del túnel
+APP_URL=https://tu-tunel.ngrok-free.app   # marcador: reemplazar por la URL real del túnel
 
 MP_ACCESS_TOKEN=TEST-xxxxxxxx # credencial de prueba de Mercado Pago
 MP_PUBLIC_KEY=TEST-xxxxxxxx   # credencial de prueba de Mercado Pago
@@ -412,7 +412,9 @@ Levanta **tres procesos a la vez** con `concurrently`, identificados por color e
 ngrok http 8000
 ```
 
-Expone el servidor local en una URL pública `https://...ngrok-free.app`. **Es imprescindible para probar Mercado Pago**, que rechaza URL locales y necesita alcanzar el webhook desde internet. Ver [Mercado Pago y webhooks](#mercado-pago-y-webhooks-en-desarrollo-local).
+Expone el servidor local del puerto 8000 en una URL pública `https://<subdominio>.ngrok-free.dev`, que la consola informa al levantarse.
+
+**Es la dirección por la que se accede a la tienda web**, y es imprescindible para probar Mercado Pago, que rechaza las URL locales y necesita alcanzar el webhook desde internet. Ver [Acceso al sistema](#acceso-al-sistema) y [Mercado Pago y webhooks](#mercado-pago-y-webhooks-en-desarrollo-local).
 
 **Mantener activo** mientras se pruebe el pago online. Depende de que el servidor Laravel esté arriba (apunta al puerto 8000). Cada vez que se reinicia, la URL pública cambia.
 
@@ -481,29 +483,89 @@ Si `MP_WEBHOOK_SECRET` está vacío, la verificación de firma **se saltea** y q
 
 ### Qué actualizar cuando cambia la URL del túnel
 
-Cada reinicio de ngrok entrega un subdominio nuevo. Hay que actualizar:
-
-1. **`APP_URL`** en el `.env`, y después `php artisan config:clear`.
-2. **La URL del webhook** configurada en el panel de Mercado Pago (*Tus integraciones → Webhooks*), apuntando a `https://<subdominio>.ngrok-free.app/checkout/webhook`.
-3. **El `--dart-define=API_URL_BASE`** de la aplicación Flutter, si se la prueba a través del túnel.
-4. La dirección por la que se navega la tienda, según la trampa descripta arriba.
+Cada reinicio de ngrok entrega un subdominio nuevo, y hay varias cosas que dependen de él: `APP_URL`, la URL del webhook en el panel de Mercado Pago, la dirección por la que se navega la tienda y, en algunos casos, la configuración de Flutter. El detalle está en [Acceso al sistema](#cuando-cambia-la-url-de-ngrok).
 
 ---
 
 ## Acceso al sistema
 
+El sistema se usa a través de **cuatro direcciones distintas**, y cada una existe por un motivo diferente. No son intercambiables.
+
+### 1. Tienda web — por la URL pública de ngrok
+
+**Así se accede a la interfaz web de la tienda**, no por `localhost`:
+
+```
+https://<subdominio>.ngrok-free.dev/
+```
+
+Al momento de escribir este README, el túnel en uso era `https://absently-attribute-dragging.ngrok-free.dev/`. **Esa dirección no es permanente**: es el subdominio que ngrok asignó en ese momento y cambia al reiniciar el túnel. El valor vigente es el que informa la consola de `ngrok http 8000` al levantarse.
+
+Hay que entrar por acá, y no por `localhost`, porque el helper `route()` de Laravel arma las URL con **el host del request entrante**. Si se navega la tienda en `localhost`, las `back_urls` que viajan a Mercado Pago salen apuntando a `localhost` y la pasarela rechaza la preferencia, por más que `APP_URL` apunte al túnel. Está explicado en detalle en [Mercado Pago y webhooks](#mercado-pago-y-webhooks-en-desarrollo-local).
+
+El panel de gestión también queda disponible por el túnel, en `https://<subdominio>.ngrok-free.dev/gestion`.
+
+### 2. Servidor Laravel local — puerto 8000
+
+```
+http://localhost:8000
+```
+
+Es el servidor de desarrollo que levanta `php artisan serve` dentro de `composer run dev`, escuchando en el puerto **8000** de la máquina. ngrok no reemplaza este servidor: lo expone. El túnel apunta a este puerto, así que si el servidor está caído, la URL pública tampoco responde.
+
+Sirve para trabajar sobre el panel de gestión y para verificar que el backend está arriba. Lo que **no** conviene hacer desde acá es el checkout con Mercado Pago, por el motivo del punto anterior.
+
 | Destino | URL local |
 |---|---|
 | Tienda | `http://localhost:8000` |
 | Panel de gestión | `http://localhost:8000/gestion` |
-| Bandeja de correo (Mailpit) | `http://localhost:8025` |
 | Estado de la aplicación | `http://localhost:8000/up` |
 | API de tienda | `http://localhost:8000/api/v1` |
 | API de gestión | `http://localhost:8000/api/v1/gestion` |
 
-Para probar el pago con Mercado Pago, entrar a la tienda por la URL de ngrok en lugar de `localhost`.
+### 3. API consumida por la aplicación Flutter — emulador de Android
 
-**Usuarios.** El respaldo SQL incluye las cuentas de usuario con las que opera el sistema, con sus roles ya asignados. **Las contraseñas no están documentadas en el repositorio** —se almacenan como hash— por lo que las credenciales de acceso debe proporcionarlas el equipo del proyecto. Este README no incluye credenciales por seguridad.
+```
+http://10.0.2.2:8000
+```
+
+Es la dirección que recibe la app en el comando de ejecución diaria (`--dart-define=API_URL_BASE=http://10.0.2.2:8000`). `10.0.2.2` es el alias con el que el **emulador de Android** alcanza el `localhost` de la máquina que lo hospeda: apunta al mismo servidor del punto 2, pero visto desde dentro del emulador, donde `localhost` sería el emulador mismo.
+
+Es una dirección de uso interno de la app, no una URL para abrir en un navegador. Para probar el pago desde la app, en cambio, hay que apuntarla al túnel. Ver el [README del frontend](https://github.com/Shiny333Arg/powertech-frontend-flutter).
+
+### 4. Bandeja de correo de prueba — Mailpit
+
+```
+http://localhost:8025
+```
+
+Interfaz web de **Mailpit**, donde quedan todos los correos que el sistema emite en desarrollo en lugar de enviarse de verdad. Es un servicio aparte del backend: corre en su propio proceso y en su propio puerto (`8025` para la interfaz web, `2526` para SMTP). No pasa por ngrok ni tiene relación con el puerto 8000.
+
+### Resumen
+
+| Para qué | Dirección | Observación |
+|---|---|---|
+| **Usar la tienda web** | `https://<subdominio>.ngrok-free.dev/` | Cambia en cada reinicio del túnel |
+| Servidor Laravel local / panel de gestión | `http://localhost:8000` | Puerto fijo |
+| API que consume Flutter en el emulador | `http://10.0.2.2:8000` | Alias del `localhost` de la máquina visto desde el emulador |
+| Bandeja de correo (Mailpit) | `http://localhost:8025` | Proceso y puerto independientes |
+
+### Cuando cambia la URL de ngrok
+
+Cada vez que se reinicia el túnel, ngrok entrega un subdominio nuevo y hay que actualizar lo que dependa de él:
+
+| Qué actualizar | Dónde | Cuándo |
+|---|---|---|
+| `APP_URL` | archivo `.env`, y después `php artisan config:clear` | Siempre |
+| URL del webhook | panel de Mercado Pago → *Tus integraciones → Webhooks*, apuntando a `https://<subdominio>.ngrok-free.dev/checkout/webhook` | Siempre que se pruebe el pago |
+| Dirección por la que se navega la tienda | el navegador | Siempre |
+| `--dart-define=API_URL_BASE` de Flutter | comando de ejecución de la app | **Solo si** se prueba la app a través del túnel. Con el emulador y `http://10.0.2.2:8000` no hace falta tocar nada |
+
+Las direcciones de los puntos 2, 3 y 4 no cambian: son locales y sus puertos son fijos.
+
+### Usuarios
+
+El respaldo SQL incluye las cuentas de usuario con las que opera el sistema, con sus roles ya asignados. **Las contraseñas no están documentadas en el repositorio** —se almacenan como hash— por lo que las credenciales de acceso debe proporcionarlas el equipo del proyecto. Este README no incluye credenciales por seguridad.
 
 ---
 
