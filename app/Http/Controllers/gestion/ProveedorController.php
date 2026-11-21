@@ -3,31 +3,44 @@
 namespace App\Http\Controllers\gestion;
 
 use App\Enums\CanalPedido;
-use App\Http\Requests\ProveedorRequest;
 use App\Models\CondicionIva;
 use App\Models\Proveedor;
-use App\Support\DomicilioFiscal;
-use Illuminate\Http\RedirectResponse;
+use App\Models\User;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Gate;
 use Illuminate\View\View;
 
 /**
- * CRUD de proveedores, sin delete.
+ * Las pantallas de proveedores del panel. <b>Ya no es un CRUD.</b>
  *
- * El proveedor esta referenciado por productos y por ordenes de compra, asi que
- * no se elimina nunca: la unica baja es activo = false. La ruta destroy no
- * existe, y el guard del modelo rechazaria el delete() igual.
+ * Entrega las tres paginas Blade —listado, alta y edicion— y nada mas. Los
+ * datos los trae y los modifica el JavaScript de cada pantalla contra
+ * /api/v1/gestion/proveedores, igual que en categorias y productos.
+ *
+ * store(), update(), darDeBaja() y reactivar() se eliminaron junto con sus
+ * rutas: existian para servirlas, y mientras existieran eran una via
+ * alternativa para ejecutar operaciones de negocio desde controladores web,
+ * que es lo que el requisito 3 de la Etapa 3 pide cerrar. Lo que hacia cada
+ * una esta mapeado a su endpoint en el comentario del bloque PROVEEDORES de
+ * routes/web.php.
+ *
+ * Las reglas no se movieron de lugar: el alta y la edicion siguen pasando por
+ * el mismo ProveedorRequest, la misma ProveedorPolicy y el mismo
+ * App\Support\DomicilioFiscal —un solo domicilio por proveedor, reemplazado
+ * en lugar de acumulado—; lo que cambio es quien los invoca.
+ *
+ * El proveedor esta referenciado por productos y por ordenes de compra, asi
+ * que no se elimina nunca: la unica baja es activo = false, ahora por
+ * PATCH .../estado.
  *
  * Los proveedores NO son usuarios: no tienen login ni interactuan con el
- * sistema. Por eso acá no hay nada de credenciales.
+ * sistema. Por eso aca no hay nada de credenciales.
  *
- * <b>El domicilio fiscal se guarda en App\Support\DomicilioFiscal.</b> Era un
- * metodo privado de este controlador hasta que la API de gestion necesito la
- * misma regla —un solo domicilio por proveedor, reemplazado en lugar de
- * acumulado—; esta en una clase compartida para que las dos interfaces no
- * puedan divergir. El comportamiento del formulario no cambio.
+ * <b>Lo unico que la pagina sigue trayendo de la base son los desplegables</b>
+ * —condiciones de IVA y canales de pedido—: son el catalogo de opciones del
+ * formulario y del filtro, no los datos del proveedor. Los canales salen del
+ * enum CanalPedido y las condiciones de IVA no tienen endpoint propio; crear
+ * uno pedia inventar tambien el permiso que lo protege. Queda anotado como
+ * pendiente.
  */
 class ProveedorController extends Controller
 {
@@ -37,147 +50,79 @@ class ProveedorController extends Controller
         $this->authorizeResource(Proveedor::class, 'proveedor');
     }
 
+    /**
+     * Listado de gestion.
+     *
+     * <b>La pagina ya no trae los proveedores.</b> El listado, los tres
+     * filtros y el paginado los resuelve
+     * resources/js/gestion/proveedores/index.js contra
+     * GET /api/v1/gestion/proveedores, con los filtros viajando en la URL para
+     * que un listado filtrado se pueda seguir guardando y compartiendo.
+     *
+     * Muestra activos e inactivos por defecto, a proposito: es la pantalla
+     * desde donde se reactiva un proveedor dado de baja. Ese criterio ahora
+     * vive en el endpoint, que tiene el mismo default.
+     *
+     * Del servidor bajan dos cosas: los canales de pedido del filtro —que son
+     * el enum, no datos— y los permisos del rol, que deciden que botones se
+     * dibujan y no que se puede hacer. Eso lo sigue exigiendo la API.
+     */
     public function index(Request $request): View
     {
-        $proveedores = Proveedor::query()
-            ->withCount([
-                // Cuantos productos dependen de este proveedor para reponerse.
-                'productos',
-                // Ordenes todavia capaces de sumar stock: es lo que hay que
-                // mirar antes de dar de baja a alguien.
-                'ordenesCompra as ordenes_abiertas_count' => fn ($query) => $query->abiertas(),
-            ])
-            ->when($request->filled('q'), function ($query) use ($request) {
-                $busqueda = $request->string('q')->trim()->value();
-                $soloDigitos = preg_replace('/\D/', '', $busqueda);
-
-                $query->where(function ($sub) use ($busqueda, $soloDigitos) {
-                    $sub->where('razon_social', 'like', "%{$busqueda}%")
-                        ->orWhere('contacto', 'like', "%{$busqueda}%");
-
-                    // Permite buscar el CUIT escrito con guiones aunque en la
-                    // columna este guardado sin ellos.
-                    if ($soloDigitos !== '') {
-                        $sub->orWhere('cuit', 'like', "%{$soloDigitos}%");
-                    }
-                });
-            })
-            ->when($request->filled('canal_pedido'), fn ($query) => $query->where('canal_pedido', $request->query('canal_pedido')))
-            ->when($request->query('estado') === 'activos', fn ($query) => $query->activos())
-            ->when($request->query('estado') === 'inactivos', fn ($query) => $query->inactivos())
-            ->orderBy('razon_social')
-            ->paginate(10)
-            ->withQueryString();
-
         return view('gestion.proveedors.index', [
-            'proveedores' => $proveedores,
-            'canales'     => CanalPedido::opciones(),
-            'filtros'     => $request->only('q', 'canal_pedido', 'estado'),
+            'canales'  => CanalPedido::opciones(),
+            'permisos' => $this->permisosDe($request->user()),
         ]);
     }
 
+    /**
+     * El formulario de alta, vacio.
+     *
+     * Ya no se precarga un Proveedor en blanco: el unico valor por omision que
+     * tenia —el canal 'email'— es el primero del desplegable, y el otro
+     * —'activo' en true— dejo de existir como campo del formulario: el alta
+     * por API deja al proveedor activo y descarta el 'activo' del cuerpo.
+     */
     public function create(): View
     {
-        return view('gestion.proveedors.create', [
-            'proveedor' => new Proveedor([
-                'activo'       => true,
-                'canal_pedido' => CanalPedido::Email->value,
-            ]),
-            'direccion' => null,
-        ] + $this->opcionesDeFormulario());
+        return view('gestion.proveedors.create', $this->opcionesDeFormulario());
     }
 
     /**
-     * Alta.
+     * El formulario de edicion.
      *
-     * Proveedor y domicilio en una sola transaccion: un proveedor guardado con
-     * el domicilio a medias obliga a completarlo despues sin que nada avise.
+     * Entrega el id y los desplegables: los datos del proveedor y su domicilio
+     * fiscal los pide la pantalla a GET /api/v1/gestion/proveedores/{proveedor}.
+     * El binding de ruta sigue sirviendo para dos cosas que no se pueden
+     * delegar al JavaScript: el 404 de un proveedor que no existe y la
+     * autorizacion de authorizeResource().
      */
-    public function store(ProveedorRequest $request): RedirectResponse
-    {
-        $proveedor = DB::transaction(function () use ($request) {
-            $proveedor = Proveedor::create($request->datosDelProveedor());
-
-            DomicilioFiscal::guardar($proveedor, $request->datosDeLaDireccion());
-
-            return $proveedor;
-        });
-
-        return redirect()
-            ->route('gestion.proveedores.index')
-            ->with('exito', "Se creó el proveedor «{$proveedor->razon_social}».");
-    }
-
     public function edit(Proveedor $proveedor): View
     {
         return view('gestion.proveedors.edit', [
             'proveedor' => $proveedor,
-            'direccion' => DomicilioFiscal::de($proveedor),
         ] + $this->opcionesDeFormulario());
     }
 
-    public function update(ProveedorRequest $request, Proveedor $proveedor): RedirectResponse
-    {
-        DB::transaction(function () use ($request, $proveedor) {
-            $proveedor->update($request->datosDelProveedor());
-
-            DomicilioFiscal::guardar($proveedor, $request->datosDeLaDireccion());
-        });
-
-        // 'proveedores.index' y no 'proveedors.index': el nombre de la ruta es
-        // el del prefijo name() de routes/web.php. 'proveedors' es la carpeta
-        // de VISTAS, que si se llama asi; con ese nombre, guardar la edicion
-        // terminaba en RouteNotFoundException.
-        return redirect()
-            ->route('gestion.proveedores.index')
-            ->with('exito', "Se guardaron los cambios en «{$proveedor->razon_social}».");
-    }
-
     /**
-     * Baja logica.
+     * Que puede hacer este empleado con los proveedores.
      *
-     * No bloquea aunque tenga productos u ordenes abiertas: la baja es
-     * reversible y el proveedor sigue nombrando las ordenes que ya emitio. Lo
-     * que sí hace es avisar, porque la consecuencia no es obvia: los productos
-     * que dependen de este proveedor dejan de generar orden automatica y su
-     * faltante pasa a ser invisible hasta que alguien lo note.
+     * Se le pregunta a la MISMA ProveedorPolicy que autoriza la API, con una
+     * instancia vacia: la policy decide por el permiso del rol y no mira la
+     * fila. Asi las claves de permiso siguen escritas en un solo lugar y no se
+     * repiten en la vista ni en el JavaScript.
+     *
+     * @return array<string, bool>
      */
-    public function darDeBaja(Proveedor $proveedor): RedirectResponse
+    private function permisosDe(User $empleado): array
     {
-        // authorizeResource() solo cubre los siete metodos de recurso: las
-        // acciones de estado tienen que autorizar a mano, o quedan abiertas a
-        // cualquier cuenta del ambito gestion.
-        Gate::authorize('cambiarEstado', $proveedor);
+        $cualquiera = new Proveedor;
 
-        $proveedor->darDeBaja();
-
-        $productosEnReposicion = $proveedor->productos()
-            ->activos()
-            ->where('reposicion_automatica', true)
-            ->count();
-
-        $aviso = "«{$proveedor->razon_social}» salió de operación.";
-
-        if ($productosEnReposicion > 0) {
-            $aviso .= " {$productosEnReposicion} producto(s) dependían de él para reponerse: asignales otro proveedor.";
-        }
-
-        $ordenesAbiertas = $proveedor->ordenesCompra()->abiertas()->count();
-
-        if ($ordenesAbiertas > 0) {
-            $aviso .= " Quedan {$ordenesAbiertas} orden(es) de compra abierta(s), que siguen su curso.";
-        }
-
-        return back()->with('exito', $aviso);
-    }
-
-    public function reactivar(Proveedor $proveedor): RedirectResponse
-    {
-        Gate::authorize('cambiarEstado', $proveedor);
-
-        $proveedor->reactivar();
-
-        return back()->with('exito', "«{$proveedor->razon_social}» vuelve a estar en operación.");
+        return [
+            'crear' => $empleado->can('create', Proveedor::class),
+            'editar' => $empleado->can('update', $cualquiera),
+            'cambiarEstado' => $empleado->can('cambiarEstado', $cualquiera),
+        ];
     }
 
     /** @return array<string, mixed> */

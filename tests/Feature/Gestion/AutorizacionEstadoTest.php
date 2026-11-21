@@ -189,42 +189,19 @@ test('el vendedor no puede reactivar una promocion', function () {
 });
 
 // ==================================================================
-// 4. Proveedores
+// 4. Proveedores: se mudaron a la API
 // ==================================================================
-
-test('el cajero no puede dar de baja un proveedor', function () {
-    actuandoComo('cajero');
-
-    $proveedor = proveedorDePrueba();
-
-    $this->patch("/gestion/proveedor/{$proveedor->id}/baja")->assertForbidden();
-
-    expect($proveedor->fresh()->activo)->toBeTrue();
-});
-
-test('el administrativo puede dar de baja y reactivar un proveedor', function () {
-    actuandoComo('administrativo');
-
-    $proveedor = proveedorDePrueba();
-
-    $this->patch("/gestion/proveedor/{$proveedor->id}/baja")->assertRedirect();
-
-    expect($proveedor->fresh()->activo)->toBeFalse();
-
-    $this->patch("/gestion/proveedor/{$proveedor->id}/reactivar")->assertRedirect();
-
-    expect($proveedor->fresh()->activo)->toBeTrue();
-});
-
-test('el vendedor no puede reactivar un proveedor', function () {
-    actuandoComo('vendedor');
-
-    $proveedor = proveedorDePrueba(['activo' => false]);
-
-    $this->patch("/gestion/proveedor/{$proveedor->id}/reactivar")->assertForbidden();
-
-    expect($proveedor->fresh()->activo)->toBeFalse();
-});
+//
+// Las tres pruebas de proveedores que vivian aca desaparecieron con las rutas
+// que ejercitaban: 'gestion.proveedores.darDeBaja' y '.reactivar' se retiraron
+// al migrar la pantalla, porque eran una via alternativa para ejecutar
+// operaciones de negocio desde un controlador web.
+//
+// La misma autorizacion sigue cubierta, ahora contra el endpoint que la
+// pantalla usa de verdad, en tests/Feature/Api/V1/Gestion/ProveedorTest.php:
+// 'no deja entrar al vendedor ni al cajero', 'no deja cambiar el estado sin el
+// permiso de baja' y 'da de baja y reactiva un proveedor'. No se perdio ningun
+// caso.
 
 // ==================================================================
 // 5. Empleados: baja, reactivacion y reenvio de invitacion
@@ -300,16 +277,13 @@ test('el administrativo puede pedir el reenvio de la invitacion de un empleado',
 test('el administrador puede cambiar el estado de cualquier recurso', function () {
     actuandoComo('administrador');
 
-    // Productos ya no esta: sus acciones de estado son de la API. Lo de
-    // productos para el administrador lo cubre ProductoTest.
+    // Productos y proveedores ya no estan: sus acciones de estado son de la
+    // API, y las cubren ProductoTest y ProveedorTest.
     $categoria = categoriaDePrueba();
-    $proveedor = proveedorDePrueba();
 
     $this->patch("/gestion/category/{$categoria->id}/baja")->assertRedirect();
-    $this->patch("/gestion/proveedor/{$proveedor->id}/baja")->assertRedirect();
 
-    expect($categoria->fresh()->activo)->toBeFalse()
-        ->and($proveedor->fresh()->activo)->toBeFalse();
+    expect($categoria->fresh()->activo)->toBeFalse();
 });
 
 // ==================================================================

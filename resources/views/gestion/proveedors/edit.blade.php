@@ -20,15 +20,16 @@
     {{-- Formulario de edición --}}
     <section class="mb-4">
 
+        {{-- Fallas de la API que no son de validacion: sin permiso, sin red. --}}
+        <div id="avisosProveedor" aria-live="polite"></div>
+
         <form
-            id="editarProveedorForm"
-            action="{{ route('gestion.proveedores.update', $proveedor) }}"
-            method="POST"
+            id="formularioProveedor"
             autocomplete="off"
             class="p-4 rounded-4 bg-light shadow-sm border">
 
-            @csrf
-            @method('PUT')
+            {{-- Errores de validación que devuelve la API. --}}
+            <div id="erroresProveedor"></div>
 
             <div class="row g-4">
 
@@ -44,19 +45,14 @@
 
                     <input
                         type="text"
-                        class="form-control rounded-3 @error('razon_social') is-invalid @enderror"
+                        class="form-control rounded-3"
                         id="razon_social"
                         name="razon_social"
-                        value="{{ old('razon_social', $proveedor->razon_social) }}"
                         maxlength="150"
                         required
                         disabled>
 
-                    @error('razon_social')
-                    <div class="invalid-feedback">
-                        {{ $message }}
-                    </div>
-                    @enderror
+                    <div class="invalid-feedback" id="error-razon_social"></div>
                 </div>
 
 
@@ -68,19 +64,14 @@
 
                     <input
                         type="text"
-                        class="form-control rounded-3 @error('cuit') is-invalid @enderror"
+                        class="form-control rounded-3"
                         id="cuit"
                         name="cuit"
-                        value="{{ old('cuit', $proveedor->cuit) }}"
                         maxlength="13"
                         required
                         disabled>
 
-                    @error('cuit')
-                    <div class="invalid-feedback">
-                        {{ $message }}
-                    </div>
-                    @enderror
+                    <div class="invalid-feedback" id="error-cuit"></div>
                 </div>
 
 
@@ -93,7 +84,7 @@
                     <select
                         id="condicion_iva_id"
                         name="condicion_iva_id"
-                        class="form-select rounded-3 @error('condicion_iva_id') is-invalid @enderror"
+                        class="form-select rounded-3"
                         required
                         disabled>
 
@@ -101,19 +92,14 @@
 
                         @foreach($condiciones as $condicion)
                         <option
-                            value="{{ $condicion->id }}"
-                            @selected(old('condicion_iva_id', $proveedor->condicion_iva_id) == $condicion->id)>
+                            value="{{ $condicion->id }}">
                             {{ $condicion->nombre }}
                         </option>
                         @endforeach
 
                     </select>
 
-                    @error('condicion_iva_id')
-                    <div class="invalid-feedback">
-                        {{ $message }}
-                    </div>
-                    @enderror
+                    <div class="invalid-feedback" id="error-condicion_iva_id"></div>
                 </div>
 
 
@@ -125,18 +111,13 @@
 
                     <input
                         type="text"
-                        class="form-control rounded-3 @error('contacto') is-invalid @enderror"
+                        class="form-control rounded-3"
                         id="contacto"
                         name="contacto"
-                        value="{{ old('contacto', $proveedor->contacto) }}"
                         maxlength="100"
                         disabled>
 
-                    @error('contacto')
-                    <div class="invalid-feedback">
-                        {{ $message }}
-                    </div>
-                    @enderror
+                    <div class="invalid-feedback" id="error-contacto"></div>
                 </div>
 
 
@@ -148,18 +129,13 @@
 
                     <input
                         type="email"
-                        class="form-control rounded-3 @error('email') is-invalid @enderror"
+                        class="form-control rounded-3"
                         id="email"
                         name="email"
-                        value="{{ old('email', $proveedor->email) }}"
                         maxlength="150"
                         disabled>
 
-                    @error('email')
-                    <div class="invalid-feedback">
-                        {{ $message }}
-                    </div>
-                    @enderror
+                    <div class="invalid-feedback" id="error-email"></div>
                 </div>
 
 
@@ -171,18 +147,13 @@
 
                     <input
                         type="text"
-                        class="form-control rounded-3 @error('telefono') is-invalid @enderror"
+                        class="form-control rounded-3"
                         id="telefono"
                         name="telefono"
-                        value="{{ old('telefono', $proveedor->telefono) }}"
                         maxlength="30"
                         disabled>
 
-                    @error('telefono')
-                    <div class="invalid-feedback">
-                        {{ $message }}
-                    </div>
-                    @enderror
+                    <div class="invalid-feedback" id="error-telefono"></div>
                 </div>
 
 
@@ -199,7 +170,7 @@
                     <select
                         id="canal_pedido"
                         name="canal_pedido"
-                        class="form-select rounded-3 @error('canal_pedido') is-invalid @enderror"
+                        class="form-select rounded-3"
                         required
                         disabled>
 
@@ -207,19 +178,14 @@
 
                         @foreach($canales as $value => $label)
                         <option
-                            value="{{ $value }}"
-                            @selected(old('canal_pedido', $proveedor->canal_pedido?->value) === $value)>
+                            value="{{ $value }}">
                             {{ $label }}
                         </option>
                         @endforeach
 
                     </select>
 
-                    @error('canal_pedido')
-                    <div class="invalid-feedback">
-                        {{ $message }}
-                    </div>
-                    @enderror
+                    <div class="invalid-feedback" id="error-canal_pedido"></div>
                 </div>
 
 
@@ -231,10 +197,9 @@
 
                     <input
                         type="url"
-                        class="form-control rounded-3 @error('portal_url') is-invalid @enderror"
+                        class="form-control rounded-3"
                         id="portal_url"
                         name="portal_url"
-                        value="{{ old('portal_url', $proveedor->portal_url) }}"
                         maxlength="255"
                         placeholder="https://ejemplo.com"
                         disabled>
@@ -243,11 +208,7 @@
                         Solo se utiliza cuando el canal de pedido es un portal externo.
                     </div>
 
-                    @error('portal_url')
-                    <div class="invalid-feedback">
-                        {{ $message }}
-                    </div>
-                    @enderror
+                    <div class="invalid-feedback" id="error-portal_url"></div>
                 </div>
 
 
@@ -260,10 +221,9 @@
                     <div class="input-group">
                         <input
                             type="number"
-                            class="form-control rounded-start-3 @error('plazo_entrega_dias') is-invalid @enderror"
+                            class="form-control rounded-start-3"
                             id="plazo_entrega_dias"
                             name="plazo_entrega_dias"
-                            value="{{ old('plazo_entrega_dias', $proveedor->plazo_entrega_dias) }}"
                             min="0"
                             max="365"
                             disabled>
@@ -273,11 +233,7 @@
                         </span>
                     </div>
 
-                    @error('plazo_entrega_dias')
-                    <div class="text-danger small mt-1">
-                        {{ $message }}
-                    </div>
-                    @enderror
+                    <div class="text-danger small mt-1" id="error-plazo_entrega_dias"></div>
                 </div>
 
 
@@ -307,18 +263,13 @@
 
                     <input
                         type="text"
-                        class="form-control rounded-3 @error('direccion.calle') is-invalid @enderror"
+                        class="form-control rounded-3"
                         id="direccion_calle"
                         name="direccion[calle]"
-                        value="{{ old('direccion.calle', $direccion?->calle) }}"
                         maxlength="120"
                         disabled>
 
-                    @error('direccion.calle')
-                    <div class="invalid-feedback">
-                        {{ $message }}
-                    </div>
-                    @enderror
+                    <div class="invalid-feedback" id="error-direccion.calle"></div>
                 </div>
 
 
@@ -330,18 +281,13 @@
 
                     <input
                         type="text"
-                        class="form-control rounded-3 @error('direccion.numero') is-invalid @enderror"
+                        class="form-control rounded-3"
                         id="direccion_numero"
                         name="direccion[numero]"
-                        value="{{ old('direccion.numero', $direccion?->numero) }}"
                         maxlength="10"
                         disabled>
 
-                    @error('direccion.numero')
-                    <div class="invalid-feedback">
-                        {{ $message }}
-                    </div>
-                    @enderror
+                    <div class="invalid-feedback" id="error-direccion.numero"></div>
                 </div>
 
 
@@ -353,18 +299,13 @@
 
                     <input
                         type="text"
-                        class="form-control rounded-3 @error('direccion.piso_depto') is-invalid @enderror"
+                        class="form-control rounded-3"
                         id="direccion_piso_depto"
                         name="direccion[piso_depto]"
-                        value="{{ old('direccion.piso_depto', $direccion?->piso_depto) }}"
                         maxlength="20"
                         disabled>
 
-                    @error('direccion.piso_depto')
-                    <div class="invalid-feedback">
-                        {{ $message }}
-                    </div>
-                    @enderror
+                    <div class="invalid-feedback" id="error-direccion.piso_depto"></div>
                 </div>
 
 
@@ -376,18 +317,13 @@
 
                     <input
                         type="text"
-                        class="form-control rounded-3 @error('direccion.codigo_postal') is-invalid @enderror"
+                        class="form-control rounded-3"
                         id="direccion_codigo_postal"
                         name="direccion[codigo_postal]"
-                        value="{{ old('direccion.codigo_postal', $direccion?->codigo_postal) }}"
                         maxlength="10"
                         disabled>
 
-                    @error('direccion.codigo_postal')
-                    <div class="invalid-feedback">
-                        {{ $message }}
-                    </div>
-                    @enderror
+                    <div class="invalid-feedback" id="error-direccion.codigo_postal"></div>
                 </div>
 
 
@@ -399,18 +335,13 @@
 
                     <input
                         type="text"
-                        class="form-control rounded-3 @error('direccion.localidad') is-invalid @enderror"
+                        class="form-control rounded-3"
                         id="direccion_localidad"
                         name="direccion[localidad]"
-                        value="{{ old('direccion.localidad', $direccion?->localidad) }}"
                         maxlength="80"
                         disabled>
 
-                    @error('direccion.localidad')
-                    <div class="invalid-feedback">
-                        {{ $message }}
-                    </div>
-                    @enderror
+                    <div class="invalid-feedback" id="error-direccion.localidad"></div>
                 </div>
 
 
@@ -422,18 +353,13 @@
 
                     <input
                         type="text"
-                        class="form-control rounded-3 @error('direccion.provincia') is-invalid @enderror"
+                        class="form-control rounded-3"
                         id="direccion_provincia"
                         name="direccion[provincia]"
-                        value="{{ old('direccion.provincia', $direccion?->provincia) }}"
                         maxlength="60"
                         disabled>
 
-                    @error('direccion.provincia')
-                    <div class="invalid-feedback">
-                        {{ $message }}
-                    </div>
-                    @enderror
+                    <div class="invalid-feedback" id="error-direccion.provincia"></div>
                 </div>
 
             </div>
@@ -459,7 +385,7 @@
             {{-- Actualizar --}}
             <button
                 type="submit"
-                form="editarProveedorForm"
+                form="formularioProveedor"
                 class="btn btn-success px-4 fw-semibold shadow-sm"
                 id="btnActualizar"
                 disabled>
@@ -485,46 +411,32 @@
             </a>
 
 
-            {{-- Baja / Alta --}}
-            @if($proveedor->activo)
+            {{--
+                Baja y reactivacion.
 
-            <form
-                action="{{ route('gestion.proveedores.darDeBaja', ['proveedor' => $proveedor->id]) }}"
-                method="POST"
-                class="d-inline">
+                Los dos botones se dibujan siempre y el JavaScript muestra el
+                que corresponde cuando la API le dice si el proveedor esta
+                activo: la pagina ya no sabe en que estado esta. Van contra
+                PATCH /api/v1/gestion/proveedores/{id}/estado, que exige
+                'proveedor.baja'.
+            --}}
+            @can('cambiarEstado', $proveedor)
 
-                @csrf
-                @method('PATCH')
+            <button
+                type="button"
+                id="botonBaja"
+                class="btn btn-danger px-4 fw-semibold shadow-sm d-none">
+                Dar de baja
+            </button>
 
-                <button
-                    type="submit"
-                    class="btn btn-danger px-4 fw-semibold shadow-sm"
-                    onclick="return confirm('¿Está seguro de que desea dar de baja este proveedor?')">
-                    Dar de baja
-                </button>
+            <button
+                type="button"
+                id="botonReactivar"
+                class="btn btn-success px-4 fw-semibold shadow-sm d-none">
+                Dar de alta
+            </button>
 
-            </form>
-
-            @else
-
-            <form
-                action="{{ route('gestion.proveedores.reactivar', ['proveedor' => $proveedor->id]) }}"
-                method="POST"
-                class="d-inline">
-
-                @csrf
-                @method('PATCH')
-
-                <button
-                    type="submit"
-                    class="btn btn-success px-4 fw-semibold shadow-sm"
-                    onclick="return confirm('¿Está seguro de que desea dar de alta este proveedor?')">
-                    Dar de alta
-                </button>
-
-            </form>
-
-            @endif
+            @endcan
 
         </div>
 
@@ -537,134 +449,12 @@
 
 
 @push('scripts')
+<script type="module">
+    import { iniciar } from '{{ Vite::asset('resources/js/gestion/proveedores/formulario.js') }}';
 
-<script>
-    document.addEventListener('DOMContentLoaded', function() {
-
-        const form = document.getElementById('editarProveedorForm');
-        const btnEditar = document.getElementById('btnEditar');
-        const btnActualizar = document.getElementById('btnActualizar');
-        const btnCancelar = document.getElementById('btnCancelar');
-
-        const campos = form.querySelectorAll(
-            'input:not([type="hidden"]), select, textarea'
-        );
-
-        // Guardamos los valores originales para poder cancelar.
-        const valoresOriginales = {};
-
-        campos.forEach(campo => {
-
-            if (campo.type === 'checkbox') {
-
-                valoresOriginales[campo.id] = campo.checked;
-
-            } else if (campo.type !== 'file') {
-
-                valoresOriginales[campo.id] = campo.value;
-
-            }
-
-        });
-
-
-        function actualizarPortalUrl() {
-
-            const canal = document.getElementById('canal_pedido');
-            const portal = document.getElementById('portal_url');
-
-            if (!canal || !portal) {
-                return;
-            }
-
-            /*
-             * El valor esperado para PortalExterno es obtenido desde
-             * CanalPedido::PortalExterno->value.
-             *
-             * Si el enum cambia ese valor, modificar esta constante.
-             */
-            const esPortalExterno = canal.value === 'portal_externo';
-
-            portal.closest('.col-md-6').style.display =
-                esPortalExterno ? '' : 'none';
-
-        }
-
-
-        function activarEdicion() {
-
-            campos.forEach(campo => {
-
-                if (campo.type !== 'hidden') {
-                    campo.disabled = false;
-                }
-
-            });
-
-            btnEditar.disabled = true;
-            btnActualizar.disabled = false;
-            btnCancelar.disabled = false;
-
-            actualizarPortalUrl();
-        }
-
-
-        function cancelarEdicion() {
-
-            campos.forEach(campo => {
-
-                if (campo.type === 'file') {
-
-                    campo.value = '';
-                    campo.disabled = true;
-
-                    return;
-                }
-
-                if (campo.type === 'checkbox') {
-
-                    campo.checked = valoresOriginales[campo.id];
-
-                } else {
-
-                    campo.value = valoresOriginales[campo.id];
-
-                }
-
-                campo.disabled = true;
-
-            });
-
-            btnEditar.disabled = false;
-            btnActualizar.disabled = true;
-            btnCancelar.disabled = true;
-
-            actualizarPortalUrl();
-        }
-
-
-        btnEditar.addEventListener('click', activarEdicion);
-
-        btnCancelar.addEventListener('click', cancelarEdicion);
-
-
-        /*
-         * Si cambia el canal de pedido mientras se está editando,
-         * mostramos u ocultamos el campo de portal.
-         */
-        const canalPedido = document.getElementById('canal_pedido');
-
-        if (canalPedido) {
-
-            canalPedido.addEventListener('change', actualizarPortalUrl);
-
-        }
-
-
-        // Estado inicial.
-        actualizarPortalUrl();
-
+    iniciar({
+        id: {{ $proveedor->id }},
+        urlListado: '{{ route('gestion.proveedores.index') }}',
     });
 </script>
-
 @endpush

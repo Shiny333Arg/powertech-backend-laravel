@@ -17,53 +17,15 @@
 
 </section>
 
-<!-- Mensajes -->
+{{--
+    Avisos de la pantalla.
 
-@if (session('exito')) <div class="alert alert-success alert-dismissible fade show" role="alert">
-    {{ session('exito') }}
-
-
-    <button
-        type="button"
-        class="btn-close"
-        data-bs-dismiss="alert"
-        aria-label="Cerrar">
-    </button>
-</div>
-
-
-@endif
-
-@if (session('error')) <div class="alert alert-danger alert-dismissible fade show" role="alert">
-    {{ session('error') }}
-
-
-    <button
-        type="button"
-        class="btn-close"
-        data-bs-dismiss="alert"
-        aria-label="Cerrar">
-    </button>
-</div>
-
-
-@endif
-
-@if ($errors->any()) <div class="alert alert-danger">
-
-
-    <strong>Se encontraron errores:</strong>
-
-    <ul class="mb-0 mt-2">
-        @foreach ($errors->all() as $error)
-        <li>{{ $error }}</li>
-        @endforeach
-    </ul>
-
-</div>
-
-
-@endif
+    Antes se imprimian aca `session('exito')`, `session('error')` y la lista de
+    `$errors`, que dejaba el redirect del controlador web. Ahora las
+    operaciones las hace el JavaScript contra la API, no hay redirect, y el
+    mismo cartel lo pinta resources/js/gestion/avisos.js con este marcado.
+--}}
+<div id="avisosProveedores" aria-live="polite"></div>
 
 <!-- Botones -->
 
@@ -72,6 +34,7 @@
 
     <!-- Nuevo proveedor -->
 
+    @if ($permisos['crear'])
     <a
         href="{{ route('gestion.proveedores.create') }}"
         class="btn btn-success d-flex align-items-center justify-content-center gap-2 flex-fill flex-md-grow-0">
@@ -94,6 +57,7 @@
         Registrar nuevo proveedor
 
     </a>
+    @endif
 
     <button
         class="btn btn-outline-primary d-flex align-items-center justify-content-center gap-2 flex-fill flex-md-grow-0"
@@ -147,7 +111,6 @@
                 class="form-control"
                 id="q"
                 name="q"
-                value="{{ $filtros['q'] ?? '' }}"
                 placeholder="Razón social, CUIT o contacto"
                 maxlength="150">
 
@@ -177,9 +140,9 @@
 
                 @foreach ($canales as $valor => $nombre)
 
+                {{-- La opcion elegida la marca el JS con lo que diga la URL. --}}
                 <option
-                    value="{{ $valor }}"
-                    {{ ($filtros['canal_pedido'] ?? '') === $valor ? 'selected' : '' }}>
+                    value="{{ $valor }}">
 
                     {{ $nombre }}
 
@@ -210,24 +173,21 @@
                 class="form-select">
 
                 <option
-                    value=""
-                    {{ ($filtros['estado'] ?? '') === '' ? 'selected' : '' }}>
+                    value="">
 
                     Todos
 
                 </option>
 
                 <option
-                    value="activos"
-                    {{ ($filtros['estado'] ?? '') === 'activos' ? 'selected' : '' }}>
+                    value="activos">
 
                     Activos
 
                 </option>
 
                 <option
-                    value="inactivos"
-                    {{ ($filtros['estado'] ?? '') === 'inactivos' ? 'selected' : '' }}>
+                    value="inactivos">
 
                     Inactivos
 
@@ -300,275 +260,30 @@
 
                     <th>Estado</th>
 
+                    @if ($permisos['editar'] || $permisos['cambiarEstado'])
                     <th class="text-nowrap">
                         Opciones
                     </th>
+                    @endif
 
                 </tr>
 
             </thead>
 
 
+            {{--
+                Las filas las dibuja el JavaScript con lo que devuelve
+                GET /api/v1/gestion/proveedores. La pagina ya no trae datos de
+                negocio: entrega la estructura y nada mas.
+            --}}
             <tbody id="contenidoTablaProveedores">
 
-                @forelse ($proveedores as $proveedor)
-
                 <tr>
-
-                    <!-- Razón social -->
-
-                    <td class="text-start">
-
-                        <strong>
-                            {{ $proveedor->razon_social }}
-                        </strong>
-
-                        @if ($proveedor->email)
-
-                        <br>
-
-                        <small class="text-muted">
-                            {{ $proveedor->email }}
-                        </small>
-
-                        @endif
-
-                    </td>
-
-
-                    <!-- CUIT -->
-
-                    <td>
-
-                        @php
-                        $cuit = preg_replace('/\D/', '', $proveedor->cuit);
-                        @endphp
-
-                        @if (strlen($cuit) === 11)
-
-                        {{ substr($cuit, 0, 2) }}-{{ substr($cuit, 2, 8) }}-{{ substr($cuit, 10, 1) }}
-
-                        @else
-
-                        {{ $proveedor->cuit }}
-
-                        @endif
-
-                    </td>
-
-
-                    <!-- Condición IVA -->
-
-                    <td>
-
-                        {{ $proveedor->condicionIva?->nombre ?? '—' }}
-
-                    </td>
-
-
-                    <!-- Contacto -->
-
-                    <td>
-
-                        @if ($proveedor->contacto)
-
-                        {{ $proveedor->contacto }}
-
-                        @else
-
-                        —
-
-                        @endif
-
-                        @if ($proveedor->telefono)
-
-                        <br>
-
-                        <small class="text-muted">
-                            {{ $proveedor->telefono }}
-                        </small>
-
-                        @endif
-
-                    </td>
-
-
-                    <!-- Canal -->
-
-                    <td>
-
-                        @php
-
-                        $canal = $proveedor->canal_pedido instanceof \App\Enums\CanalPedido
-                        ? $proveedor->canal_pedido->value
-                        : $proveedor->canal_pedido;
-
-                        @endphp
-
-                        {{ $canales[$canal] ?? $canal }}
-
-                    </td>
-
-
-                    <!-- Productos -->
-
-                    <td>
-
-                        {{ $proveedor->productos_count }}
-
-                    </td>
-
-
-                    <!-- Órdenes abiertas -->
-
-                    <td>
-
-                        {{ $proveedor->ordenes_abiertas_count }}
-
-                    </td>
-
-
-                    <!-- Estado -->
-
-                    <td>
-
-                        @if ($proveedor->activo)
-
-                        <span class="badge text-bg-success">
-                            Activo
-                        </span>
-
-                        @else
-
-                        <span class="badge text-bg-secondary">
-                            Inactivo
-                        </span>
-
-                        @endif
-
-                    </td>
-
-
-                    <!-- Opciones -->
-
-                    <td class="text-nowrap">
-
-                        <!-- Editar -->
-
-                        <a
-                            href="{{ route('gestion.proveedores.edit', $proveedor) }}"
-                            class="btn btn-sm btn-warning me-1"
-                            title="Editar">
-
-                            <svg
-                                xmlns="http://www.w3.org/2000/svg"
-                                width="16"
-                                height="16"
-                                fill="currentColor"
-                                viewBox="0 0 16 16">
-
-                                <path
-                                    d="M12.146.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1 0 .708l-10 10a.5.5 0 0 1-.168.11l-5 2a.5.5 0 0 1-.65-.65l2-5a.5.5 0 0 1 .11-.168zM11.207 2.5 13.5 4.793 14.793 3.5 12.5 1.207zm1.586 3L10.5 3.207 4 9.707V10h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.293zm-9.761 5.175-.106.106-1.528 3.821 3.821-1.528.106-.106A.5.5 0 0 1 5 12.5V12h-.5a.5.5 0 0 1-.5-.5V11h-.5a.5.5 0 0 1-.468-.325" />
-
-                            </svg>
-
-                        </a>
-
-
-                        <!-- Dar de baja -->
-
-                        @if ($proveedor->activo)
-
-                        <form
-                            action="{{ route('gestion.proveedores.darDeBaja', $proveedor) }}"
-                            method="POST"
-                            class="d-inline">
-
-                            @csrf
-
-                            @method('PATCH')
-
-                            <button
-                                type="submit"
-                                class="btn btn-sm btn-secondary me-1"
-                                title="Dar de baja"
-                                onclick="return confirm('¿Está seguro de dar de baja este proveedor?');">
-
-                                <svg
-                                    xmlns="http://www.w3.org/2000/svg"
-                                    width="16"
-                                    height="16"
-                                    fill="currentColor"
-                                    viewBox="0 0 16 16">
-
-                                    <path
-                                        d="M8 15A7 7 0 1 0 8 1a7 7 0 0 0 0 14zM4.5 7.5h7a.5.5 0 0 1 0 1h-7a.5.5 0 0 1 0-1z" />
-
-                                </svg>
-
-                            </button>
-
-                        </form>
-
-                        @else
-
-                        <!-- Reactivar -->
-
-                        <form
-                            action="{{ route('gestion.proveedores.reactivar', $proveedor) }}"
-                            method="POST"
-                            class="d-inline">
-
-                            @csrf
-
-                            @method('PATCH')
-
-                            <button
-                                type="submit"
-                                class="btn btn-sm btn-success me-1"
-                                title="Reactivar"
-                                onclick="return confirm('¿Está seguro de reactivar este proveedor?');">
-
-                                <svg
-                                    xmlns="http://www.w3.org/2000/svg"
-                                    width="16"
-                                    height="16"
-                                    fill="currentColor"
-                                    viewBox="0 0 16 16">
-
-                                    <path
-                                        d="M8 3a5 5 0 1 1-4.546 2.917.5.5 0 0 1 .91-.414A4 4 0 1 0 8 4z" />
-
-                                    <path
-                                        d="M8 1v4H4" />
-
-                                </svg>
-
-                            </button>
-
-                        </form>
-
-                        @endif
-
-                    </td>
-
-                </tr>
-
-                @empty
-
-                <tr>
-
-                    <td
-                        colspan="9"
+                    <td colspan="{{ $permisos['editar'] || $permisos['cambiarEstado'] ? 9 : 8 }}"
                         class="text-center py-4 text-muted">
-
-                        No se encontraron proveedores.
-
+                        Cargando proveedores…
                     </td>
-
                 </tr>
-
-                @endforelse
 
             </tbody>
 
@@ -581,16 +296,24 @@
 
 <!-- Paginación -->
 
-@if ($proveedores->hasPages())
-
-
-<div class="mt-4 d-flex justify-content-center">
-
-    {{ $proveedores->onEachSide(2)->links() }}
-
-</div>
-
-
-@endif
+{{-- Mismo paginado de Bootstrap 5, armado con el `meta` de la respuesta. --}}
+<div id="paginadoProveedores" class="mt-4 d-flex justify-content-center"></div>
 
 @endsection
+
+@push('scripts')
+<script type="module">
+    import { iniciar } from '{{ Vite::asset('resources/js/gestion/proveedores/index.js') }}';
+
+    iniciar({
+        // Los decide ProveedorPolicy en el servidor (ver el controlador): aca
+        // solo dicen que botones se dibujan. El permiso de verdad lo exige la
+        // API en cada llamada.
+        permisos: @json($permisos),
+
+        // La ruta de edicion con un hueco en lugar del id, para no escribir
+        // URLs del panel dentro del JavaScript.
+        urlEdicion: '{{ route('gestion.proveedores.edit', ['proveedor' => '__ID__']) }}',
+    });
+</script>
+@endpush

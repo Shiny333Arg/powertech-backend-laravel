@@ -29,7 +29,11 @@ export default defineConfig({
                 // Las pantallas de productos, migradas a la API con el mismo
                 // criterio que las de categorias.
                 'resources/js/gestion/productos/index.js',
-                'resources/js/gestion/productos/formulario.js'
+                'resources/js/gestion/productos/formulario.js',
+
+                // Las pantallas de proveedores, migradas con el mismo criterio.
+                'resources/js/gestion/proveedores/index.js',
+                'resources/js/gestion/proveedores/formulario.js'
             ],
             refresh: true,
         }),

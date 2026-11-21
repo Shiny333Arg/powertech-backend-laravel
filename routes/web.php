@@ -752,6 +752,25 @@ Route::prefix('gestion')
         // ========================================================
         // PROVEEDORES
         // ========================================================
+        //
+        // <b>Solo quedan las tres rutas que entregan paginas Blade.</b> Las
+        // cuatro que ejecutaban operaciones de negocio —store, update, baja y
+        // reactivar— se retiraron al migrar la pantalla a la API, por el mismo
+        // motivo que en productos: el requisito 3 de la Etapa 3 pide que las
+        // rutas web anteriores dejen de estar disponibles como via alternativa
+        // de acceso, y mientras existieran lo estaban.
+        //
+        // Lo que antes hacia cada una, ahora:
+        //
+        //   POST  proveedor                -> POST  /api/v1/gestion/proveedores
+        //   PUT   proveedor/{p}            -> PUT   /api/v1/gestion/proveedores/{p}
+        //   PATCH proveedor/{p}/baja       -> PATCH .../{p}/estado  {activo:false}
+        //   PATCH proveedor/{p}/reactivar  -> PATCH .../{p}/estado  {activo:true}
+        //
+        // Los permisos no cambiaron: los exige la misma ProveedorPolicy, ahora
+        // desde el 'can:' de cada ruta de la API. El domicilio fiscal sigue
+        // viajando en el mismo cuerpo del alta y de la edicion, bajo la clave
+        // 'direccion', y lo guarda el mismo App\Support\DomicilioFiscal.
 
         Route::prefix('proveedor')
             ->name('proveedores.')
@@ -763,20 +782,8 @@ Route::prefix('gestion')
                 Route::get('/create', [ProveedorController::class, 'create'])
                     ->name('create');
 
-                Route::post('/', [ProveedorController::class, 'store'])
-                    ->name('store');
-
                 Route::get('/{proveedor}/edit', [ProveedorController::class, 'edit'])
                     ->name('edit');
-
-                Route::put('/{proveedor}', [ProveedorController::class, 'update'])
-                    ->name('update');
-
-                Route::patch('/{proveedor}/baja', [ProveedorController::class, 'darDeBaja'])
-                    ->name('darDeBaja');
-
-                Route::patch('/{proveedor}/reactivar', [ProveedorController::class, 'reactivar'])
-                    ->name('reactivar');
             });
 
 
