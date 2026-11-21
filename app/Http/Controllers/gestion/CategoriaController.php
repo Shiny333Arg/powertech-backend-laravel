@@ -5,12 +5,28 @@ namespace App\Http\Controllers\gestion;
 use App\Exceptions\EntidadNoEliminableException;
 use App\Http\Requests\CategoriaRequest;
 use App\Models\Categoria;
+use App\Models\User;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\View\View;
 
+/**
+ * Las pantallas de categorias del panel.
+ *
+ * <b>Desde la migracion a la API, este controlador ya no ejecuta operaciones
+ * de negocio desde la interfaz.</b> index(), create() y edit() entregan la
+ * pagina Blade —la cascara, sin datos— y el JavaScript de la pantalla trae y
+ * modifica los datos contra /api/v1/gestion/categorias, que es lo que pide el
+ * requisito 3 de la Etapa 3.
+ *
+ * store(), update(), darDeBaja(), reactivar() y destroy() siguen existiendo
+ * porque sus rutas todavia estan publicadas: ya ninguna pantalla las usa, y se
+ * retiran junto con las rutas web de negocio de los demas modulos, en el paso
+ * siguiente del plan. Hasta entonces comparten FormRequest, policy y modelo
+ * con la API, asi que no hay dos reglas distintas conviviendo.
+ */
 class CategoriaController extends Controller
 {
     public function __construct()
@@ -24,38 +40,38 @@ class CategoriaController extends Controller
     /**
      * Listado de gestion.
      *
+     * <b>La pagina ya no trae las categorias.</b> El listado, los filtros y el
+     * paginado los resuelve resources/js/gestion/categorias/index.js contra
+     * GET /api/v1/gestion/categorias, con los mismos dos filtros de siempre
+     * —nombre y estado— viajando en la URL para que un enlace filtrado se
+     * pueda seguir guardando y compartiendo.
+     *
      * Muestra activas e inactivas por defecto, a proposito: esta pantalla es
-     * desde donde se reactiva una categoria dada de baja, asi que filtrarlas
-     * de entrada la dejaria sin su funcion principal. El modelo no tiene
-     * global scope justamente para que esto sea posible.
+     * desde donde se reactiva una categoria dada de baja. Ese criterio ahora
+     * vive en el endpoint, que tiene el mismo default.
+     *
+     * Lo unico que baja del servidor son los permisos del rol: deciden que
+     * botones se dibujan, no que se puede hacer. Eso lo sigue exigiendo la API
+     * en cada llamada.
      */
     public function index(Request $request): View
     {
-        $estado = $request->query('estado', 'todas');
-        $nombre = $request->query('nombre');
-
-        $categorias = Categoria::query()
-            ->withCount('productos')
-            ->when($nombre, function ($query, $nombre) {
-                $query->where('nombre', 'like', '%' . $nombre . '%');
-            })
-            ->when($estado === 'activas', fn($query) => $query->activos())
-            ->when($estado === 'inactivas', fn($query) => $query->inactivos())
-            ->orderBy('orden')
-            ->orderBy('nombre')
-            // ->get();
-            ->paginate(10)
-            ->withQueryString();
-
-        return view('gestion.category.index', compact('categorias', 'estado', 'nombre'));
+        return view('gestion.category.index', [
+            'permisos' => $this->permisosDe($request->user()),
+        ]);
     }
 
+    /**
+     * El formulario de alta, vacio.
+     *
+     * Ya no se precarga nada: el formulario no muestra el orden —no lo mostraba
+     * tampoco antes— y el estado arranca en "en operacion", que es el default
+     * de la columna. Sin consulta a la base, la pagina no entrega ningun dato
+     * de negocio.
+     */
     public function create(): View
     {
-        // Sugiere la posicion siguiente para no obligar a pensar un numero.
-        $categoria = new Categoria(['orden' => (int) Categoria::max('orden') + 1, 'activo' => true]);
-
-        return view('gestion.category.create', compact('categoria'));
+        return view('gestion.category.create');
     }
 
     public function store(CategoriaRequest $request): RedirectResponse
@@ -67,9 +83,23 @@ class CategoriaController extends Controller
             ->with('exito', "Se creó la categoría «{$categoria->nombre}».");
     }
 
+    /**
+     * El formulario de edicion.
+     *
+     * Entrega el id y nada mas: los datos los pide la pantalla a
+     * GET /api/v1/gestion/categorias/{categoria}. El binding de ruta sigue
+     * sirviendo para dos cosas que no se pueden delegar al JavaScript: el 404
+     * de una categoria que no existe y la autorizacion de authorizeResource().
+     */
     public function edit(Categoria $categoria): View
     {
-        return view('gestion.category.edit', compact('categoria'));
+        return view('gestion.category.edit', [
+            'categoria' => $categoria,
+
+            // El casillero de estado se deshabilita sin este permiso: el PUT
+            // no cambia 'activo' y la llamada al endpoint de estado daria 403.
+            'puedeCambiarEstado' => Gate::allows('cambiarEstado', $categoria),
+        ]);
     }
 
     public function update(CategoriaRequest $request, Categoria $categoria): RedirectResponse
@@ -142,5 +172,28 @@ class CategoriaController extends Controller
         return redirect()
             ->route('gestion.categorias.index')
             ->with('exito', "Se eliminó la categoría «{$nombre}».");
+    }
+
+    /**
+     * Que puede hacer este empleado con las categorias.
+     *
+     * Se le pregunta a la MISMA CategoriaPolicy que autoriza la API, con una
+     * instancia vacia: la policy decide por el permiso del rol y no mira la
+     * fila. De este modo las claves de permiso ('categoria.editar' y
+     * companhia) siguen escritas en un solo lugar y no se repiten en la vista
+     * ni en el JavaScript.
+     *
+     * @return array<string, bool>
+     */
+    private function permisosDe(User $empleado): array
+    {
+        $cualquiera = new Categoria;
+
+        return [
+            'crear' => $empleado->can('create', Categoria::class),
+            'editar' => $empleado->can('update', $cualquiera),
+            'cambiarEstado' => $empleado->can('cambiarEstado', $cualquiera),
+            'eliminar' => $empleado->can('delete', $cualquiera),
+        ];
     }
 }

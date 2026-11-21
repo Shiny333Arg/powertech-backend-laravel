@@ -47,11 +47,9 @@
         pantalla cuyas llamadas van a fallar con 401.
     --}}
     @if (session()->has(\App\Support\SesionGestion::TOKEN))
-        <script type="module">
-            import { iniciar } from '{{ Vite::asset('resources/js/gestion/api.js') }}';
-
-            iniciar(@json(session(\App\Support\SesionGestion::TOKEN)));
-        </script>
+    <script>
+        window.__POWERTECH_TOKEN__ = @json(session(\App\Support\SesionGestion::TOKEN));
+    </script>
     @endif
 
     {{--

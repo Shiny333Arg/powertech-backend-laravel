@@ -17,12 +17,14 @@ use Illuminate\Validation\Rule;
  *
  * Tres detalles que hacen que sirva a los dos sin romper al primero:
  *
- *   - <b>'activo' solo se normaliza si vino.</b> El formulario manda SIEMPRE el
- *     campo —tiene un input hidden en 0 junto al checkbox en 1—, asi que su
- *     comportamiento no cambia. La API, en cambio, puede mandar un PUT sin
- *     'activo', y con un boolean() incondicional ese PUT daria de baja la
- *     categoria sin que nadie lo pida. Ademas el estado tiene su propio
- *     endpoint (PATCH .../estado) y su propio permiso.
+ *   - <b>'activo' solo se normaliza si vino.</b> Con un boolean()
+ *     incondicional, un PUT sin 'activo' daria de baja la categoria sin que
+ *     nadie lo pida. Ademas el estado tiene su propio endpoint
+ *     (PATCH .../estado) y su propio permiso, asi que el update lo ignora
+ *     aunque viaje. Desde que el panel manda el alta y la edicion por la API,
+ *     el unico que manda 'activo' es el alta —donde si lo fija—; cuando el
+ *     formulario era un POST tradicional lo mandaba siempre, por el input
+ *     hidden en 0 que acompanhaba al checkbox.
  *   - <b>'slug' se respeta si vino, y si no sale del nombre.</b> El formulario
  *     no tiene campo de slug, asi que sigue derivandose igual que antes.
  *   - <b>'orden' es 'sometimes'.</b> El formulario tampoco lo manda y queda con

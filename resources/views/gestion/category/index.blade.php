@@ -15,24 +15,15 @@
     </p>
 </section>
 
-<!-- Mensajes -->
+{{--
+    Avisos de la pantalla.
 
-@if (session('exito')) <div class="alert alert-success alert-dismissible fade show" role="alert">
-    {{ session('exito') }} <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-</div>
-@endif
-
-@if (session('error')) <div class="alert alert-danger alert-dismissible fade show" role="alert">
-    {{ session('error') }} <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-</div>
-@endif
-
-@if ($errors->any()) <div class="alert alert-danger"> <strong>Se encontraron errores:</strong>
-    <ul class="mb-0 mt-2">
-        @foreach ($errors->all() as $error) <li>{{ $error }}</li>
-        @endforeach </ul>
-</div>
-@endif
+    Antes acá se imprimían `session('exito')`, `session('error')` y la lista de
+    `$errors`: los dejaba el redirect del controlador web. Ahora las
+    operaciones las hace el JavaScript contra la API, no hay redirect, y el
+    mismo cartel lo pinta `resources/js/gestion/avisos.js` con este marcado.
+--}}
+<div id="avisosCategorias" aria-live="polite"></div>
 
 <!-- Botones -->
 
@@ -109,7 +100,6 @@
                 class="form-control"
                 id="nombre"
                 name="nombre"
-                value="{{ $nombre ?? '' }}"
                 placeholder="Ej: Procesador"
                 maxlength="100">
         </div>
@@ -121,15 +111,16 @@
             </label>
 
             <select name="estado" id="estado" class="form-select">
-                <option value="todas" {{ $estado === 'todas' ? 'selected' : '' }}>
+                {{-- La opcion elegida la marca el JS con lo que diga la URL. --}}
+                <option value="todas">
                     Todas
                 </option>
 
-                <option value="activas" {{ $estado === 'activas' ? 'selected' : '' }}>
+                <option value="activas">
                     Activas
                 </option>
 
-                <option value="inactivas" {{ $estado === 'inactivas' ? 'selected' : '' }}>
+                <option value="inactivas">
                     Inactivas
                 </option>
             </select>
@@ -171,173 +162,49 @@
                     <th id="columnaNombre">Nombre</th>
                     <th id="columnaEstado">Estado</th>
                     <th id="columnaProductos">Productos</th>
-                    @can('create', App\Models\Categoria::class)
+                    @if ($permisos['editar'] || $permisos['cambiarEstado'] || $permisos['eliminar'])
                     <th id="columnaOpciones" class="text-nowrap">Opciones</th>
-                    @endcan
+                    @endif
                 </tr>
             </thead>
 
+            {{--
+                Las filas las dibuja el JavaScript con lo que devuelve
+                GET /api/v1/gestion/categorias. La página ya no trae datos de
+                negocio: entrega la estructura y nada más.
+            --}}
             <tbody id="contenidoTablaCategorias">
 
-                @forelse ($categorias as $categoria)
-
                 <tr>
-
-                    <td>
-                        {{ $categoria->nombre }}
-                    </td>
-
-                    <td>
-                        @if ($categoria->activo)
-                        <span class="badge text-bg-success">
-                            Activa
-                        </span>
-                        @else
-                        <span class="badge text-bg-secondary">
-                            Inactiva
-                        </span>
-                        @endif
-                    </td>
-
-                    <td>
-                        {{ $categoria->productos_count }}
-                    </td>
-
-                    @can('create', App\Models\Categoria::class)
-                    <td class="text-nowrap">
-
-                        <!-- Editar -->
-                        <a
-                            href="{{ route('gestion.categorias.edit', $categoria) }}"
-                            class="btn btn-sm btn-warning me-1"
-                            title="Editar">
-
-                            <svg xmlns="http://www.w3.org/2000/svg"
-                                width="16"
-                                height="16"
-                                fill="currentColor"
-                                class="bi bi-pencil"
-                                viewBox="0 0 16 16">
-
-                                <path d="M12.146.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1 0 .708l-10 10a.5.5 0 0 1-.168.11l-5 2a.5.5 0 0 1-.65-.65l2-5a.5.5 0 0 1 .11-.168zM11.207 2.5 13.5 4.793 14.793 3.5 12.5 1.207zm1.586 3L10.5 3.207 4 9.707V10h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.293zm-9.761 5.175-.106.106-1.528 3.821 3.821-1.528.106-.106A.5.5 0 0 1 5 12.5V12h-.5a.5.5 0 0 1-.5-.5V11h-.5a.5.5 0 0 1-.468-.325" />
-                            </svg>
-                        </a>
-
-                        <!-- Dar de baja -->
-                        @if ($categoria->activo)
-
-                        <form
-                            action="{{ route('gestion.categorias.baja', $categoria) }}"
-                            method="POST"
-                            class="d-inline">
-
-                            @csrf
-
-                            @method('PATCH')
-
-                            <button
-                                type="submit"
-                                class="btn btn-sm btn-secondary me-1"
-                                title="Dar de baja"
-                                onclick="return confirm('¿Está seguro de dar de baja esta categoría?');">
-
-                                <svg xmlns="http://www.w3.org/2000/svg"
-                                    width="16"
-                                    height="16"
-                                    fill="currentColor"
-                                    viewBox="0 0 16 16">
-
-                                    <path d="M8 15A7 7 0 1 0 8 1a7 7 0 0 0 0 14zM4.5 7.5h7a.5.5 0 0 1 0 1h-7a.5.5 0 0 1 0-1z" />
-
-                                </svg>
-                            </button>
-                        </form>
-
-                        @else
-
-                        <!-- Reactivar -->
-                        <form
-                            action="{{ route('gestion.categorias.reactivar', $categoria) }}"
-                            method="POST"
-                            class="d-inline">
-
-                            @csrf
-
-                            @method('PATCH')
-
-                            <button
-                                type="submit"
-                                class="btn btn-sm btn-success me-1"
-                                title="Reactivar"
-                                onclick="return confirm('¿Está seguro de reactivar esta categoría?');">
-
-                                <svg xmlns="http://www.w3.org/2000/svg"
-                                    width="16"
-                                    height="16"
-                                    fill="currentColor"
-                                    viewBox="0 0 16 16">
-
-                                    <path d="M8 3a5 5 0 1 1-4.546 2.917.5.5 0 0 1 .91-.414A4 4 0 1 0 8 4z" />
-
-                                    <path d="M8 1v4H4" />
-                                </svg>
-                            </button>
-                        </form>
-
-                        @endif
-
-                        <!-- Eliminar físicamente -->
-                        <form
-                            action="{{ route('gestion.categorias.destroy', $categoria) }}"
-                            method="POST"
-                            class="d-inline">
-
-                            @csrf
-
-                            @method('DELETE')
-
-                            <button
-                                type="submit"
-                                class="btn btn-sm btn-danger"
-                                title="Eliminar"
-                                onclick="return confirm('¿Está seguro de eliminar esta categoría? Esta acción no se puede deshacer.');">
-
-                                <svg xmlns="http://www.w3.org/2000/svg"
-                                    width="16"
-                                    height="16"
-                                    fill="currentColor"
-                                    class="bi bi-trash3"
-                                    viewBox="0 0 16 16">
-
-                                    <path d="M6.5 1h3a.5.5 0 0 1 .5.5v1H6v-1a.5.5 0 0 1 .5-.5M11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3A1.5 1.5 0 0 0 5 1.5v1H1.5a.5.5 0 0 0 0 1h.538l.853 10.66A2 2 0 0 0 4.885 16h6.23a2 2 0 0 0 1.994-1.84l.853-10.66h.538a.5.5 0 0 0 0-1zm1.958 1-.846 10.58a1 1 0 0 1-.997.92h-6.23a1 1 0 0 1-.997-.92L3.042 3.5zm-7.487 1a.5.5 0 0 1 .528.47l.5 8.5a.5.5 0 0 1-.998.06L5 5.03a.5.5 0 0 1 .47-.53Zm5.058 0a.5.5 0 0 1 .47.53l-.5 8.5a.5.5 0 1 1-.998-.06l.5-8.5a.5.5 0 0 1 .528-.47M8 4.5a.5.5 0 0 1 .5.5v8.5a.5.5 0 0 1-1 0V5a.5.5 0 0 1 .5-.5" />
-                                </svg>
-                            </button>
-                        </form>
-
-                    </td>
-                    @endcan
-                </tr>
-
-                @empty
-
-                <tr>
-                    <td colspan="6" class="text-center py-4 text-muted">
-                        No se encontraron categorías.
+                    <td colspan="{{ $permisos['editar'] || $permisos['cambiarEstado'] || $permisos['eliminar'] ? 4 : 3 }}" class="text-center py-4 text-muted">
+                        Cargando categorías…
                     </td>
                 </tr>
-
-                @endforelse
 
             </tbody>
         </table>
     </div>
 
-    @if ($categorias->hasPages())
-    <div class="d-flex justify-content-center mt-4">
-        {{ $categorias->onEachSide(2)->links() }}
-    </div>
-    @endif
+    {{-- Mismo paginado de Bootstrap 5, armado con el `meta` de la respuesta. --}}
+    <div id="paginadoCategorias" class="d-flex justify-content-center mt-4"></div>
 
 </section>
 
 @endsection
+
+@push('scripts')
+<script type="module">
+    import { iniciar } from '{{ Vite::asset('resources/js/gestion/categorias/index.js') }}';
+
+    iniciar({
+        // Los decide CategoriaPolicy en el servidor (ver el controlador): acá
+        // sólo dicen qué botones se dibujan. El permiso de verdad lo exige la
+        // API en cada llamada, así que esto no abre ninguna puerta.
+        permisos: @json($permisos),
+
+        // La ruta de edición con un hueco en lugar del id, para no escribir
+        // URLs del panel dentro del JavaScript.
+        urlEdicion: '{{ route('gestion.categorias.edit', ['categoria' => '__ID__']) }}',
+    });
+</script>
+@endpush

@@ -15,7 +15,16 @@ export default defineConfig({
                 // propia porque se importa con Vite::asset() desde el layout de
                 // gestion y desde el ingreso del panel, no desde app.js: tiene
                 // que resolverse por el manifiesto.
-                'resources/js/gestion/api.js'
+                'resources/js/gestion/api.js',
+
+                // Las pantallas de categorias, migradas a la API. Entran como
+                // entradas propias por el mismo motivo que api.js: las importa
+                // la vista con Vite::asset(), asi que tienen que resolverse por
+                // el manifiesto. Los modulos que ellas importan —api.js y
+                // avisos.js— quedan en un chunk compartido, que es lo que hace
+                // que el token siga viviendo en UNA sola variable de modulo.
+                'resources/js/gestion/categorias/index.js',
+                'resources/js/gestion/categorias/formulario.js'
             ],
             refresh: true,
         }),

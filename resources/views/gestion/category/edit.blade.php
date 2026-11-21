@@ -4,6 +4,19 @@
 
 @section('content')
 
+{{--
+    Edicion de categoria.
+
+    La pagina ya no trae los datos de la categoria: los pide
+    resources/js/gestion/categorias/formulario.js a
+    GET /api/v1/gestion/categorias/{id} y los guarda con PUT. Lo unico que
+    baja del servidor es el id y lo que la policy deja hacer.
+
+    El casillero de estado va aparte: el PUT no lo toca —tiene su endpoint,
+    PATCH .../estado, y su propio permiso (categoria.baja)—, asi que viene
+    deshabilitado si el rol no puede cambiarlo.
+--}}
+
 <div class="container py-4">
 
   <!-- Título -->
@@ -14,28 +27,17 @@
 
   <!-- Formulario -->
   <section class="mb-4">
+
+    {{-- Fallas de la API que no son de validacion: 409, sin permiso, sin red. --}}
+    <div id="avisosCategoria" aria-live="polite"></div>
+
     <form
-      action="{{ route('gestion.categorias.update', $categoria) }}"
-      method="POST"
       autocomplete="off"
       class="p-4 rounded-4 bg-light shadow-sm border"
-      id="editarCategoriaForm">
+      id="formularioCategoria">
 
-      @csrf
-      @method('PUT')
-
-      {{-- Errores de validación --}}
-      @if ($errors->any())
-      <div class="alert alert-danger">
-        <strong>Revisá estos campos:</strong>
-
-        <ul class="mb-0 mt-2">
-          @foreach ($errors->all() as $error)
-          <li>{{ $error }}</li>
-          @endforeach
-        </ul>
-      </div>
-      @endif
+      {{-- Errores de validación que devuelve la API. --}}
+      <div id="erroresCategoria"></div>
 
       <div class="row g-4">
 
@@ -47,28 +49,18 @@
 
           <input
             type="text"
-            class="form-control rounded-3 @error('nombre') is-invalid @enderror"
+            class="form-control rounded-3"
             id="nombre"
             name="nombre"
-            value="{{ old('nombre', $categoria->nombre) }}"
             maxlength="100"
             required
             autofocus>
 
-          @error('nombre')
-          <div class="invalid-feedback">
-            {{ $message }}
-          </div>
-          @enderror
+          <div class="invalid-feedback" id="errorNombre"></div>
         </div>
 
         <div class="col-12">
           <div class="form-check">
-
-            <input
-              type="hidden"
-              name="activo"
-              value="0">
 
             <input
               type="checkbox"
@@ -76,7 +68,7 @@
               id="activo"
               name="activo"
               value="1"
-              {{ old('activo', $categoria->activo) ? 'checked' : '' }}>
+              @cannot('cambiarEstado', $categoria) disabled @endcannot>
 
             <label for="activo" class="form-check-label fw-semibold">
               En operación
@@ -85,14 +77,12 @@
           </div>
 
           <div class="form-text">
+            @can('cambiarEstado', $categoria)
             Si la categoría está fuera de operación, no estará disponible para nuevos productos.
+            @else
+            Tu rol no puede cambiar el estado de una categoría.
+            @endcan
           </div>
-
-          @error('activo')
-          <div class="text-danger small mt-1">
-            {{ $message }}
-          </div>
-          @enderror
         </div>
 
       </div>
@@ -105,7 +95,8 @@
 
       <button
         type="submit"
-        form="editarCategoriaForm"
+        form="formularioCategoria"
+        id="botonGuardar"
         class="btn btn-success px-4 fw-semibold shadow-sm">
         Actualizar
       </button>
@@ -116,22 +107,14 @@
         Volver al listado
       </a>
 
-      <form
-        action="{{ route('gestion.categorias.destroy', $categoria) }}"
-        method="POST"
-        class="d-inline">
-
-        @csrf
-        @method('DELETE')
-
-        <button
-          type="submit"
-          class="btn btn-danger px-4 fw-semibold shadow-sm"
-          onclick="return confirm('¿Está seguro de eliminar permanentemente esta categoría? Esta acción no se puede deshacer.');">
-          Eliminar
-        </button>
-
-      </form>
+      @can('delete', $categoria)
+      <button
+        type="button"
+        id="botonEliminar"
+        class="btn btn-danger px-4 fw-semibold shadow-sm">
+        Eliminar
+      </button>
+      @endcan
 
     </div>
 
@@ -140,3 +123,15 @@
 </div>
 
 @endsection
+
+@push('scripts')
+<script type="module">
+    import { iniciar } from '{{ Vite::asset('resources/js/gestion/categorias/formulario.js') }}';
+
+    iniciar({
+        id: {{ $categoria->id }},
+        urlListado: '{{ route('gestion.categorias.index') }}',
+        puedeCambiarEstado: @json($puedeCambiarEstado),
+    });
+</script>
+@endpush
