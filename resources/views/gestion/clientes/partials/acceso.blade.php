@@ -1,69 +1,31 @@
 {{--
     Estado de la cuenta de un cliente en la tienda y, si corresponde, el botón
-    para reenviarle la invitación. Se usa en la ficha y sirve para el listado:
+    para reenviarle la invitación.
 
-      @include('gestion.clientes.partials.acceso', ['cliente' => $cliente])
-      @include('gestion.clientes.partials.acceso', ['cliente' => $cliente, 'detalle' => true])
+      @include('gestion.clientes.partials.acceso')
 
-    Con 'detalle' agrega una línea explicando el estado.
+    <b>Ya no recibe el cliente.</b> Entrega los dos huecos y los llena
+    resources/js/gestion/clientes/ficha.js con lo que viaja en `data.cuenta` del
+    detalle: si la cuenta existe, si está activa, si la invitación sigue
+    pendiente y si el correo está verificado. Los cinco estados y sus frases son
+    los mismos que escribía este partial —sin cuenta, acceso bloqueado,
+    invitación pendiente, correo sin verificar, activa—, con la misma precedencia
+    y en el mismo marcado; están en la función `estadoDeLaCuenta()` de ese
+    módulo, que es donde ahora se sabe en qué estado está.
+
+    El botón de reenviar sale sólo si la cuenta está activa, la invitación sigue
+    pendiente y el rol tiene 'cliente.editar'. Es la misma condición que tenía el
+    `@can('update', $cliente)` de acá, y el endpoint la vuelve a verificar: un
+    cliente que ya eligió su contraseña recibe un 422.
 
     Lo que este bloque dice es SOLO sobre la tienda online. Ninguno de estos
     estados frena una venta, un cobro ni una factura de mostrador: para eso
     alcanza con que el cliente exista y tenga sus datos fiscales. Por eso el
     detalle lo aclara donde podría dar lugar a duda.
 --}}
-@php
-    $usuario    = $cliente->user;
-    $pendiente  = $usuario?->invitacionPendiente() ?? false;
-    $verificado = $usuario?->email_verified_at !== null;
-    $detalle  ??= false;
-@endphp
 
-<div class="d-flex flex-wrap align-items-center gap-2">
+{{-- La insignia del estado y, si corresponde, el botón de reenviar. --}}
+<div class="d-flex flex-wrap align-items-center gap-2" id="estadoCuenta"></div>
 
-    @if ($usuario === null)
-        <span class="badge text-bg-light border">Sin cuenta</span>
-    @elseif (! $usuario->activo)
-        <span class="badge text-bg-secondary">Acceso bloqueado</span>
-    @elseif ($pendiente)
-        <span class="badge text-bg-warning">Invitación pendiente</span>
-    @elseif (! $verificado)
-        <span class="badge text-bg-warning">Correo sin verificar</span>
-    @else
-        <span class="badge text-bg-success">Activa</span>
-    @endif
-
-    @if ($usuario?->activo && $pendiente)
-        @can('update', $cliente)
-            <form method="POST" action="{{ route('gestion.clientes.reenviarInvitacion', $cliente) }}" class="d-inline">
-                @csrf
-                <button type="submit" class="btn btn-sm btn-outline-primary">Reenviar invitación</button>
-            </form>
-        @endcan
-    @endif
-
-</div>
-
-@if ($detalle)
-
-    <p class="small text-muted mt-2 mb-0">
-        @if ($usuario === null)
-            Cliente de mostrador: se le puede vender y facturar, pero no tiene con qué
-            entrar a la tienda. Si más adelante se registra, la cuenta se vincula a esta
-            ficha en lugar de duplicarla.
-        @elseif (! $usuario->activo)
-            No puede ingresar a la tienda. Igual se le puede seguir vendiendo desde el mostrador.
-        @elseif ($pendiente)
-            Todavía no eligió su contraseña. El enlace que recibió en {{ $usuario->email }} vence a las
-            {{ \App\Notifications\InvitacionCliente::HORAS_DE_VIGENCIA }} horas; si se le venció, reenviáselo.
-            Mientras tanto se le puede vender y facturar con normalidad.
-        @elseif (! $verificado)
-            Le cambiaron el correo y todavía no confirmó {{ $usuario->email }}. Hasta que lo haga
-            no puede comprar online, pero sí desde el mostrador.
-        @else
-            Ingresa con {{ $usuario->email }}. Si olvida la contraseña, la recupera desde
-            "¿Olvidaste tu contraseña?" en la pantalla de ingreso.
-        @endif
-    </p>
-
-@endif
+{{-- La línea que explica el estado. --}}
+<p class="small text-muted mt-2 mb-0" id="detalleCuenta"></p>

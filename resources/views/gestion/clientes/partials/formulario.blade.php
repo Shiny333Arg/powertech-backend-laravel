@@ -2,15 +2,27 @@
     Ficha del cliente. La comparten el alta y la edición.
 
     Variables que recibe:
-      $accion          URL a la que se envía
-      $metodo          'POST' | 'PUT'
-      $cliente         Cliente|null   (null en el alta)
-      $usuario         User|null      (null en el alta; $cliente->user en la edición)
       $tiposDocumento  Collection de TipoDocumento (necesita id, nombre, codigo_afip)
       $condicionesIva  Collection de CondicionIva  (necesita id, nombre, codigo_afip)
 
+    <b>Ya no recibe el cliente ni su usuario.</b> El partial entrega la
+    estructura del formulario y los desplegables, que son el catálogo de
+    opciones y no datos del cliente; los valores los vuelca
+    resources/js/gestion/clientes/formulario.js con lo que devuelve
+    GET /api/v1/gestion/clientes/{cliente}, y el guardado va por POST o PUT
+    contra la API.
+
+    Con los valores se fueron el `old()`, los `@error` y la lista de `$errors`:
+    no hay redirect del que volver con los datos escritos, porque la página no
+    se recarga. Los mensajes del 422 los reparte el JavaScript en los mismos
+    lugares: la lista de `#erroresCliente` y el `#error-{campo}` de cada
+    control.
+
     Un cliente son DOS filas: `users` (con qué correo entra a la tienda) y
     `clientes` (a quién se le factura). De ahí los dos bloques del formulario.
+    El cliente de mostrador viejo puede no tener cuenta, y en ese caso el bloque
+    no corresponde: quién la tiene lo dice la API en `data.cuenta`, así que el
+    JavaScript muestra `#bloqueCuenta` o `#avisoSinCuenta` al llegar el detalle.
 
     La contraseña NO está acá a propósito. El cliente nace sin ella y la elige
     él mismo desde el enlace que le llega por correo, igual que el empleado
@@ -28,68 +40,38 @@
     // ProfileController hace lo mismo con esta misma clase.
     $reglas = \App\Http\Requests\Auth\RegistroClienteRequest::class;
 
-    $esAlta   = $metodo === 'POST';
-    $usuario ??= $cliente?->user;
-
-    // El cliente de mostrador viejo puede no tener cuenta. En ese caso no hay
-    // nada que editar en el bloque de la cuenta.
-    $conCuenta = $esAlta || $usuario !== null;
-
     // Un cliente se identifica con DNI o con CUIT; el resto del catálogo
     // (pasaporte, CDI, etc.) es para otros usos y no se ofrece acá.
+    //
+    // Si el cliente que se está editando apunta a uno de los que no se ofrecen,
+    // de cuando se aceptaban, el JavaScript agrega esa opción al desplegable
+    // antes de elegirla: sin eso el navegador mostraría la primera como si
+    // fuera la suya y guardar le cambiaría el documento sin que nadie lo haya
+    // pedido. Es lo que hacía el `$documentos->push($suyo)` de esta vista,
+    // movido a donde ahora se sabe qué documento tiene.
     $documentos = $tiposDocumento->whereIn('codigo_afip', $reglas::TIPOS_DOCUMENTO_CLIENTE);
 
-    // Salvo que el cliente ya tenga uno de los que no se ofrecen, de cuando
-    // se aceptaban. Si no estuviera en la lista, el navegador mostraría la
-    // primera opción como si fuera la suya y guardar le cambiaría el
-    // documento sin que nadie lo haya pedido.
-    $suyo = $tiposDocumento->firstWhere('id', $cliente?->tipo_documento_id);
-
-    if ($suyo && ! $documentos->contains('id', $suyo->id)) {
-        $documentos = $documentos->push($suyo);
-    }
-
-    // Preselección: el caso común en el mostrador es consumidor final con DNI.
+    // Preselección del alta: el caso común en el mostrador es consumidor final
+    // con DNI. En la edición la pisa el valor que traiga la API.
     $dniId             = $documentos->firstWhere('codigo_afip', $reglas::DOC_DNI)?->id;
     $consumidorFinalId = $condicionesIva->firstWhere('codigo_afip', $reglas::IVA_CONSUMIDOR_FINAL)?->id;
 @endphp
 
+{{-- Fallas de la API que no son de validación: sin permiso, sin red. --}}
+<div id="avisosCliente" aria-live="polite"></div>
+
 <form
-    action="{{ $accion }}"
-    method="POST"
     autocomplete="off"
-    class="p-4 rounded-4 bg-light shadow-sm border">
+    class="p-4 rounded-4 bg-light shadow-sm border"
+    id="formularioCliente">
 
-    @csrf
-
-    @if (! $esAlta)
-    @method('PUT')
-    @endif
-
-
-    {{-- Errores generales de validación --}}
-    @if ($errors->any())
-
-    <div class="alert alert-danger">
-
-        <strong>Revisá estos campos:</strong>
-
-        <ul class="mb-0 mt-2">
-            @foreach ($errors->all() as $error)
-            <li>{{ $error }}</li>
-            @endforeach
-        </ul>
-
-    </div>
-
-    @endif
+    {{-- Errores de validación que devuelve la API. --}}
+    <div id="erroresCliente"></div>
 
 
     {{-- ===================== Datos de la cuenta ===================== --}}
 
-    @if ($conCuenta)
-
-    <section class="mb-4">
+    <section class="mb-4" id="bloqueCuenta">
 
         <h2 class="h6 fw-bold mb-1">Datos de la cuenta</h2>
 
@@ -108,21 +90,16 @@
 
                 <input
                     type="text"
-                    class="form-control rounded-3 @error('nombres') is-invalid @enderror"
+                    class="form-control rounded-3"
                     id="nombres"
                     name="nombres"
-                    value="{{ old('nombres', $usuario?->nombres) }}"
                     maxlength="80"
                     placeholder="Ej: Juan Carlos"
                     autocomplete="off"
                     required
                     autofocus>
 
-                @error('nombres')
-                <div class="invalid-feedback">
-                    {{ $message }}
-                </div>
-                @enderror
+                <div class="invalid-feedback" id="error-nombres"></div>
 
             </div>
 
@@ -136,20 +113,15 @@
 
                 <input
                     type="text"
-                    class="form-control rounded-3 @error('apellido') is-invalid @enderror"
+                    class="form-control rounded-3"
                     id="apellido"
                     name="apellido"
-                    value="{{ old('apellido', $usuario?->apellido) }}"
                     maxlength="80"
                     placeholder="Ej: Pérez"
                     autocomplete="off"
                     required>
 
-                @error('apellido')
-                <div class="invalid-feedback">
-                    {{ $message }}
-                </div>
-                @enderror
+                <div class="invalid-feedback" id="error-apellido"></div>
 
             </div>
 
@@ -163,10 +135,9 @@
 
                 <input
                     type="email"
-                    class="form-control rounded-3 @error('email') is-invalid @enderror"
+                    class="form-control rounded-3"
                     id="email"
                     name="email"
-                    value="{{ old('email', $usuario?->email) }}"
                     maxlength="150"
                     placeholder="Ej: jperez@correo.com"
                     autocomplete="off"
@@ -174,19 +145,10 @@
                     required>
 
                 <div id="email-ayuda" class="form-text">
-                    @if ($esAlta)
-                        Verificalo con el cliente antes de guardar: es a donde le llega el
-                        enlace para activar la cuenta.
-                    @else
-                        Si lo cambiás, el cliente va a tener que confirmar la casilla nueva.
-                    @endif
+                    {{ $ayudaDelCorreo }}
                 </div>
 
-                @error('email')
-                <div class="invalid-feedback">
-                    {{ $message }}
-                </div>
-                @enderror
+                <div class="invalid-feedback" id="error-email"></div>
 
             </div>
 
@@ -201,19 +163,14 @@
 
                 <input
                     type="tel"
-                    class="form-control rounded-3 @error('telefono') is-invalid @enderror"
+                    class="form-control rounded-3"
                     id="telefono"
                     name="telefono"
-                    value="{{ old('telefono', $cliente?->telefono) }}"
                     maxlength="30"
                     placeholder="Ej: 297 400 0000"
                     autocomplete="off">
 
-                @error('telefono')
-                <div class="invalid-feedback">
-                    {{ $message }}
-                </div>
-                @enderror
+                <div class="invalid-feedback" id="error-telefono"></div>
 
             </div>
 
@@ -221,10 +178,14 @@
 
     </section>
 
-    @else
 
-    {{-- Cliente de mostrador sin cuenta: no hay nada de `users` que editar. --}}
-    <div class="alert alert-secondary d-flex align-items-start gap-2">
+    {{--
+        Cliente de mostrador sin cuenta: no hay nada de `users` que editar.
+        Arranca escondido y lo muestra el JavaScript si el detalle trae
+        `cuenta` en null. En el alta nunca aparece: toda cuenta nueva nace con
+        su fila en `users`.
+    --}}
+    <div class="alert alert-secondary d-flex align-items-start gap-2 d-none" id="avisoSinCuenta">
 
         <svg xmlns="http://www.w3.org/2000/svg"
             width="18"
@@ -242,8 +203,6 @@
         </div>
 
     </div>
-
-    @endif
 
 
     {{-- ===================== Datos para facturar ===================== --}}
@@ -269,14 +228,14 @@
                 <select
                     id="tipo_documento_id"
                     name="tipo_documento_id"
-                    class="form-select rounded-3 @error('tipo_documento_id') is-invalid @enderror"
+                    class="form-select rounded-3"
                     required>
 
                     @foreach ($documentos as $tipo)
 
                     <option
                         value="{{ $tipo->id }}"
-                        @selected(old('tipo_documento_id', $cliente?->tipo_documento_id ?? $dniId) == $tipo->id)>
+                        @selected($dniId == $tipo->id)>
 
                         {{ $tipo->nombre }}
 
@@ -286,11 +245,7 @@
 
                 </select>
 
-                @error('tipo_documento_id')
-                <div class="invalid-feedback">
-                    {{ $message }}
-                </div>
-                @enderror
+                <div class="invalid-feedback" id="error-tipo_documento_id"></div>
 
             </div>
 
@@ -304,10 +259,9 @@
 
                 <input
                     type="text"
-                    class="form-control rounded-3 @error('nro_doc') is-invalid @enderror"
+                    class="form-control rounded-3"
                     id="nro_doc"
                     name="nro_doc"
-                    value="{{ old('nro_doc', $cliente?->nro_doc) }}"
                     maxlength="20"
                     inputmode="numeric"
                     placeholder="Sin puntos ni guiones"
@@ -318,11 +272,7 @@
                     DNI de 7 u 8 dígitos, o CUIT de 11.
                 </div>
 
-                @error('nro_doc')
-                <div class="invalid-feedback">
-                    {{ $message }}
-                </div>
-                @enderror
+                <div class="invalid-feedback" id="error-nro_doc"></div>
 
             </div>
 
@@ -337,14 +287,14 @@
                 <select
                     id="condicion_iva_id"
                     name="condicion_iva_id"
-                    class="form-select rounded-3 @error('condicion_iva_id') is-invalid @enderror"
+                    class="form-select rounded-3"
                     required>
 
                     @foreach ($condicionesIva as $condicion)
 
                     <option
                         value="{{ $condicion->id }}"
-                        @selected(old('condicion_iva_id', $cliente?->condicion_iva_id ?? $consumidorFinalId) == $condicion->id)>
+                        @selected($consumidorFinalId == $condicion->id)>
 
                         {{ $condicion->nombre }}
 
@@ -358,11 +308,7 @@
                     Salvo consumidor final, todas exigen CUIT.
                 </div>
 
-                @error('condicion_iva_id')
-                <div class="invalid-feedback">
-                    {{ $message }}
-                </div>
-                @enderror
+                <div class="invalid-feedback" id="error-condicion_iva_id"></div>
 
             </div>
 
@@ -377,10 +323,9 @@
 
                 <input
                     type="text"
-                    class="form-control rounded-3 @error('razon_social') is-invalid @enderror"
+                    class="form-control rounded-3"
                     id="razon_social"
                     name="razon_social"
-                    value="{{ old('razon_social', $cliente?->razon_social) }}"
                     maxlength="150"
                     placeholder="Ej: Distribuidora del Sur S.R.L."
                     autocomplete="off"
@@ -391,11 +336,7 @@
                     el apellido y los nombres.
                 </div>
 
-                @error('razon_social')
-                <div class="invalid-feedback">
-                    {{ $message }}
-                </div>
-                @enderror
+                <div class="invalid-feedback" id="error-razon_social"></div>
 
             </div>
 
@@ -407,8 +348,8 @@
     {{-- Botones --}}
     <div class="mt-5 d-flex flex-wrap gap-3">
 
-        <button type="submit" class="btn btn-success px-4 fw-semibold shadow-sm">
-            {{ $esAlta ? 'Crear cuenta' : 'Guardar cambios' }}
+        <button type="submit" id="botonGuardar" class="btn btn-success px-4 fw-semibold shadow-sm">
+            {{ $textoDelBoton }}
         </button>
 
         <a

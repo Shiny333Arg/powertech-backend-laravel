@@ -14,8 +14,6 @@
     </p>
 </section>
 
-@include('gestion.partials.alertas')
-
 {{-- Qué pasa después de guardar. Va antes del formulario porque cambia lo que
      el empleado tiene que verificar con el cliente mientras lo completa: el
      correo deja de ser un dato de contacto y pasa a ser la llave de la cuenta. --}}
@@ -46,12 +44,23 @@
 <section class="mb-4">
 
     @include('gestion.clientes.partials.formulario', [
-        'accion'  => route('gestion.clientes.store'),
-        'metodo'  => 'POST',
-        'cliente' => null,
-        'usuario' => null,
+        'textoDelBoton'  => 'Crear cuenta',
+        'ayudaDelCorreo' => 'Verificalo con el cliente antes de guardar: es a donde le llega el '
+            .'enlace para activar la cuenta.',
     ])
 
 </section>
 
 @endsection
+
+@push('scripts')
+<script type="module">
+    import { iniciar } from '{{ Vite::asset('resources/js/gestion/clientes/formulario.js') }}';
+
+    iniciar({
+        // El alta termina en la ficha del cliente recién creado, igual que el
+        // redirect del controlador web.
+        urlFicha: '{{ route('gestion.clientes.show', ['cliente' => '__ID__']) }}',
+    });
+</script>
+@endpush

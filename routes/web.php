@@ -14,7 +14,6 @@ use App\Http\Controllers\gestion\ClienteController;
 use App\Http\Controllers\gestion\ComprobanteController;
 use App\Http\Controllers\gestion\DashboardController;
 use App\Http\Controllers\gestion\DevolucionController;
-use App\Http\Controllers\gestion\DireccionController;
 use App\Http\Controllers\gestion\EmpleadoController;
 use App\Http\Controllers\gestion\EntregaController;
 use App\Http\Controllers\gestion\OrdenCompraController;
@@ -527,6 +526,25 @@ Route::prefix('gestion')
         // ========================================================
         // Sin destroy: solo baja logica. Esta referenciado por ventas y
         // comprobantes emitidos.
+        //
+        // <b>Solo quedan las cuatro rutas que ENTREGAN paginas.</b> Las cuatro
+        // que ejecutaban operaciones de negocio se retiraron en la Etapa 3 y
+        // viven en /api/v1/gestion/clientes, que es el unico camino para
+        // escribir un cliente desde el panel:
+        //
+        //   POST   clientes.store                 -> POST   /clientes
+        //   PUT    clientes.update                -> PUT    /clientes/{cliente}
+        //   PATCH  clientes.baja                  -> PATCH  /clientes/{cliente}/estado  {activo:false}
+        //   PATCH  clientes.reactivar             -> PATCH  /clientes/{cliente}/estado  {activo:true}
+        //   POST   clientes.reenviarInvitacion    -> POST   /clientes/{cliente}/invitacion
+        //
+        // La baja y la reactivacion eran dos rutas y ahora son un endpoint:
+        // son la misma decision —y el mismo permiso, cliente.baja— mirada desde
+        // los dos lados, y la diferencia esta en que un formulario Blade no
+        // puede mandar un booleano en el cuerpo y un cliente JSON si.
+        //
+        // Con ellas se fueron los cinco metodos del controlador que existian
+        // solo para servirlas.
 
         Route::prefix('customer')
             ->name('clientes.')
@@ -538,58 +556,42 @@ Route::prefix('gestion')
                 Route::get('/create', [ClienteController::class, 'create'])
                     ->name('create');
 
-                Route::post('/', [ClienteController::class, 'store'])
-                    ->name('store');
-
                 Route::get('/{cliente}', [ClienteController::class, 'show'])
                     ->name('show');
 
                 Route::get('/{cliente}/edit', [ClienteController::class, 'edit'])
                     ->name('edit');
-
-                Route::put('/{cliente}', [ClienteController::class, 'update'])
-                    ->name('update');
-
-                Route::patch('/{cliente}/baja', [ClienteController::class, 'baja'])
-                    ->name('baja');
-
-                Route::patch('/{cliente}/reactivar', [ClienteController::class, 'reactivar'])
-                    ->name('reactivar');
-
-                // Envia un mail: es una accion, no una modificacion del recurso.
-                Route::post('/{cliente}/reenviar-invitacion', [ClienteController::class, 'reenviarInvitacion'])
-                    ->name('reenviarInvitacion');
             });
 
 
         // ========================================================
         // DIRECCIONES
         // ========================================================
-        // Una sola tabla polimorfica para clientes, proveedores y empleados.
-        // El dueño sale de la URL y nunca del body: si el tipo llegara del
-        // formulario, cualquiera podria colgarle una direccion fiscal a otro.
+        // <b>El grupo se retiro completo en la Etapa 3.</b> Era una sola tabla
+        // polimorfica para clientes, proveedores y empleados, pero su UNICO
+        // consumidor era la ficha del cliente: el proveedor y el empleado
+        // mandan su domicilio anidado bajo 'direccion' en el cuerpo de su
+        // propio formulario, y nunca usaron estas rutas. Al migrar clientes
+        // quedo sin nadie que lo llame.
         //
-        // {tipo} es el discriminador, no un prefijo de recurso: sus valores
-        // son las claves de DireccionController::DUENOS.
+        //   POST   direcciones.store    -> POST   /api/v1/gestion/clientes/{cliente}/direcciones
+        //   PUT    direcciones.update   -> PUT    /api/v1/gestion/clientes/{cliente}/direcciones/{direccion}
+        //   DELETE direcciones.destroy  -> DELETE /api/v1/gestion/clientes/{cliente}/direcciones/{direccion}
         //
-        // La direccion SI se borra: no es un documento. Los envios copian el
-        // domicilio en lugar de apuntar aca, justamente para que un despacho
-        // no cambie de destino si alguien edita el perfil.
-
-        Route::prefix('{tipo}/{id}/address')
-            ->name('direcciones.')
-            ->where(['tipo' => 'clientes|proveedores|empleados', 'id' => '[0-9]+'])
-            ->group(function () {
-
-                Route::post('/', [DireccionController::class, 'store'])
-                    ->name('store');
-
-                Route::put('/{direccion}', [DireccionController::class, 'update'])
-                    ->name('update');
-
-                Route::delete('/{direccion}', [DireccionController::class, 'destroy'])
-                    ->name('destroy');
-            });
+        // Se mantiene lo que importaba del diseño viejo: el dueño sale de la URL
+        // y nunca del cuerpo —si el tipo llegara del formulario, cualquiera
+        // podria colgarle una direccion fiscal a otro— y la direccion SI se
+        // borra, porque no es un documento: los envios copian el domicilio en
+        // lugar de apuntar aca, justamente para que un despacho ya hecho no
+        // cambie de destino si alguien edita el perfil.
+        //
+        // Lo que se fue es el discriminador {tipo}: en la API el cliente es el
+        // unico que necesita estas rutas, asi que el sub-recurso cuelga de
+        // /clientes/{cliente} y no hay un parametro libre que defender.
+        //
+        // App\Http\Controllers\gestion\DireccionController se elimino con el
+        // grupo. App\Http\Requests\DireccionRequest NO: lo reutiliza
+        // Api\V1\Gestion\ClienteDireccionController, con las mismas reglas.
 
 
         // ========================================================

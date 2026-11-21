@@ -7,12 +7,15 @@ use App\Models\User;
 /**
  * Revoca UN token de acceso del usuario indicado.
  *
- * <b>Es el unico lugar del sistema donde se borra un token.</b> La invocan el
+ * <b>Es el unico lugar del sistema donde se borra UN token.</b> La invocan el
  * endpoint compartido de cierre de sesion (Api\V1\AuthController::logout, el
  * mismo para Flutter y para el panel), el intercambio de token por sesion
  * cuando reemplaza al token anterior (gestion\SesionController) y el
  * middleware de coherencia cuando encuentra una sesion con un token que ya no
  * sirve (VerificarTokenDeSesionGestion).
+ *
+ * Para borrarlos TODOS —solo en la baja de una cuenta— esta su hermana
+ * RevocarTodosLosTokens. El borrado de tokens vive entero en app/Actions.
  *
  * Tenerla en una clase y no repetida en cada lugar es lo que pide el requisito
  * 3 de la consigna: la logica se reutiliza DENTRO del backend, sin duplicar

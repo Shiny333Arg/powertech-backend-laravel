@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\V1\Gestion\Acciones\AjustarStockController;
 use App\Http\Controllers\Api\V1\Gestion\Acciones\AprobarOrdenCompraController;
 use App\Http\Controllers\Api\V1\Gestion\Acciones\CambiarEstadoCategoriaController;
+use App\Http\Controllers\Api\V1\Gestion\Acciones\CambiarEstadoClienteController;
 use App\Http\Controllers\Api\V1\Gestion\Acciones\CambiarEstadoProductoController;
 use App\Http\Controllers\Api\V1\Gestion\Acciones\CambiarEstadoProveedorController;
 use App\Http\Controllers\Api\V1\Gestion\Acciones\CambiarPublicacionProductoController;
@@ -10,12 +11,16 @@ use App\Http\Controllers\Api\V1\Gestion\Acciones\CancelarOrdenCompraController;
 use App\Http\Controllers\Api\V1\Gestion\Acciones\CerrarOrdenCompraController;
 use App\Http\Controllers\Api\V1\Gestion\Acciones\EnviarOrdenCompraController;
 use App\Http\Controllers\Api\V1\Gestion\Acciones\RegistrarRecepcionController;
+use App\Http\Controllers\Api\V1\Gestion\Acciones\ReenviarInvitacionClienteController;
 use App\Http\Controllers\Api\V1\Gestion\CategoriaController;
+use App\Http\Controllers\Api\V1\Gestion\ClienteController;
+use App\Http\Controllers\Api\V1\Gestion\ClienteDireccionController;
 use App\Http\Controllers\Api\V1\Gestion\OrdenCompraController;
 use App\Http\Controllers\Api\V1\Gestion\ProductoController;
 use App\Http\Controllers\Api\V1\Gestion\ProveedorController;
 use App\Http\Controllers\Api\V1\Gestion\StockController;
 use App\Models\Categoria;
+use App\Models\Cliente;
 use App\Models\OrdenCompra;
 use App\Models\Producto;
 use App\Models\Proveedor;
@@ -274,6 +279,141 @@ Route::prefix('v1/gestion')
                     ->whereNumber('proveedor')
                     ->middleware('can:cambiarEstado,proveedor')
                     ->name('estado');
+            });
+
+        // ============================================================
+        // CLIENTES
+        // ============================================================
+        //
+        // <b>No hay DELETE, y la ausencia es la regla.</b> El cliente esta
+        // referenciado por ventas y por comprobantes emitidos, que son historia
+        // fiscal y no pueden quedar sin sujeto: la factura dice a quien se le
+        // vendio. ClientePolicy::delete() devuelve false siempre —nunca hizo
+        // otra cosa—, la ruta web tampoco existia y el guard del modelo
+        // (ProtegeContraBorrado) rechazaria el delete() igual. Es el mismo
+        // criterio que productos y proveedores.
+        //
+        // La unica baja es PATCH .../estado con activo=false.
+        //
+        // <b>Lo propio de este modulo: el cliente son DOS filas.</b> `users`
+        // —con que correo entra a la tienda— y `clientes` —a quien se le
+        // factura—. El alta las escribe juntas en una transaccion y manda la
+        // invitacion para que el cliente elija su contraseña; la edicion, si le
+        // cambian el correo, desverifica la cuenta. Las dos reglas son las que
+        // ya tenia el panel y viven en el controlador, no en la ruta.
+        //
+        // Cuatro permisos y cuatro decisiones distintas:
+        //
+        //   GET    /clientes                     listar y detalle   cliente.ver
+        //   POST   /clientes                     alta               cliente.crear
+        //   PUT    /clientes/{cliente}           datos              cliente.editar
+        //   PATCH  /clientes/{cliente}/estado    ¿opera?            cliente.baja
+        //
+        // <b>'cliente.baja' es el unico que no tienen los cuatro roles.</b>
+        // Segun la matriz de PermisoSeeder, el vendedor y el cajero tienen ver,
+        // crear y editar: el mostrador carga y corrige clientes, pero sacar a
+        // uno de la operacion es del administrador y del administrativo. Es la
+        // diferencia con proveedores, donde los dos roles que entran tienen los
+        // cuatro permisos, y la razon por la que aca los botones por permiso no
+        // son decorativos.
+        //
+        // <b>El reenvio de la invitacion va con 'cliente.editar'</b>, el mismo
+        // permiso que exigia el panel: quien puede corregirle el correo es quien
+        // tiene que poder reenviarle el enlace a la casilla corregida. Es POST
+        // sobre /invitacion —un sub-recurso sustantivado, no un verbo— porque lo
+        // que se crea es un envio y la ficha del cliente no cambia: el mismo
+        // criterio de /aprobacion y /envio en compras.
+        //
+        // <b>El historial de compras va bajo 'cliente.ver' y no 'venta.ver'</b>,
+        // que es el permiso del modulo de ventas. No es un descuido: es el
+        // permiso con el que el panel ya mostraba esa tabla dentro de la ficha,
+        // y pedir el otro le sacaria al vendedor y al cajero una vista que hoy
+        // tienen. El detalle de cada venta sigue exigiendo lo suyo.
+        //
+        // <b>Y las direcciones son varias</b>, a diferencia del domicilio unico
+        // del proveedor: fiscal, de envio y particular, con una predeterminada
+        // por tipo. Por eso tienen sub-recurso propio en lugar de viajar
+        // anidadas en el cuerpo del alta, y por eso son el unico DELETE de este
+        // bloque —la direccion no es un documento: los envios copian el
+        // domicilio en lugar de apuntar a ella, justamente para que un despacho
+        // ya hecho no cambie de destino si alguien edita el perfil—.
+
+        Route::prefix('clientes')
+            ->name('clientes.')
+            ->group(function () {
+
+                Route::get('/', [ClienteController::class, 'index'])
+                    ->middleware('can:viewAny,'.Cliente::class)
+                    ->name('index');
+
+                Route::post('/', [ClienteController::class, 'store'])
+                    ->middleware('can:create,'.Cliente::class)
+                    ->name('store');
+
+                Route::get('/{cliente}', [ClienteController::class, 'show'])
+                    ->whereNumber('cliente')
+                    ->middleware('can:view,cliente')
+                    ->name('show');
+
+                Route::put('/{cliente}', [ClienteController::class, 'update'])
+                    ->whereNumber('cliente')
+                    ->middleware('can:update,cliente')
+                    ->name('update');
+
+                // Baja logica y reactivacion en un solo endpoint: son la misma
+                // decision —y el mismo permiso— mirada desde los dos lados.
+                Route::patch('/{cliente}/estado', CambiarEstadoClienteController::class)
+                    ->whereNumber('cliente')
+                    ->middleware('can:baja,cliente')
+                    ->name('estado');
+
+                // El metodo de la policy se llama baja() y no cambiarEstado()
+                // como en categorias, productos y proveedores. Es el nombre que
+                // tiene desde que se escribio y el que usan las dos pantallas:
+                // renombrarlo seria tocar la policy, la vista y el controlador
+                // web para que diga lo mismo. Devuelve exactamente
+                // tienePermiso('cliente.baja').
+
+                Route::post('/{cliente}/invitacion', ReenviarInvitacionClienteController::class)
+                    ->whereNumber('cliente')
+                    ->middleware('can:update,cliente')
+                    ->name('invitacion');
+
+                Route::get('/{cliente}/ventas', [ClienteController::class, 'ventas'])
+                    ->whereNumber('cliente')
+                    ->middleware('can:view,cliente')
+                    ->name('ventas');
+
+                // ----------------------------------------------------
+                // Direcciones de un cliente
+                // ----------------------------------------------------
+                //
+                // Cuelgan del cliente, asi que el dueño sale de la URL y nunca
+                // del cuerpo: si el tipo polimorfico llegara del formulario,
+                // cualquiera podria colgarle una direccion fiscal a otro.
+                //
+                // Las tres van con 'cliente.editar': la autorizacion se delega
+                // en el dueño, igual que en el panel, y es lo que dice la
+                // descripcion del permiso en PermisoSeeder —"Editar clientes y
+                // sus direcciones"—.
+
+                Route::prefix('{cliente}/direcciones')
+                    ->name('direcciones.')
+                    ->whereNumber('cliente')
+                    ->middleware('can:update,cliente')
+                    ->group(function () {
+
+                        Route::post('/', [ClienteDireccionController::class, 'store'])
+                            ->name('store');
+
+                        Route::put('/{direccion}', [ClienteDireccionController::class, 'update'])
+                            ->whereNumber('direccion')
+                            ->name('update');
+
+                        Route::delete('/{direccion}', [ClienteDireccionController::class, 'destroy'])
+                            ->whereNumber('direccion')
+                            ->name('destroy');
+                    });
             });
 
         // ============================================================

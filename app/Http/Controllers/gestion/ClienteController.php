@@ -2,284 +2,151 @@
 
 namespace App\Http\Controllers\gestion;
 
-use App\Enums\AmbitoRol;
-use App\Enums\ProveedorAuth;
-use App\Http\Requests\ClienteRequest;
 use App\Models\Cliente;
 use App\Models\CondicionIva;
-use App\Models\Rol;
 use App\Models\TipoDocumento;
 use App\Models\User;
-use App\Notifications\InvitacionCliente;
-use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\View\View;
-use Throwable;
 
 /**
- * El cliente tiene que ser una entidad y no un texto libre dentro de la venta:
- * sin tipo y numero de documento y condicion frente al IVA no se puede
- * facturar.
+ * Las pantallas de clientes del panel. <b>Ya no es un CRUD.</b>
  *
- * El alta escribe sobre DOS tablas: users (con que correo entra a la tienda) y
- * clientes (a quien se le factura). Es la misma cuenta que saldria de
- * registrarse solo en la tienda, nada mas que cargada por un empleado.
+ * Entrega las cuatro páginas Blade —listado, alta, ficha y edición— y nada más.
+ * Los datos los trae y los modifica el JavaScript de cada pantalla contra
+ * /api/v1/gestion/clientes, igual que en categorías, productos y proveedores.
  *
- * La contraseña no pasa nunca por aca. El cliente nace sin ella y recibe un
- * enlace para elegirla (InvitacionCliente); aceptarlo tambien le verifica el
- * correo. Mientras tanto la cuenta ya existe y el mostrador puede venderle,
- * cobrarle y facturarle: la verificacion solo hace falta para comprar en la
- * tienda online, que es donde vive el middleware 'verified'.
+ * store(), update(), baja(), reactivar() y reenviarInvitacion() se eliminaron
+ * junto con sus rutas: existían para servirlas, y mientras existieran eran una
+ * vía alternativa para ejecutar operaciones de negocio desde controladores web,
+ * que es lo que el requisito 3 de la Etapa 3 pide cerrar. Lo que hacía cada una
+ * está mapeado a su endpoint en el comentario del bloque CLIENTES de
+ * routes/web.php.
  *
- * <b>No hay destroy().</b> El cliente solo se da de baja: esta referenciado
- * por ventas y comprobantes emitidos. `baja()` y `reactivar()` son la misma
- * operacion en los dos sentidos.
+ * Con ellas se fue también el grupo `gestion.direcciones.*` y su
+ * DireccionController: esta ficha era su único consumidor —el proveedor y el
+ * empleado mandan su domicilio anidado en el cuerpo de su propio formulario—,
+ * así que las direcciones del cliente pasaron a colgar de
+ * /api/v1/gestion/clientes/{cliente}/direcciones.
+ *
+ * <b>Las reglas no se movieron de lugar:</b> el alta y la edición siguen pasando
+ * por el mismo ClienteRequest —que comparte sus reglas con el registro de la
+ * tienda a través de ReglasDatosCliente—, la misma ClientePolicy y el mismo
+ * DireccionRequest. Lo que cambió es quién los invoca.
+ *
+ * <b>Un cliente sigue siendo DOS filas</b>, `users` y `clientes`, y la
+ * contraseña sigue sin pasar por ninguna pantalla: el cliente nace sin ella y
+ * la elige desde el enlace que recibe por correo. Esas reglas viven ahora en
+ * Api\V1\Gestion\ClienteController y en App\Support\CuentaDeCliente.
+ *
+ * El cliente está referenciado por ventas y por comprobantes emitidos, así que
+ * no se elimina nunca: la única baja es activo = false, ahora por
+ * PATCH .../estado.
+ *
+ * <b>Lo único que las páginas siguen trayendo de la base son los
+ * desplegables</b> —tipos de documento y condiciones frente al IVA—: son el
+ * catálogo de opciones del formulario, no los datos del cliente. Ninguno de los
+ * dos tiene endpoint propio; crear uno pedía inventar también el permiso que lo
+ * protege. Queda anotado como pendiente, igual que en proveedores.
  */
 class ClienteController extends Controller
 {
+    /**
+     * Listado de gestión.
+     *
+     * <b>La página ya no trae los clientes.</b> El listado, los dos filtros y el
+     * paginado los resuelve resources/js/gestion/clientes/index.js contra
+     * GET /api/v1/gestion/clientes, con los filtros viajando en la URL para que
+     * un listado filtrado se pueda seguir guardando y compartiendo.
+     *
+     * Muestra activos e inactivos por defecto, a propósito: es la pantalla desde
+     * donde se reactiva un cliente dado de baja. Ese criterio ahora vive en el
+     * endpoint, que tiene el mismo default.
+     */
     public function index(Request $request): View
     {
         Gate::authorize('viewAny', Cliente::class);
 
-        $filtros = $request->validate([
-            'q'      => ['nullable', 'string', 'max:100'],
-            'activo' => ['nullable', 'boolean'],
+        return view('gestion.clientes.index', [
+            'permisos' => $this->permisosDe($request->user()),
         ]);
-
-        $clientes = Cliente::query()
-            ->with(['tipoDocumento:id,nombre', 'condicionIva:id,nombre'])
-            ->when($filtros['q'] ?? null, fn($q, $texto) => $q->where(
-                fn($sub) => $sub->where('razon_social', 'like', "%{$texto}%")
-                    ->orWhere('nro_doc', 'like', "%{$texto}%")
-            ))
-            // Las pantallas de gestion necesitan ver lo dado de baja para
-            // poder reactivarlo: por eso el filtro es explicito y no un
-            // global scope.
-            ->when(isset($filtros['activo']), fn($q) => $q->where('activo', (bool) $filtros['activo']))
-            ->orderBy('razon_social')
-            ->paginate(25)
-            ->withQueryString();
-
-        return view('gestion.clientes.index', compact('clientes', 'filtros'));
     }
 
-    public function create(): View
+    /** El formulario de alta, vacío. */
+    public function create(Request $request): View
     {
         Gate::authorize('create', Cliente::class);
 
-        return view('gestion.clientes.create', $this->catalogos());
+        return view('gestion.clientes.create', $this->opcionesDeFormulario());
     }
 
     /**
-     * Alta.
+     * La ficha del cliente.
      *
-     * Las dos filas en una transaccion: un user sin su cliente es una cuenta
-     * a la que no se le puede facturar, y un cliente sin su user es el cliente
-     * de mostrador viejo, que es justamente lo que esta pantalla ya no crea.
-     *
-     * El mail se manda DESPUES de la transaccion: si el envio falla, el alta
-     * queda hecha y la invitacion se reenvia desde la ficha. Que no se le
-     * pueda avisar no es razon para perder el cliente, sobre todo si hay una
-     * venta esperando para cargarse a su nombre.
+     * Entrega el id y los permisos del rol: los datos del cliente, el estado de
+     * su cuenta, sus direcciones y su historial de compras los pide la pantalla
+     * a la API. El binding de ruta sigue sirviendo para dos cosas que no se
+     * pueden delegar al JavaScript: el 404 de un cliente que no existe y la
+     * autorización de Gate::authorize().
      */
-    public function store(ClienteRequest $request): RedirectResponse
-    {
-        Gate::authorize('create', Cliente::class);
-
-        $cliente = DB::transaction(function () use ($request) {
-            $usuario = User::create($request->datosDelUsuario() + [
-                'rol_id'         => $this->rolDeCliente(),
-                'password'       => null,
-                'proveedor_auth' => ProveedorAuth::Local->value,
-                'activo'         => true,
-            ]);
-
-            return $usuario->cliente()->create($request->datosDelCliente() + ['activo' => true]);
-        });
-
-        $usuario = $cliente->user;
-
-        $respuesta = redirect()
-            ->route('gestion.clientes.show', $cliente)
-            ->with('status', "Cliente «{$cliente->razon_social}» creado. Ya se le puede vender y facturar.");
-
-        return $this->enviarInvitacion($usuario)
-            ? $respuesta
-            : $respuesta->withErrors(['estado' => "El cliente quedó creado, pero no se pudo enviar el correo a "
-                . "{$usuario->email}. Reenviá la invitación desde su ficha."]);
-    }
-
-    public function show(Cliente $cliente): View
+    public function show(Request $request, Cliente $cliente): View
     {
         Gate::authorize('view', $cliente);
 
-        $cliente->load([
-            'tipoDocumento',
-            'condicionIva',
-            'direcciones',
-            // password no se trae: la base calcula si la invitacion sigue
-            // pendiente y devuelve un booleano (ver User::invitacionPendiente).
-            // Sin el alias, el modelo llega sin la columna y la daria por nula,
-            // o sea pendiente, para todos.
-            'user' => fn($query) => $query
-                ->select(['id', 'email', 'nombres', 'apellido', 'activo', 'email_verified_at'])
-                ->selectRaw('password IS NULL AS invitacion_pendiente'),
-        ]);
-
         return view('gestion.clientes.show', [
-            'cliente' => $cliente,
-            'ventas'  => $cliente->ventas()
-                ->latest('fecha')
-                ->latest('id')
-                ->paginate(10, ['*'], 'compras')
-                ->withQueryString()
-                ->fragment('compras'),
+            'cliente'  => $cliente,
+            'permisos' => $this->permisosDe($request->user()),
         ]);
     }
 
-    public function edit(Cliente $cliente): View
+    /**
+     * El formulario de edición.
+     *
+     * Entrega el id y los desplegables. El bloque de la cuenta se muestra o se
+     * esconde según la respuesta de la API y no según una variable de la vista:
+     * el cliente de mostrador viejo (user_id nulo) no tiene nada de `users` que
+     * editar, y eso lo dice el detalle.
+     */
+    public function edit(Request $request, Cliente $cliente): View
     {
         Gate::authorize('update', $cliente);
 
         return view('gestion.clientes.edit', [
-            'cliente' => $cliente,
-            'usuario' => $cliente->user,
-        ] + $this->catalogos());
+            'cliente'  => $cliente,
+            'permisos' => $this->permisosDe($request->user()),
+        ] + $this->opcionesDeFormulario());
     }
 
     /**
-     * Edicion.
+     * Qué puede hacer este empleado con los clientes.
      *
-     * Si le cambian el correo, la cuenta deja de estar verificada y el cliente
-     * tiene que confirmar la casilla nueva: si no, un empleado podria mudarle
-     * la cuenta a una direccion que no es suya y seguir pareciendo verificada.
-     * No le corta la operatoria de mostrador, solo la compra online.
-     */
-    public function update(ClienteRequest $request, Cliente $cliente): RedirectResponse
-    {
-        Gate::authorize('update', $cliente);
-
-        $usuario = $cliente->user;
-
-        $cambioElCorreo = DB::transaction(function () use ($request, $cliente, $usuario) {
-            $cliente->update($request->datosDelCliente());
-
-            if ($usuario === null) {
-                return false;
-            }
-
-            $usuario->fill($request->datosDelUsuario());
-
-            $cambioElCorreo = $usuario->isDirty('email');
-
-            if ($cambioElCorreo) {
-                $usuario->email_verified_at = null;
-            }
-
-            $usuario->save();
-
-            return $cambioElCorreo;
-        });
-
-        // Si todavia no eligio su contraseña, el enlace viejo apunta a la
-        // casilla anterior: lo que hay que mandar es otra invitacion, no una
-        // verificacion que no lo deja entrar a ningun lado.
-        if ($cambioElCorreo) {
-            $usuario->password === null
-                ? $this->enviarInvitacion($usuario)
-                : $usuario->sendEmailVerificationNotification();
-        }
-
-        return redirect()
-            ->route('gestion.clientes.show', $cliente)
-            ->with('status', $cambioElCorreo
-                ? "Cliente actualizado. Le mandamos un correo a {$usuario->email} para que confirme la casilla nueva."
-                : 'Cliente actualizado.');
-    }
-
-    /**
-     * Reenvia el enlace para elegir la contraseña.
+     * Se le pregunta a la MISMA ClientePolicy que autoriza la API, con una
+     * instancia vacía: la policy decide por el permiso del rol y no mira la
+     * fila. Así las claves de permiso siguen escritas en un solo lugar y no se
+     * repiten en la vista ni en el JavaScript.
      *
-     * Solo sirve mientras la cuenta no tenga una: una vez elegida, el camino
-     * es "¿Olvidaste tu contraseña?" como cualquier usuario.
-     */
-    public function reenviarInvitacion(Cliente $cliente): RedirectResponse
-    {
-        Gate::authorize('update', $cliente);
-
-        $usuario = $cliente->user;
-
-        if ($usuario === null || ! $usuario->invitacionPendiente()) {
-            return back()->withErrors(['estado' => 'Este cliente ya activó su cuenta o no tiene una.']);
-        }
-
-        return $this->enviarInvitacion($usuario)
-            ? back()->with('status', "Le reenviamos la invitación a {$usuario->email}.")
-            : back()->withErrors(['estado' => 'No se pudo enviar el correo. Probá de nuevo en un rato.']);
-    }
-
-    /**
-     * Baja logica. Saca al cliente de la operacion de mostrador; sus compras
-     * anteriores lo siguen nombrando.
+     * <b>Acá los botones por permiso no son decorativos.</b> Según la matriz de
+     * PermisoSeeder, el vendedor y el cajero tienen ver, crear y editar y NO
+     * tienen 'cliente.baja': con cualquiera de esos dos roles la columna de
+     * acciones sale sin los botones de baja y reactivación, y el endpoint los
+     * rechazaría igual con un 403.
      *
-     * No toca el `activo` de su `user`: cortarle el acceso a la tienda es una
-     * decision distinta, y por eso son dos columnas.
+     * @return array<string, bool>
      */
-    public function baja(Cliente $cliente): RedirectResponse
+    private function permisosDe(User $empleado): array
     {
-        Gate::authorize('baja', $cliente);
+        $cualquiera = new Cliente;
 
-        $cliente->update(['activo' => false]);
-
-        return back()->with('status', 'Cliente dado de baja.');
+        return [
+            'crear'  => $empleado->can('create', Cliente::class),
+            'editar' => $empleado->can('update', $cualquiera),
+            'baja'   => $empleado->can('baja', $cualquiera),
+        ];
     }
 
-    public function reactivar(Cliente $cliente): RedirectResponse
-    {
-        Gate::authorize('baja', $cliente);
-
-        $cliente->update(['activo' => true]);
-
-        return back()->with('status', 'Cliente reactivado.');
-    }
-
-    /**
-     * Un fallo del servidor de correo no tiene que tirar abajo el alta: se
-     * registra en el log y el empleado ve un aviso para reintentar.
-     */
-    private function enviarInvitacion(User $usuario): bool
-    {
-        try {
-            $usuario->notify(new InvitacionCliente());
-
-            return true;
-        } catch (Throwable $e) {
-            report($e);
-
-            return false;
-        }
-    }
-
-    /**
-     * El unico rol de ambito tienda. No se elige en el formulario: un cliente
-     * creado desde gestion tiene exactamente los mismos permisos que uno que
-     * se registro solo.
-     */
-    private function rolDeCliente(): int
-    {
-        return Rol::where('nombre', 'cliente')
-            ->where('ambito', AmbitoRol::Tienda->value)
-            ->value('id') ?? throw new \RuntimeException(
-                'No existe el rol "cliente". Corré RolSeeder.'
-            );
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function catalogos(): array
+    /** @return array<string, mixed> */
+    private function opcionesDeFormulario(): array
     {
         return [
             'tiposDocumento' => TipoDocumento::orderBy('nombre')->get(),

@@ -33,7 +33,15 @@ export default defineConfig({
 
                 // Las pantallas de proveedores, migradas con el mismo criterio.
                 'resources/js/gestion/proveedores/index.js',
-                'resources/js/gestion/proveedores/formulario.js'
+                'resources/js/gestion/proveedores/formulario.js',
+
+                // Las pantallas de clientes, migradas con el mismo criterio.
+                // Son TRES y no dos: a diferencia de los otros modulos, este
+                // tiene ficha —la del cliente—, con el historial de compras,
+                // las direcciones y el estado de la cuenta en la tienda.
+                'resources/js/gestion/clientes/index.js',
+                'resources/js/gestion/clientes/formulario.js',
+                'resources/js/gestion/clientes/ficha.js'
             ],
             refresh: true,
         }),

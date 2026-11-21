@@ -9,22 +9,20 @@
 
     <h1 class="h3 fw-bold mb-2">Editar cliente</h1>
 
-    <p class="text-muted mb-0">
-        {{ $cliente->razon_social }}
-        @if ($cliente->user)
-            · {{ $cliente->user->email }}
-        @endif
-    </p>
+    {{-- «Razón social · correo». Lo escribe el JS con lo que trae el detalle. --}}
+    <p class="text-muted mb-0" id="subtituloCliente"></p>
 
 </section>
 
-@include('gestion.partials.alertas')
-
 {{-- Cambiar el correo lo desverifica: el empleado tiene que saberlo antes de
-     tocarlo, no después de que el cliente no pueda entrar a la tienda. --}}
-@if ($cliente->user && ! $cliente->user->invitacionPendiente())
+     tocarlo, no después de que el cliente no pueda entrar a la tienda.
 
-<div class="alert alert-warning d-flex align-items-start gap-2 mb-4" role="alert">
+     Arranca escondido: sólo corresponde si el cliente YA activó su cuenta, y eso
+     lo dice `cuenta.invitacion_pendiente` en el detalle. Al que todavía no
+     eligió su contraseña se le reenvía la invitación, que es otra cosa. --}}
+<div class="alert alert-warning d-flex align-items-start gap-2 mb-4 d-none"
+    id="avisoCambioDeCorreo"
+    role="alert">
 
     <svg xmlns="http://www.w3.org/2000/svg"
         width="18"
@@ -44,18 +42,28 @@
 
 </div>
 
-@endif
-
 {{-- Formulario --}}
 <section class="mb-4">
 
     @include('gestion.clientes.partials.formulario', [
-        'accion'  => route('gestion.clientes.update', $cliente),
-        'metodo'  => 'PUT',
-        'cliente' => $cliente,
-        'usuario' => $cliente->user,
+        'textoDelBoton'  => 'Guardar cambios',
+        'ayudaDelCorreo' => 'Si lo cambiás, el cliente va a tener que confirmar la casilla nueva.',
     ])
 
 </section>
 
 @endsection
+
+@push('scripts')
+<script type="module">
+    import { iniciar } from '{{ Vite::asset('resources/js/gestion/clientes/formulario.js') }}';
+
+    iniciar({
+        // Sólo el id: los datos del cliente los pide la pantalla a
+        // GET /api/v1/gestion/clientes/{cliente}.
+        id: {{ $cliente->id }},
+
+        urlFicha: '{{ route('gestion.clientes.show', ['cliente' => '__ID__']) }}',
+    });
+</script>
+@endpush

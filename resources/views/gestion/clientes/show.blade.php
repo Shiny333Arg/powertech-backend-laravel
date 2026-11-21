@@ -4,6 +4,26 @@
 
 @section('content')
 
+{{--
+    La ficha del cliente. <b>La página entrega la estructura y nada más.</b>
+
+    Los datos del cliente, el estado de su cuenta, sus direcciones y su historial
+    de compras los pide resources/js/gestion/clientes/ficha.js a la API:
+
+      GET    /api/v1/gestion/clientes/{id}
+      GET    /api/v1/gestion/clientes/{id}/ventas?page=
+      PATCH  /api/v1/gestion/clientes/{id}/estado
+      POST   /api/v1/gestion/clientes/{id}/invitacion
+      POST   /api/v1/gestion/clientes/{id}/direcciones
+      DELETE /api/v1/gestion/clientes/{id}/direcciones/{direccion}
+
+    Los cuatro formularios que había acá —baja/reactivación, reenvío de la
+    invitación, alta de dirección y borrado de dirección— eran los últimos
+    consumidores de las rutas web de negocio y del grupo
+    `gestion.direcciones.*`. Se retiraron las rutas y los formularios pasaron a
+    ser llamadas a la API.
+--}}
+
 <!-- Título -->
 
 <section class="mb-4">
@@ -14,53 +34,41 @@
 
             <h1 class="h3 fw-bold mb-2 d-flex flex-wrap align-items-center gap-2">
 
-                {{ $cliente->razon_social }}
+                <span id="fichaRazonSocial"></span>
 
-                @unless ($cliente->activo)
-                <span class="badge text-bg-secondary">Dado de baja</span>
-                @endunless
+                <span class="badge text-bg-secondary d-none" id="fichaInsigniaBaja">Dado de baja</span>
 
             </h1>
 
-            <p class="text-muted mb-0">
-                {{ $cliente->tipoDocumento?->nombre }} {{ $cliente->nro_doc }}
-                · {{ $cliente->condicionIva?->nombre }}
-            </p>
+            {{-- «DNI 27123456 · Consumidor Final» --}}
+            <p class="text-muted mb-0" id="fichaDocumento"></p>
 
         </div>
 
 
         <div class="d-flex flex-wrap gap-2">
 
-            @can('update', $cliente)
+            {{--
+                Los tres botones arrancan escondidos y los muestra el JS según
+                el permiso del rol y el estado del cliente. No se dibujan desde
+                Blade porque el estado —y por lo tanto cuál de los dos de baja
+                corresponde— llega con el detalle.
 
-            <a href="{{ route('gestion.clientes.edit', $cliente) }}" class="btn btn-warning fw-semibold">
+                Según la matriz de PermisoSeeder, el vendedor y el cajero NO
+                tienen 'cliente.baja': con esos roles los dos últimos no
+                aparecen nunca, y el endpoint los rechazaría igual con un 403.
+            --}}
+            <a href="#" class="btn btn-warning fw-semibold d-none" id="botonEditar">
                 Editar
             </a>
 
-            @endcan
+            <button type="button" class="btn btn-outline-danger fw-semibold d-none" id="botonBaja">
+                Dar de baja
+            </button>
 
-
-            @can('baja', $cliente)
-
-            <form
-                action="{{ $cliente->activo ? route('gestion.clientes.baja', $cliente) : route('gestion.clientes.reactivar', $cliente) }}"
-                method="POST">
-
-                @csrf
-                @method('PATCH')
-
-                <button
-                    type="submit"
-                    class="btn {{ $cliente->activo ? 'btn-outline-danger' : 'btn-success' }} fw-semibold"
-                    onclick="return confirm('{{ $cliente->activo ? '¿Está seguro de dar de baja este cliente?' : '¿Está seguro de reactivar este cliente?' }}');">
-                    {{ $cliente->activo ? 'Dar de baja' : 'Reactivar' }}
-                </button>
-
-            </form>
-
-            @endcan
-
+            <button type="button" class="btn btn-success fw-semibold d-none" id="botonReactivar">
+                Reactivar
+            </button>
 
             <a href="{{ route('gestion.clientes.index') }}" class="btn btn-outline-secondary">
                 Volver al listado
@@ -73,17 +81,19 @@
 </section>
 
 
-@include('gestion.partials.alertas')
+{{--
+    Avisos de la pantalla. Antes era `@include('gestion.partials.alertas')` con
+    el `session('status')` del redirect; ahora lo pinta avisos.js, que además
+    muestra el que haya dejado el formulario de alta o de edición.
+--}}
+<div id="avisosCliente" aria-live="polite"></div>
 
 
-@unless ($cliente->activo)
-
-<div class="alert alert-warning" role="alert">
-    Este cliente está fuera de operación: no se ofrece al cargar una venta nueva.
-    Sus compras anteriores lo siguen nombrando y la baja se puede revertir.
+<div class="alert alert-warning d-none" id="avisoFueraDeOperacion" role="alert">
+    Este cliente está dado de baja: no se ofrece al cargar una venta nueva y su
+    cuenta quedó inhabilitada, así que no puede ingresar ni comprar online. Sus
+    compras anteriores lo siguen nombrando y la baja se puede revertir.
 </div>
-
-@endunless
 
 
 <div class="row g-4">
@@ -94,18 +104,12 @@
         <!-- Historial de compras -->
         <section class="mb-4" id="compras">
 
-            <h2 class="h5 fw-bold mb-3">Últimas compras</h2>
-
             <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
 
                 <h2 class="h5 fw-bold mb-0">Historial de compras</h2>
 
-                @if ($ventas->total() > 0)
-                <span class="text-muted small">
-                    Mostrando {{ $ventas->firstItem() }}–{{ $ventas->lastItem() }}
-                    de {{ $ventas->total() }}
-                </span>
-                @endif
+                {{-- «Mostrando 1–10 de 23» --}}
+                <span class="text-muted small d-none" id="resumenVentas"></span>
 
             </div>
 
@@ -124,43 +128,19 @@
 
                     </thead>
 
-                    <tbody>
-
-                        @forelse ($ventas as $venta)
-
-                        <tr>
-
-                            <td class="text-nowrap fw-semibold">
-                                <a href="{{ route('gestion.ventas.show', $venta) }}">
-                                    {{ $venta->numeroFormateado() }}
-                                </a>
-                            </td>
-
-                            <td class="text-nowrap">
-                                {{ $venta->fecha?->format('d/m/Y') }}
-                            </td>
-
-                            <td>
-                                @include('gestion.partials.estado', ['estado' => $venta->estado])
-                            </td>
-
-                            <td class="text-nowrap fw-semibold">
-                                $ {{ number_format($venta->total, 2, ',', '.') }}
-                            </td>
-
-                        </tr>
-
-                        @empty
+                    {{--
+                        Las filas las dibuja el JS con lo que devuelve
+                        GET /clientes/{id}/ventas. El enlace de cada número
+                        lleva al detalle de la venta, que sigue exigiendo
+                        'venta.ver': que el enlace esté no significa que entre.
+                    --}}
+                    <tbody id="contenidoTablaVentas">
 
                         <tr>
-
                             <td colspan="4" class="text-center py-4 text-muted">
-                                Todavía no compró nada.
+                                Cargando compras…
                             </td>
-
                         </tr>
-
-                        @endforelse
 
                     </tbody>
 
@@ -168,11 +148,7 @@
 
             </div>
 
-            @if ($ventas->hasPages())
-            <div class="d-flex justify-content-center mt-3">
-                {{ $ventas->onEachSide(2)->links() }}
-            </div>
-            @endif
+            <div id="paginadoVentas" class="d-flex justify-content-center mt-3"></div>
 
         </section>
 
@@ -187,68 +163,13 @@
                 despachado no cambia de destino si se edita esto.
             </p>
 
-            @if ($cliente->direcciones->isEmpty())
+            <p class="text-muted d-none" id="sinDirecciones">Sin direcciones cargadas.</p>
 
-            <p class="text-muted">Sin direcciones cargadas.</p>
-
-            @else
-
-            <ul class="list-group mb-3">
-
-                @foreach ($cliente->direcciones as $direccion)
-
-                <li class="list-group-item d-flex flex-wrap justify-content-between align-items-start gap-3">
-
-                    <div>
-
-                        <span class="badge text-bg-light border">
-                            {{ ucfirst($direccion->tipo->value) }}
-                        </span>
-
-                        @if ($direccion->es_predeterminada)
-                        <span class="text-muted small">Predeterminada</span>
-                        @endif
-
-                        <address class="mb-0 mt-1">
-                            {{ $direccion->calle }} {{ $direccion->numero }}
-                            @if ($direccion->piso_depto) ({{ $direccion->piso_depto }}) @endif<br>
-                            {{ $direccion->localidad }}, {{ $direccion->provincia }}
-                            ({{ $direccion->codigo_postal }})
-                        </address>
-
-                    </div>
-
-                    @can('update', $cliente)
-
-                    <form
-                        action="{{ route('gestion.direcciones.destroy', ['tipo' => 'clientes', 'id' => $cliente->id, 'direccion' => $direccion->id]) }}"
-                        method="POST">
-
-                        @csrf
-                        @method('DELETE')
-
-                        <button
-                            type="submit"
-                            class="btn btn-sm btn-outline-danger"
-                            title="Eliminar dirección"
-                            onclick="return confirm('¿Está seguro de eliminar esta dirección?');">
-                            Eliminar
-                        </button>
-
-                    </form>
-
-                    @endcan
-
-                </li>
-
-                @endforeach
-
-            </ul>
-
-            @endif
+            {{-- La lista la dibuja el JS con `data.direcciones` del detalle. --}}
+            <ul class="list-group mb-3 d-none" id="listaDirecciones"></ul>
 
 
-            @can('update', $cliente)
+            @if ($permisos['editar'])
 
             <!-- Alta de dirección -->
             <div class="accordion" id="acordeonDireccion">
@@ -277,13 +198,18 @@
 
                         <div class="accordion-body">
 
-                            <form
-                                action="{{ route('gestion.direcciones.store', ['tipo' => 'clientes', 'id' => $cliente->id]) }}"
-                                method="POST"
-                                class="row g-3"
-                                autocomplete="off">
+                            {{-- Errores de validación que devuelve la API. --}}
+                            <div id="erroresDireccion"></div>
 
-                                @csrf
+                            {{--
+                                Las reglas son las de siempre: el mismo
+                                DireccionRequest, ahora invocado por
+                                Api\V1\Gestion\ClienteDireccionController.
+                            --}}
+                            <form
+                                class="row g-3"
+                                autocomplete="off"
+                                id="formularioDireccion">
 
                                 <div class="col-12 col-md-4">
 
@@ -295,6 +221,8 @@
                                         <option value="particular">Particular</option>
                                     </select>
 
+                                    <div class="invalid-feedback" id="error-direccion-tipo"></div>
+
                                 </div>
 
                                 <div class="col-12 col-md-6">
@@ -302,7 +230,9 @@
                                     <label for="calle" class="form-label fw-semibold">Calle</label>
 
                                     <input type="text" class="form-control rounded-3" id="calle" name="calle"
-                                        value="{{ old('calle') }}" maxlength="120" required>
+                                        maxlength="120" required>
+
+                                    <div class="invalid-feedback" id="error-direccion-calle"></div>
 
                                 </div>
 
@@ -311,7 +241,9 @@
                                     <label for="numero" class="form-label fw-semibold">Número</label>
 
                                     <input type="text" class="form-control rounded-3" id="numero" name="numero"
-                                        value="{{ old('numero') }}" maxlength="10">
+                                        maxlength="10">
+
+                                    <div class="invalid-feedback" id="error-direccion-numero"></div>
 
                                 </div>
 
@@ -320,7 +252,9 @@
                                     <label for="piso_depto" class="form-label fw-semibold">Piso / depto</label>
 
                                     <input type="text" class="form-control rounded-3" id="piso_depto" name="piso_depto"
-                                        value="{{ old('piso_depto') }}" maxlength="20">
+                                        maxlength="20">
+
+                                    <div class="invalid-feedback" id="error-direccion-piso_depto"></div>
 
                                 </div>
 
@@ -329,7 +263,9 @@
                                     <label for="localidad" class="form-label fw-semibold">Localidad</label>
 
                                     <input type="text" class="form-control rounded-3" id="localidad" name="localidad"
-                                        value="{{ old('localidad') }}" maxlength="80" required>
+                                        maxlength="80" required>
+
+                                    <div class="invalid-feedback" id="error-direccion-localidad"></div>
 
                                 </div>
 
@@ -338,7 +274,9 @@
                                     <label for="provincia" class="form-label fw-semibold">Provincia</label>
 
                                     <input type="text" class="form-control rounded-3" id="provincia" name="provincia"
-                                        value="{{ old('provincia') }}" maxlength="60" required>
+                                        maxlength="60" required>
+
+                                    <div class="invalid-feedback" id="error-direccion-provincia"></div>
 
                                 </div>
 
@@ -347,7 +285,9 @@
                                     <label for="codigo_postal" class="form-label fw-semibold">Código postal</label>
 
                                     <input type="text" class="form-control rounded-3" id="codigo_postal" name="codigo_postal"
-                                        value="{{ old('codigo_postal') }}" maxlength="10" required>
+                                        maxlength="10" required>
+
+                                    <div class="invalid-feedback" id="error-direccion-codigo_postal"></div>
 
                                 </div>
 
@@ -384,7 +324,7 @@
 
             </div>
 
-            @endcan
+            @endif
 
         </section>
 
@@ -398,13 +338,11 @@
 
             <h2 class="h6 fw-bold mb-2">Contacto</h2>
 
-            @if ($cliente->user)
-            <p class="mb-1">{{ $cliente->user->email }}</p>
-            @endif
+            {{-- El cliente de mostrador sin cuenta no tiene correo: el JS
+                 esconde la línea, como hacía el `@if ($cliente->user)`. --}}
+            <p class="mb-1 d-none" id="fichaEmail"></p>
 
-            <p class="mb-0 {{ $cliente->telefono ? '' : 'text-muted' }}">
-                {{ $cliente->telefono ?: 'Sin teléfono cargado' }}
-            </p>
+            <p class="mb-0" id="fichaTelefono"></p>
 
         </section>
 
@@ -413,10 +351,7 @@
 
             <h2 class="h6 fw-bold mb-3">Cuenta en la tienda</h2>
 
-            @include('gestion.clientes.partials.acceso', [
-            'cliente' => $cliente,
-            'detalle' => true,
-            ])
+            @include('gestion.clientes.partials.acceso')
 
         </section>
 
@@ -425,3 +360,27 @@
 </div>
 
 @endsection
+
+@push('scripts')
+<script type="module">
+    import { iniciar } from '{{ Vite::asset('resources/js/gestion/clientes/ficha.js') }}';
+
+    iniciar({
+        // Sólo el id: los datos los pide la pantalla a la API.
+        id: {{ $cliente->id }},
+
+        // Los decide ClientePolicy en el servidor (ver el controlador): acá
+        // sólo dicen qué se dibuja. El permiso de verdad lo exige la API.
+        permisos: @json($permisos),
+
+        urlEdicion: '{{ route('gestion.clientes.edit', $cliente) }}',
+
+        // El detalle de la venta, con un hueco en lugar del id.
+        urlVenta: '{{ route('gestion.ventas.show', ['venta' => '__ID__']) }}',
+
+        // La vigencia del enlace de invitación, que la frase del estado de la
+        // cuenta nombra. Es una constante del dominio, no un dato del cliente.
+        horasDeVigencia: {{ \App\Notifications\InvitacionCliente::HORAS_DE_VIGENCIA }},
+    });
+</script>
+@endpush
