@@ -2,208 +2,107 @@
 
 namespace App\Http\Controllers\gestion;
 
-use App\Http\Requests\ProductoRequest;
 use App\Models\AlicuotaIva;
 use App\Models\Categoria;
 use App\Models\Producto;
 use App\Models\Proveedor;
-use App\Services\StockService;
-use App\Support\ImagenProducto;
-use Illuminate\Http\RedirectResponse;
+use App\Models\User;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\View\View;
 
 /**
- * CRUD de productos, sin la D de delete: un producto NO se elimina nunca.
+ * Las pantallas de productos del panel. <b>Ya no es un CRUD.</b>
  *
- * Esta referenciado por lineas de venta, lineas de comprobante, movimientos de
- * stock y lineas de orden de compra, y todas esas filas son historia que no
- * puede quedar sin sujeto. La ruta destroy directamente no existe, y si alguien
- * llamara a delete() igual, el guard del modelo lanza la excepcion de dominio.
- * La unica baja es activo = false.
+ * Entrega las tres paginas Blade —listado, alta y edicion— y nada mas. Los
+ * datos los trae y los modifica el JavaScript de cada pantalla contra
+ * /api/v1/gestion/productos, igual que en categorias.
+ *
+ * store(), update(), darDeBaja(), reactivar(), publicar() y despublicar() se
+ * eliminaron junto con sus rutas: existian para servirlas, y mientras
+ * existieran eran una via alternativa para ejecutar operaciones de negocio
+ * desde controladores web, que es lo que el requisito 3 de la Etapa 3 pide
+ * cerrar. Lo que hacia cada una esta mapeado a su endpoint en el comentario
+ * del bloque PRODUCTOS de routes/web.php.
+ *
+ * El alta y la baja siguen siendo las mismas operaciones de siempre, con el
+ * mismo ProductoRequest, la misma ProductoPolicy y el mismo StockService: lo
+ * que cambio es quien las invoca. Un producto NO se elimina nunca —esta
+ * referenciado por lineas de venta, de comprobante, de orden de compra y por
+ * los movimientos de stock—, asi que la unica baja sigue siendo activo =
+ * false, ahora por PATCH .../estado.
+ *
+ * <b>Lo unico que la pagina sigue trayendo de la base son los desplegables</b>
+ * —categorias, proveedores y alicuotas de IVA—: son el catalogo de opciones
+ * del formulario, no los datos del producto. Categorias y proveedores tienen
+ * endpoint propio, pero las alicuotas de IVA no, y crear uno pedia inventar
+ * tambien el permiso que lo protege. Queda anotado como pendiente para cuando
+ * se migren esos dos modulos.
  */
 class ProductoController extends Controller
 {
-    public function __construct(private readonly StockService $stock)
+    public function __construct()
     {
         // Descomentar cuando exista el login:
         $this->authorizeResource(Producto::class, 'producto');
     }
 
     /**
-     * Listado de gestion, con los filtros que pide la operacion diaria.
+     * Listado de gestion.
      *
-     * Muestra activos e inactivos: es la pantalla desde donde se reactiva un
-     * producto dado de baja. El filtro es explicito, no un global scope.
+     * <b>La pagina ya no trae los productos.</b> El listado, los cuatro
+     * filtros y el paginado los resuelve resources/js/gestion/productos/index.js
+     * contra GET /api/v1/gestion/productos, con los filtros viajando en la URL
+     * para que un listado filtrado se pueda seguir guardando y compartiendo.
+     *
+     * Muestra activos e inactivos por defecto, a proposito: es la pantalla
+     * desde donde se reactiva un producto dado de baja. Ese criterio ahora
+     * vive en el endpoint, que tiene el mismo default.
+     *
+     * Del servidor bajan dos cosas: el desplegable de categorias del filtro y
+     * los permisos del rol, que deciden que botones se dibujan y no que se
+     * puede hacer. Eso lo sigue exigiendo la API en cada llamada.
      */
     public function index(Request $request): View
     {
-        $productos = Producto::query()
-            ->with(['categoria:id,nombre', 'proveedor:id,razon_social'])
-            ->when($request->filled('q'), function ($query) use ($request) {
-                $busqueda = $request->string('q')->trim()->value();
-
-                // Codigo, nombre y marca son los tres campos por los que
-                // alguien busca un producto en el mostrador.
-                $query->where(function ($sub) use ($busqueda) {
-                    $sub->where('codigo', 'like', "%{$busqueda}%")
-                        ->orWhere('nombre', 'like', "%{$busqueda}%")
-                        ->orWhere('marca', 'like', "%{$busqueda}%");
-                });
-            })
-            ->when($request->filled('categoria_id'), fn ($query) => $query->where('categoria_id', $request->integer('categoria_id')))
-            ->when($request->query('estado') === 'activos', fn ($query) => $query->activos())
-            ->when($request->query('estado') === 'inactivos', fn ($query) => $query->inactivos())
-            // Los dos cortes de stock que alimentan el dashboard del administrativo.
-            ->when($request->query('stock') === 'reponer', fn ($query) => $query->bajoPuntoReposicion())
-            ->when($request->query('stock') === 'preventa', fn ($query) => $query->where('stock_disponible', '<', 0))
-            ->orderBy('nombre')
-            ->paginate(10)
-            ->withQueryString();
-
         return view('gestion.item.index', [
-            'productos'  => $productos,
             'categorias' => Categoria::activos()->orderBy('nombre')->get(['id', 'nombre']),
-            'filtros'    => $request->only('q', 'categoria_id', 'estado', 'stock'),
+            'permisos' => $this->permisosDe($request->user()),
         ]);
     }
 
+    /**
+     * El formulario de alta, vacio.
+     *
+     * Ya no se precarga un Producto en blanco: los valores por omision del
+     * formulario —en operacion, sin publicar, sin reposicion automatica— son
+     * los mismos de antes y estan escritos en la vista. Lo unico que baja de
+     * la base son los desplegables.
+     */
     public function create(): View
     {
-        return view('gestion.item.create', [
-            'producto' => new Producto([
-                'activo'                => true,
-                'publicado_app'         => false,
-                'reposicion_automatica' => false,
-                'punto_reposicion'      => 0,
-                'cantidad_reposicion'   => 0,
-            ]),
-        ] + $this->opcionesDeFormulario());
+        return view('gestion.item.create', $this->opcionesDeFormulario());
     }
 
     /**
-     * Alta.
+     * El formulario de edicion.
      *
-     * El stock inicial NO se escribe en la columna: se carga como movimiento de
-     * tipo 'inicial', para que el saldo quede respaldado por el historico desde
-     * el primer dia. Producto y movimiento van en la misma transaccion: un
-     * producto creado con un movimiento a medias dejaria el saldo sin explicar.
+     * Entrega el id, los desplegables y los permisos: los datos del producto
+     * los pide la pantalla a GET /api/v1/gestion/productos/{producto}. El
+     * binding de ruta sigue sirviendo para dos cosas que no se pueden delegar
+     * al JavaScript: el 404 de un producto que no existe y la autorizacion de
+     * authorizeResource().
      */
-    public function store(ProductoRequest $request): RedirectResponse
-    {
-        $producto = DB::transaction(function () use ($request) {
-            $datos = $request->datosDelProducto();
-
-            $datos['activo'] = true;
-
-            if ($request->hasFile('imagen')) {
-                $datos['imagen'] = ImagenProducto::guardar($request->file('imagen'));
-            }
-
-            $producto = Producto::create($datos);
-
-            if ($request->stockInicial() > 0) {
-                $this->stock->cargaInicial($producto, $request->stockInicial());
-            }
-
-            return $producto;
-        });
-
-        return redirect()
-            ->route('gestion.items.index')
-            ->with('exito', "Se creó «{$producto->nombre}».");
-    }
-
     public function edit(Producto $producto): View
     {
-        return view('gestion.item.edit', ['producto' => $producto] + $this->opcionesDeFormulario());
-    }
+        return view('gestion.item.edit', [
+            'producto' => $producto,
 
-    /**
-     * Edicion.
-     *
-     * No toca ninguna de las tres columnas de stock. Cambiar el saldo desde acá
-     * dejaria un movimiento sin registrar y rompe la conciliacion: el stock se
-     * corrige con un ajuste de inventario.
-     */
-    public function update(ProductoRequest $request, Producto $producto): RedirectResponse
-    {
-        $datos = $request->datosDelProducto();
-
-        if ($request->hasFile('imagen')) {
-            $imagenAnterior   = $producto->imagen;
-            $datos['imagen']  = ImagenProducto::guardar($request->file('imagen'));
-
-            $producto->update($datos);
-            ImagenProducto::borrar($imagenAnterior); // recien despues de guardar la nueva
-
-            return redirect()->route('gestion.items.index')
-                ->with('exito', "Se guardaron los cambios en «{$producto->nombre}».");
-        }
-
-        $producto->update($datos);
-
-        return redirect()
-            ->route('gestion.items.index')
-            ->with('exito', "Se guardaron los cambios en «{$producto->nombre}».");
-    }
-
-    /**
-     * Baja logica, la unica baja posible.
-     *
-     * No hace falta tocar publicado_app: un producto dado de baja no se publica
-     * nunca, cualquiera sea ese valor, porque la vitrina filtra por los dos.
-     * Dejarlo intacto conserva la decision de publicacion por si se reactiva.
-     */
-    public function darDeBaja(Producto $producto): RedirectResponse
-    {
-        // authorizeResource() solo cubre los siete metodos de recurso: las
-        // acciones de estado tienen que autorizar a mano, o quedan abiertas a
-        // cualquier cuenta del ambito gestion.
-        Gate::authorize('cambiarEstado', $producto);
-
-        $producto->darDeBaja();
-
-        return back()->with('exito', "«{$producto->nombre}» salió de operación. No se puede cargar en ventas nuevas.");
-    }
-
-    public function reactivar(Producto $producto): RedirectResponse
-    {
-        Gate::authorize('cambiarEstado', $producto);
-
-        $producto->reactivar();
-
-        return back()->with('exito', "«{$producto->nombre}» vuelve a estar en operación.");
-    }
-
-    /**
-     * Publicacion en la tienda: pregunta distinta de la baja. Un producto activo
-     * que se vende en mostrador y no se publica —reservado, de exhibicion— es un
-     * caso normal del rubro.
-     */
-    public function publicar(Producto $producto): RedirectResponse
-    {
-        // Permiso propio: publicar en la tienda no es lo mismo que dar de baja.
-        Gate::authorize('publicar', $producto);
-
-        if (! $producto->activo) {
-            return back()->with('error', 'Un producto dado de baja no se puede publicar. Reactivalo primero.');
-        }
-
-        $producto->update(['publicado_app' => true]);
-
-        return back()->with('exito', "«{$producto->nombre}» ya se ve en la tienda.");
-    }
-
-    public function despublicar(Producto $producto): RedirectResponse
-    {
-        Gate::authorize('publicar', $producto);
-
-        $producto->update(['publicado_app' => false]);
-
-        return back()->with('exito', "«{$producto->nombre}» dejó de verse en la tienda. Se sigue vendiendo en mostrador.");
+            // El interruptor de publicacion se deshabilita sin este permiso:
+            // publicar tiene endpoint propio ('producto.publicar') y no se
+            // decide junto con el resto de los datos.
+            'puedePublicar' => Gate::allows('publicar', $producto),
+        ] + $this->opcionesDeFormulario());
     }
 
     /**
@@ -214,6 +113,33 @@ class ProductoController extends Controller
      * quitaron las rutas y los metodos; la vista de edicion ahora enlaza
      * gestion.stock.show para el historial.
      */
+
+    /**
+     * Que puede hacer este empleado con los productos.
+     *
+     * Se le pregunta a la MISMA ProductoPolicy que autoriza la API, con una
+     * instancia vacia: la policy decide por el permiso del rol y no mira la
+     * fila. Asi las claves de permiso siguen escritas en un solo lugar y no se
+     * repiten en la vista ni en el JavaScript.
+     *
+     * 'verStock' no es del catalogo sino del modulo stock ('stock.ver'): es el
+     * permiso que ya exige la pantalla del kardex a la que lleva el boton de
+     * historial.
+     *
+     * @return array<string, bool>
+     */
+    private function permisosDe(User $empleado): array
+    {
+        $cualquiera = new Producto;
+
+        return [
+            'crear' => $empleado->can('create', Producto::class),
+            'editar' => $empleado->can('update', $cualquiera),
+            'cambiarEstado' => $empleado->can('cambiarEstado', $cualquiera),
+            'publicar' => $empleado->can('publicar', $cualquiera),
+            'verStock' => $empleado->can('verStock', $cualquiera),
+        ];
+    }
 
     /** @return array<string, mixed> */
     private function opcionesDeFormulario(): array

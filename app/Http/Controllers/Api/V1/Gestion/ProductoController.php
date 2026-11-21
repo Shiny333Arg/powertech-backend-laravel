@@ -161,12 +161,27 @@ class ProductoController extends Controller
      * dejaria un movimiento sin registrar y rompe la conciliacion. Eso se hace
      * con un ajuste de inventario.
      *
-     * Tampoco cambia el estado ni la publicacion: cada uno tiene su endpoint y
-     * su permiso.
+     * <b>Tampoco cambia el estado ni la publicacion: cada uno tiene su
+     * endpoint y su permiso.</b> Con la publicacion eso hay que hacerlo
+     * explicito, y por dos motivos distintos:
+     *
+     *   - ProductoRequest::prepareForValidation() hace boolean('publicado_app')
+     *     SIEMPRE, asi que el campo esta en validated() aunque el cuerpo no lo
+     *     traiga, y con valor false. Sin el except, un PUT que no lo manda
+     *     despublicaria el producto sin que nadie lo pida.
+     *   - Si el PUT lo escribiera, publicar quedaria al alcance de cualquiera
+     *     con 'producto.editar', salteando 'producto.publicar', que es
+     *     justamente el permiso que separa las dos decisiones.
+     *
+     * El unico camino para publicar y despublicar es
+     * PATCH /{producto}/publicacion. 'activo' no hace falta excluirlo: el
+     * FormRequest lo rechaza con 'prohibited'.
      */
     public function update(ProductoRequest $request, Producto $producto): ProductoResource
     {
-        $datos = $request->datosDelProducto();
+        $datos = collect($request->datosDelProducto())
+            ->except('publicado_app')
+            ->all();
 
         if (! $request->hasFile('imagen')) {
             $producto->update($datos);

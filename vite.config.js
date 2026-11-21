@@ -24,7 +24,12 @@ export default defineConfig({
                 // avisos.js— quedan en un chunk compartido, que es lo que hace
                 // que el token siga viviendo en UNA sola variable de modulo.
                 'resources/js/gestion/categorias/index.js',
-                'resources/js/gestion/categorias/formulario.js'
+                'resources/js/gestion/categorias/formulario.js',
+
+                // Las pantallas de productos, migradas a la API con el mismo
+                // criterio que las de categorias.
+                'resources/js/gestion/productos/index.js',
+                'resources/js/gestion/productos/formulario.js'
             ],
             refresh: true,
         }),

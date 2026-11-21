@@ -71,6 +71,17 @@
 
 </section>
 
+{{--
+    Avisos de la pantalla.
+
+    Antes no habia ninguno: el controlador web dejaba `session('exito')` y
+    `session('error')` en el flash y esta vista nunca los imprimia, asi que los
+    mensajes —incluido el error de "un producto dado de baja no se puede
+    publicar"— no se veian. Ahora los pinta avisos.js con el marcado de
+    Bootstrap que usan las demas pantallas.
+--}}
+<div id="avisosProductos" aria-live="polite"></div>
+
 <!-- Filtros -->
 
 <section class="mb-4">
@@ -100,8 +111,7 @@
                 @foreach ($categorias as $categoria)
 
                 <option
-                    value="{{ $categoria->id }}"
-                    @selected(($filtros['categoria_id'] ?? null)==$categoria->id)>
+                    value="{{ $categoria->id }}">
 
                     {{ $categoria->nombre }}
 
@@ -126,7 +136,6 @@
                 class="form-control"
                 id="q"
                 name="q"
-                value="{{ $filtros['q'] ?? '' }}"
                 placeholder="Ej: RTX 3070"
                 maxlength="150">
 
@@ -148,14 +157,12 @@
                 <option value="">Todos</option>
 
                 <option
-                    value="activos"
-                    @selected(($filtros['estado'] ?? null)==='activos' )>
+                    value="activos">
                     Activos
                 </option>
 
                 <option
-                    value="inactivos"
-                    @selected(($filtros['estado'] ?? null)==='inactivos' )>
+                    value="inactivos">
                     Inactivos
                 </option>
 
@@ -179,14 +186,12 @@
                 <option value="">Todos</option>
 
                 <option
-                    value="reponer"
-                    @selected(($filtros['stock'] ?? null)==='reponer' )>
+                    value="reponer">
                     Bajo reposición
                 </option>
 
                 <option
-                    value="preventa"
-                    @selected(($filtros['stock'] ?? null)==='preventa' )>
+                    value="preventa">
                     En preventa
                 </option>
 
@@ -247,243 +252,27 @@
                     <th class="text-nowrap" id="columnaPrecio">Precio</th>
                     <th class="text-nowrap" id="columnaStockDisponible">Stock</th>
                     <th class="text-nowrap" id="columnaEstado">Estado</th>
-                    @can('create', App\Models\Producto::class)
+                    @if ($permisos['editar'] || $permisos['cambiarEstado'] || $permisos['verStock'])
                     <th class="text-nowrap" id="columnaOpciones">Opciones</th>
-                    @endcan
+                    @endif
                 </tr>
 
             </thead>
 
 
+            {{--
+                Las filas las dibuja el JavaScript con lo que devuelve
+                GET /api/v1/gestion/productos. La pagina ya no trae datos de
+                negocio: entrega la estructura y nada mas.
+            --}}
             <tbody id="contenidoTablaProductos">
 
-                @forelse ($productos as $producto)
-
                 <tr>
-                    @if ($producto->imagen)
-
-                    <td>
-                        <img
-                            src="{{ asset('storage/'.$producto->imagen) }}"
-                            alt="{{ $producto->nombre }}"
-                            class="w-100 h-100"
-                            style="object-fit: contain;"
-                            loading="lazy">
-                    </td>
-
-                    @else
-
-                    <td>
-                        <img
-                            src="{{ asset('images/Sin_Imagen.png') }}"
-                            alt="Sin imagen"
-                            class="w-100 h-100"
-                            style="object-fit: contain;"
-                            loading="lazy">
-                    </td>
-
-                    @endif
-
-                    <td>
-                        {{ $producto->codigo }}
-                    </td>
-
-                    <td>
-                        {{ $producto->nombre }}
-                    </td>
-
-                    <td>
-                        {{ $producto->marca ?: '—' }}
-                    </td>
-
-                    <td>
-                        {{ $producto->categoria?->nombre ?? '—' }}
-                    </td>
-
-                    <td class="text-nowrap">
-                        $ {{ number_format($producto->precio, 2, ',', '.') }}
-                    </td>
-
-                    <td>
-
-                        @if ($producto->stock_disponible < 0)
-
-                            <span class="badge text-bg-danger">
-                            {{ $producto->stock_disponible }}
-                            </span>
-
-                            @elseif ($producto->stock_disponible == 0)
-
-                            <span class="badge text-bg-warning">
-                                {{ $producto->stock_disponible }}
-                            </span>
-
-                            @else
-
-                            <span class="badge text-bg-success">
-                                {{ $producto->stock_disponible }}
-                            </span>
-
-                            @endif
-
-                    </td>
-
-
-                    <td>
-
-                        @if ($producto->activo)
-
-                        <span class="badge text-bg-success">
-                            Activo
-                        </span>
-
-                        @else
-
-                        <span class="badge text-bg-secondary">
-                            Inactivo
-                        </span>
-
-                        @endif
-
-                        @if ($producto->publicado_app)
-
-                        <span class="badge text-bg-primary mt-1">
-                            Publicado
-                        </span>
-
-                        @endif
-
-                    </td>
-
-
-                    @can('create', App\Models\Producto::class)
-                    <td class="text-nowrap">
-
-                        <!-- Editar -->
-                        <a
-                            href="{{ route('gestion.items.edit', $producto) }}"
-                            class="btn btn-sm btn-warning me-1"
-                            title="Editar">
-
-                            <svg xmlns="http://www.w3.org/2000/svg"
-                                width="16"
-                                height="16"
-                                fill="currentColor"
-                                class="bi bi-pencil"
-                                viewBox="0 0 16 16">
-
-                                <path d="M12.146.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1 0 .708l-10 10a.5.5 0 0 1-.168.11l-5 2a.5.5 0 0 1-.65-.65l2-5a.5.5 0 0 1 .11-.168zM11.207 2.5 13.5 4.793 14.793 3.5 12.5 1.207zm1.586 3L10.5 3.207 4 9.707V10h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.293zm-9.761 5.175-.106.106-1.528 3.821 3.821-1.528.106-.106A.5.5 0 0 1 5 12.5V12h-.5a.5.5 0 0 1-.5-.5V11h-.5a.5.5 0 0 1-.468-.325" />
-                            </svg>
-
-                        </a>
-
-
-                        <!-- Historial de stock -->
-                        <a
-                            href="{{ route('gestion.stock.show', $producto) }}"
-                            class="btn btn-sm btn-info text-white me-1"
-                            title="Historial de stock">
-
-                            <svg xmlns="http://www.w3.org/2000/svg"
-                                width="16"
-                                height="16"
-                                fill="currentColor"
-                                class="bi bi-clock"
-                                viewBox="0 0 16 16">
-
-                                <path d="M8 3.5a.5.5 0 0 1 .5.5v3.25l2.25 1.35a.5.5 0 0 1-.5.866l-2.5-1.5A.5.5 0 0 1 7.5 7.5V4a.5.5 0 0 1 .5-.5z" />
-
-                                <path d="M8 16A8 8 0 1 0 8 0a8 8 0 0 0 0 16zm0-1A7 7 0 1 1 8 1a7 7 0 0 1 0 14z" />
-                            </svg>
-
-                        </a>
-
-
-                        @if ($producto->activo)
-
-                        <!-- Dar de baja -->
-                        <form
-                            action="{{ route('gestion.items.darDeBaja', $producto) }}"
-                            method="POST"
-                            class="d-inline">
-
-                            @csrf
-                            @method('PATCH')
-
-                            <button
-                                type="submit"
-                                class="btn btn-sm btn-secondary me-1"
-                                title="Dar de baja"
-                                onclick="return confirm('¿Está seguro de dar de baja este producto?');">
-
-                                <svg xmlns="http://www.w3.org/2000/svg"
-                                    width="16"
-                                    height="16"
-                                    fill="currentColor"
-                                    viewBox="0 0 16 16">
-
-                                    <path d="M8 15A7 7 0 1 0 8 1a7 7 0 0 0 0 14zM4.5 7.5h7a.5.5 0 0 1 0 1h-7a.5.5 0 0 1 0-1z" />
-
-                                </svg>
-
-                            </button>
-
-                        </form>
-
-                        @else
-
-                        <!-- Reactivar -->
-                        <form
-                            action="{{ route('gestion.items.reactivar', $producto) }}"
-                            method="POST"
-                            class="d-inline">
-
-                            @csrf
-                            @method('PATCH')
-
-                            <button
-                                type="submit"
-                                class="btn btn-sm btn-success"
-                                title="Reactivar"
-                                onclick="return confirm('¿Está seguro de reactivar este producto?');">
-
-                                <svg xmlns="http://www.w3.org/2000/svg"
-                                    width="16"
-                                    height="16"
-                                    fill="currentColor"
-                                    viewBox="0 0 16 16">
-
-                                    <path d="M8 3a5 5 0 1 1-4.546 2.917.5.5 0 0 1 .91-.414A4 4 0 1 0 8 4z" />
-
-                                    <path d="M8 1v4H4" />
-                                </svg>
-
-                            </button>
-
-                        </form>
-
-                        @endif
-
-                    </td>
-                    @endcan
-
-                </tr>
-
-                @empty
-
-                <tr>
-
-                    <td
-                        colspan="8"
+                    <td colspan="{{ $permisos['editar'] || $permisos['cambiarEstado'] || $permisos['verStock'] ? 9 : 8 }}"
                         class="text-center py-4 text-muted">
-
-                        No se encontraron productos.
-
+                        Cargando productos…
                     </td>
-
                 </tr>
-
-                @endforelse
 
             </tbody>
 
@@ -492,18 +281,30 @@
     </div>
 
 
-    <!-- Paginación Laravel -->
-    @if ($productos->hasPages())
-
-    <div class="d-flex justify-content-center mt-3">
-
-        {{ $productos->onEachSide(2)->links() }}
-
-    </div>
-
-    @endif
+    {{-- Mismo paginado de Bootstrap 5, armado con el `meta` de la respuesta. --}}
+    <div id="paginadoProductos" class="d-flex justify-content-center mt-3"></div>
 
 
 </section>
 
 @endsection
+
+@push('scripts')
+<script type="module">
+    import { iniciar } from '{{ Vite::asset('resources/js/gestion/productos/index.js') }}';
+
+    iniciar({
+        // Los decide ProductoPolicy en el servidor (ver el controlador): aca
+        // solo dicen que botones se dibujan. El permiso de verdad lo exige la
+        // API en cada llamada.
+        permisos: @json($permisos),
+
+        // Rutas del panel con un hueco en lugar del id, para no escribirlas
+        // dentro del JavaScript.
+        urlEdicion: '{{ route('gestion.items.edit', ['producto' => '__ID__']) }}',
+        urlHistorial: '{{ route('gestion.stock.show', ['producto' => '__ID__']) }}',
+
+        imagenPorDefecto: '{{ asset('images/Sin_Imagen.png') }}',
+    });
+</script>
+@endpush

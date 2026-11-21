@@ -3,6 +3,7 @@
 use App\Models\AlicuotaIva;
 use App\Models\Categoria;
 use App\Models\CondicionIva;
+use App\Models\Permiso;
 use App\Models\Producto;
 use App\Models\Proveedor;
 use App\Models\User;
@@ -441,6 +442,72 @@ it('publica y despublica un producto', function () {
         ->assertJsonPath('data.publicado_app', false);
 
     expect($producto->refresh()->publicado_app)->toBeFalse();
+});
+
+/*
+ * ------------------------------------------------------------------
+ * La publicacion NO se escribe desde la edicion
+ * ------------------------------------------------------------------
+ *
+ * Las dos pruebas que siguen cubren las dos mitades del mismo agujero, que el
+ * PUT tenia abierto hasta esta correccion:
+ *
+ *   - 'producto.editar' alcanzaba para publicar, salteando 'producto.publicar';
+ *   - y un PUT que no mandaba el campo despublicaba el producto en silencio,
+ *     porque prepareForValidation() lo mete en validated() con valor false.
+ *
+ * update() ahora descarta 'publicado_app' y el unico camino es
+ * PATCH .../publicacion.
+ */
+
+it('no deja publicar con un PUT al que solo puede editar', function () {
+    // Un administrativo sin 'producto.publicar': conserva 'producto.editar',
+    // asi que el PUT se autoriza y responde 200. Lo que no puede es publicar.
+    $empleado = administrativoDeProductos();
+
+    $empleado->rol->permisos()->detach(
+        Permiso::where('clave', 'producto.publicar')->value('id')
+    );
+
+    Sanctum::actingAs($empleado, ['gestion']);
+
+    $producto = productoDePrueba(['codigo' => 'EDI-1', 'publicado_app' => false]);
+
+    $this->putJson(route('api.v1.gestion.productos.update', $producto), datosDeAlta([
+        'codigo' => 'EDI-1',
+        'nombre' => 'Monitor editado',
+        'publicado_app' => true,
+    ]))
+        ->assertOk()
+        ->assertJsonPath('data.nombre', 'Monitor editado')
+        ->assertJsonPath('data.publicado_app', false);
+
+    expect($producto->refresh()->publicado_app)->toBeFalse();
+
+    // Y por el camino correcto tampoco, que para eso esta el permiso.
+    $this->patchJson(route('api.v1.gestion.productos.publicacion', $producto), ['publicado_app' => true])
+        ->assertForbidden();
+
+    expect($producto->refresh()->publicado_app)->toBeFalse();
+});
+
+it('el PUT no despublica un producto que no trae la publicación en el cuerpo', function () {
+    Sanctum::actingAs(administrativoDeProductos(), ['gestion']);
+
+    $producto = productoDePrueba(['codigo' => 'EDI-2']);
+    $producto->update(['publicado_app' => true]);
+
+    // datosDeAlta() no incluye 'publicado_app': es el cuerpo de una edicion
+    // que solo quiere cambiar el precio.
+    $this->putJson(route('api.v1.gestion.productos.update', $producto), datosDeAlta([
+        'codigo' => 'EDI-2',
+        'precio' => 111111.11,
+    ]))
+        ->assertOk()
+        ->assertJsonPath('data.precio', 111111.11)
+        ->assertJsonPath('data.publicado_app', true);
+
+    expect($producto->refresh()->publicado_app)->toBeTrue();
 });
 
 it('no deja publicar un producto dado de baja', function () {

@@ -91,99 +91,25 @@ function empleadoDePrueba(): Empleado
 }
 
 // ==================================================================
-// 1. Productos: baja, reactivacion y publicacion
+// 1. Productos: se mudaron a la API
 // ==================================================================
-
-test('el cajero no puede dar de baja un producto', function () {
-    actuandoComo('cajero');
-
-    $producto = productoDePrueba();
-
-    $this->patch("/gestion/item/{$producto->id}/baja")->assertForbidden();
-
-    expect($producto->fresh()->activo)->toBeTrue();
-});
-
-test('el administrativo puede dar de baja un producto', function () {
-    actuandoComo('administrativo');
-
-    $producto = productoDePrueba();
-
-    $this->patch("/gestion/item/{$producto->id}/baja")->assertRedirect();
-
-    expect($producto->fresh()->activo)->toBeFalse();
-});
-
-test('el cajero no puede reactivar un producto', function () {
-    actuandoComo('cajero');
-
-    $producto = productoDePrueba(['activo' => false]);
-
-    $this->patch("/gestion/item/{$producto->id}/reactivar")->assertForbidden();
-
-    expect($producto->fresh()->activo)->toBeFalse();
-});
-
-test('el administrativo puede reactivar un producto', function () {
-    actuandoComo('administrativo');
-
-    $producto = productoDePrueba(['activo' => false]);
-
-    $this->patch("/gestion/item/{$producto->id}/reactivar")->assertRedirect();
-
-    expect($producto->fresh()->activo)->toBeTrue();
-});
-
-/**
- * El caso que motivo la correccion: despublicar saca el producto de la tienda
- * online, y lo hacia cualquier empleado.
- */
-test('el cajero no puede despublicar un producto de la tienda', function () {
-    actuandoComo('cajero');
-
-    $producto = productoDePrueba(['publicado_app' => true]);
-
-    $this->patch("/gestion/item/{$producto->id}/despublicar")->assertForbidden();
-
-    expect($producto->fresh()->publicado_app)->toBeTrue();
-});
-
-test('el vendedor no puede publicar un producto en la tienda', function () {
-    actuandoComo('vendedor');
-
-    $producto = productoDePrueba(['publicado_app' => false]);
-
-    $this->patch("/gestion/item/{$producto->id}/publicar")->assertForbidden();
-
-    expect($producto->fresh()->publicado_app)->toBeFalse();
-});
-
-test('el administrativo puede publicar y despublicar un producto', function () {
-    actuandoComo('administrativo');
-
-    $producto = productoDePrueba(['publicado_app' => false]);
-
-    $this->patch("/gestion/item/{$producto->id}/publicar")->assertRedirect();
-
-    expect($producto->fresh()->publicado_app)->toBeTrue();
-
-    $this->patch("/gestion/item/{$producto->id}/despublicar")->assertRedirect();
-
-    expect($producto->fresh()->publicado_app)->toBeFalse();
-});
-
-/** La regla de negocio que ya existia sigue corriendo DESPUES del permiso. */
-test('un producto dado de baja no se publica aunque haya permiso', function () {
-    actuandoComo('administrativo');
-
-    $producto = productoDePrueba(['activo' => false, 'publicado_app' => false]);
-
-    $this->patch("/gestion/item/{$producto->id}/publicar")
-        ->assertRedirect()
-        ->assertSessionHas('error');
-
-    expect($producto->fresh()->publicado_app)->toBeFalse();
-});
+//
+// Las ocho pruebas de productos que vivian aca —baja, reactivacion,
+// publicacion y la regla de que un producto dado de baja no se publica—
+// desaparecieron con las rutas que ejercitaban: 'gestion.items.darDeBaja',
+// '.reactivar', '.publicar' y '.despublicar' se retiraron al migrar la
+// pantalla, porque eran una via alternativa para ejecutar operaciones de
+// negocio desde un controlador web.
+//
+// La misma autorizacion sigue cubierta, ahora contra los endpoints que la
+// pantalla usa de verdad, en tests/Feature/Api/V1/Gestion/ProductoTest.php:
+// 'no deja dar de baja al cajero', 'no deja publicar al vendedor', 'no deja
+// publicar un producto dado de baja', 'publica y despublica un producto' y
+// 'no deja publicar con un PUT al que solo puede editar'. No se perdio
+// ningun caso.
+//
+// Los demas modulos siguen con sus rutas web y con sus pruebas aca abajo
+// intactas.
 
 // ==================================================================
 // 2. Categorias
@@ -374,18 +300,15 @@ test('el administrativo puede pedir el reenvio de la invitacion de un empleado',
 test('el administrador puede cambiar el estado de cualquier recurso', function () {
     actuandoComo('administrador');
 
-    $producto = productoDePrueba();
+    // Productos ya no esta: sus acciones de estado son de la API. Lo de
+    // productos para el administrador lo cubre ProductoTest.
     $categoria = categoriaDePrueba();
     $proveedor = proveedorDePrueba();
 
-    $this->patch("/gestion/item/{$producto->id}/baja")->assertRedirect();
-    $this->patch("/gestion/item/{$producto->id}/reactivar")->assertRedirect();
-    $this->patch("/gestion/item/{$producto->id}/despublicar")->assertRedirect();
     $this->patch("/gestion/category/{$categoria->id}/baja")->assertRedirect();
     $this->patch("/gestion/proveedor/{$proveedor->id}/baja")->assertRedirect();
 
-    expect($producto->fresh()->publicado_app)->toBeFalse()
-        ->and($categoria->fresh()->activo)->toBeFalse()
+    expect($categoria->fresh()->activo)->toBeFalse()
         ->and($proveedor->fresh()->activo)->toBeFalse();
 });
 
@@ -393,22 +316,26 @@ test('el administrador puede cambiar el estado de cualquier recurso', function (
 // 7. Las capas anteriores siguen en su lugar
 // ==================================================================
 
+// Las dos de abajo usaban la baja de un producto como vehiculo. Ahora usan la
+// de una categoria, que sigue siendo una ruta web de negocio: lo que prueban
+// no es el recurso sino las capas que estan ANTES de la autorizacion fina.
+
 test('un invitado no llega a las acciones de estado', function () {
-    $producto = productoDePrueba();
+    $categoria = categoriaDePrueba();
 
     // Desde F2 el panel tiene su propia puerta de ingreso y redirectGuestsTo
     // decide el destino segun la URL pedida: un empleado que pega una URL de
     // /gestion/... cae en el formulario del panel y no en el del storefront,
     // que no emite token y lo rebotaria.
-    $this->patch("/gestion/item/{$producto->id}/baja")->assertRedirect(route('gestion.login'));
+    $this->patch("/gestion/category/{$categoria->id}/baja")->assertRedirect(route('gestion.login'));
 });
 
 test('un cliente no entra al ambito de gestion', function () {
     $this->actingAs(clienteDeTienda());
 
-    $producto = productoDePrueba();
+    $categoria = categoriaDePrueba();
 
-    $this->patch("/gestion/item/{$producto->id}/baja")->assertRedirect();
+    $this->patch("/gestion/category/{$categoria->id}/baja")->assertRedirect();
 
-    expect($producto->fresh()->activo)->toBeTrue();
+    expect($categoria->fresh()->activo)->toBeTrue();
 });

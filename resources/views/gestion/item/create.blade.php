@@ -18,27 +18,16 @@
     {{-- Formulario --}}
     <section class="mb-4">
 
+        {{-- Fallas de la API que no son de validacion: sin permiso, sin red. --}}
+        <div id="avisosProducto" aria-live="polite"></div>
+
         <form
-            action="{{ route('gestion.items.store') }}"
-            method="POST"
-            enctype="multipart/form-data"
             autocomplete="off"
-            class="p-4 rounded-4 bg-light shadow-sm border">
+            class="p-4 rounded-4 bg-light shadow-sm border"
+            id="formularioProducto">
 
-            @csrf
-
-            {{-- Errores generales de validación --}}
-            @if ($errors->any())
-            <div class="alert alert-danger">
-                <strong>Revisá estos campos:</strong>
-
-                <ul class="mb-0 mt-2">
-                    @foreach ($errors->all() as $error)
-                    <li>{{ $error }}</li>
-                    @endforeach
-                </ul>
-            </div>
-            @endif
+            {{-- Errores de validación que devuelve la API. --}}
+            <div id="erroresProducto"></div>
 
             <div class="row g-4">
 
@@ -50,19 +39,14 @@
 
                     <input
                         type="text"
-                        class="form-control rounded-3 @error('codigo') is-invalid @enderror"
+                        class="form-control rounded-3"
                         id="codigo"
                         name="codigo"
-                        value="{{ old('codigo', $producto->codigo) }}"
                         maxlength="50"
                         placeholder="Ej: PRD-001"
                         required>
 
-                    @error('codigo')
-                    <div class="invalid-feedback">
-                        {{ $message }}
-                    </div>
-                    @enderror
+                    <div class="invalid-feedback" id="error-codigo"></div>
                 </div>
 
                 {{-- Nombre --}}
@@ -73,19 +57,14 @@
 
                     <input
                         type="text"
-                        class="form-control rounded-3 @error('nombre') is-invalid @enderror"
+                        class="form-control rounded-3"
                         id="nombre"
                         name="nombre"
-                        value="{{ old('nombre', $producto->nombre) }}"
                         maxlength="100"
                         placeholder="Ej: Mouse Gamer RGB"
                         required>
 
-                    @error('nombre')
-                    <div class="invalid-feedback">
-                        {{ $message }}
-                    </div>
-                    @enderror
+                    <div class="invalid-feedback" id="error-nombre"></div>
                 </div>
 
                 {{-- Marca --}}
@@ -96,18 +75,13 @@
 
                     <input
                         type="text"
-                        class="form-control rounded-3 @error('marca') is-invalid @enderror"
+                        class="form-control rounded-3"
                         id="marca"
                         name="marca"
-                        value="{{ old('marca', $producto->marca) }}"
                         maxlength="100"
                         placeholder="Ej: Logitech">
 
-                    @error('marca')
-                    <div class="invalid-feedback">
-                        {{ $message }}
-                    </div>
-                    @enderror
+                    <div class="invalid-feedback" id="error-marca"></div>
                 </div>
 
                 {{-- Categoría --}}
@@ -119,25 +93,21 @@
                     <select
                         id="categoria_id"
                         name="categoria_id"
-                        class="form-select rounded-3 @error('categoria_id') is-invalid @enderror"
+                        class="form-select rounded-3"
                         required>
                         <option value="">Seleccione una categoría</option>
 
                         @foreach($categorias as $categoria)
                         <option
                             value="{{ $categoria->id }}"
-                            @selected(old('categoria_id', $producto->categoria_id) == $categoria->id)
+ == $categoria->id)
                             >
                             {{ $categoria->nombre }}
                         </option>
                         @endforeach
                     </select>
 
-                    @error('categoria_id')
-                    <div class="invalid-feedback">
-                        {{ $message }}
-                    </div>
-                    @enderror
+                    <div class="invalid-feedback" id="error-categoria_id"></div>
                 </div>
 
                 {{-- Descripción --}}
@@ -147,18 +117,14 @@
                     </label>
 
                     <textarea
-                        class="form-control rounded-3 @error('descripcion') is-invalid @enderror"
+                        class="form-control rounded-3"
                         id="descripcion"
                         name="descripcion"
                         rows="4"
                         placeholder="Breve descripción del producto."
-                        style="resize: none">{{ old('descripcion', $producto->descripcion) }}</textarea>
+                        style="resize: none"></textarea>
 
-                    @error('descripcion')
-                    <div class="invalid-feedback">
-                        {{ $message }}
-                    </div>
-                    @enderror
+                    <div class="invalid-feedback" id="error-descripcion"></div>
                 </div>
 
                 <hr class="my-4">
@@ -171,20 +137,15 @@
 
                     <input
                         type="number"
-                        class="form-control rounded-3 @error('precio') is-invalid @enderror"
+                        class="form-control rounded-3"
                         id="precio"
                         name="precio"
-                        value="{{ old('precio', $producto->precio) }}"
                         min="0"
                         step="0.01"
                         placeholder="Ej: 35000"
                         required>
 
-                    @error('precio')
-                    <div class="invalid-feedback">
-                        {{ $message }}
-                    </div>
-                    @enderror
+                    <div class="invalid-feedback" id="error-precio"></div>
                 </div>
 
                 {{-- Costo --}}
@@ -195,19 +156,14 @@
 
                     <input
                         type="number"
-                        class="form-control rounded-3 @error('costo') is-invalid @enderror"
+                        class="form-control rounded-3"
                         id="costo"
                         name="costo"
-                        value="{{ old('costo', $producto->costo) }}"
                         min="0"
                         step="0.01"
                         placeholder="Ej: 25000">
 
-                    @error('costo')
-                    <div class="invalid-feedback">
-                        {{ $message }}
-                    </div>
-                    @enderror
+                    <div class="invalid-feedback" id="error-costo"></div>
                 </div>
 
                 {{-- IVA --}}
@@ -219,25 +175,21 @@
                     <select
                         id="alicuota_iva_id"
                         name="alicuota_iva_id"
-                        class="form-select rounded-3 @error('alicuota_iva_id') is-invalid @enderror"
+                        class="form-select rounded-3"
                         required>
                         <option value="">Seleccione IVA</option>
 
                         @foreach($alicuotas as $alicuota)
                         <option
                             value="{{ $alicuota->id }}"
-                            @selected(old('alicuota_iva_id', $producto->alicuota_iva_id) == $alicuota->id)
+ == $alicuota->id)
                             >
                             {{ $alicuota->nombre ?? $alicuota->porcentaje . '%' }}
                         </option>
                         @endforeach
                     </select>
 
-                    @error('alicuota_iva_id')
-                    <div class="invalid-feedback">
-                        {{ $message }}
-                    </div>
-                    @enderror
+                    <div class="invalid-feedback" id="error-alicuota_iva_id"></div>
                 </div>
 
                 {{-- Proveedor --}}
@@ -249,24 +201,20 @@
                     <select
                         id="proveedor_id"
                         name="proveedor_id"
-                        class="form-select rounded-3 @error('proveedor_id') is-invalid @enderror">
+                        class="form-select rounded-3">
                         <option value="">Sin proveedor</option>
 
                         @foreach($proveedores as $proveedor)
                         <option
                             value="{{ $proveedor->id }}"
-                            @selected(old('proveedor_id', $producto->proveedor_id) == $proveedor->id)
+ == $proveedor->id)
                             >
                             {{ $proveedor->razon_social }}
                         </option>
                         @endforeach
                     </select>
 
-                    @error('proveedor_id')
-                    <div class="invalid-feedback">
-                        {{ $message }}
-                    </div>
-                    @enderror
+                    <div class="invalid-feedback" id="error-proveedor_id"></div>
                 </div>
 
                 {{-- Stock inicial --}}
@@ -277,10 +225,10 @@
 
                     <input
                         type="number"
-                        class="form-control rounded-3 @error('stock_inicial') is-invalid @enderror"
+                        class="form-control rounded-3"
                         id="stock_inicial"
                         name="stock_inicial"
-                        value="{{ old('stock_inicial', 0) }}"
+                        value="0"
                         min="0"
                         placeholder="Ej: 20">
 
@@ -288,11 +236,7 @@
                         Se registrará como movimiento inicial de stock.
                     </div>
 
-                    @error('stock_inicial')
-                    <div class="invalid-feedback">
-                        {{ $message }}
-                    </div>
-                    @enderror
+                    <div class="invalid-feedback" id="error-stock_inicial"></div>
                 </div>
 
                 {{-- Punto de reposición --}}
@@ -303,19 +247,15 @@
 
                     <input
                         type="number"
-                        class="form-control rounded-3 @error('punto_reposicion') is-invalid @enderror"
+                        class="form-control rounded-3"
                         id="punto_reposicion"
                         name="punto_reposicion"
-                        value="{{ old('punto_reposicion', $producto->punto_reposicion) }}"
+                        value="0"
                         min="0"
                         placeholder="Ej: 5"
                         required>
 
-                    @error('punto_reposicion')
-                    <div class="invalid-feedback">
-                        {{ $message }}
-                    </div>
-                    @enderror
+                    <div class="invalid-feedback" id="error-punto_reposicion"></div>
                 </div>
 
                 {{-- Cantidad de reposición --}}
@@ -326,19 +266,15 @@
 
                     <input
                         type="number"
-                        class="form-control rounded-3 @error('cantidad_reposicion') is-invalid @enderror"
+                        class="form-control rounded-3"
                         id="cantidad_reposicion"
                         name="cantidad_reposicion"
-                        value="{{ old('cantidad_reposicion', $producto->cantidad_reposicion) }}"
+                        value="0"
                         min="0"
                         placeholder="Ej: 10"
                         required>
 
-                    @error('cantidad_reposicion')
-                    <div class="invalid-feedback">
-                        {{ $message }}
-                    </div>
-                    @enderror
+                    <div class="invalid-feedback" id="error-cantidad_reposicion"></div>
                 </div>
 
                 <hr class="my-4">
@@ -351,18 +287,13 @@
 
                     <input
                         type="number"
-                        class="form-control rounded-3 @error('peso_gramos') is-invalid @enderror"
+                        class="form-control rounded-3"
                         id="peso_gramos"
                         name="peso_gramos"
-                        value="{{ old('peso_gramos', $producto->peso_gramos) }}"
                         min="0"
                         placeholder="Ej: 500">
 
-                    @error('peso_gramos')
-                    <div class="invalid-feedback">
-                        {{ $message }}
-                    </div>
-                    @enderror
+                    <div class="invalid-feedback" id="error-peso_gramos"></div>
                 </div>
 
                 {{-- Imagen --}}
@@ -373,7 +304,7 @@
 
                     <input
                         type="file"
-                        class="form-control rounded-3 @error('imagen') is-invalid @enderror"
+                        class="form-control rounded-3"
                         id="imagen"
                         name="imagen"
                         accept=".jpg,.jpeg,.png,.webp">
@@ -382,11 +313,7 @@
                         Formatos permitidos: JPG, JPEG, PNG o WEBP. Máximo 2 MB.
                     </div>
 
-                    @error('imagen')
-                    <div class="invalid-feedback">
-                        {{ $message }}
-                    </div>
-                    @enderror
+                    <div class="invalid-feedback" id="error-imagen"></div>
                 </div>
 
                 {{-- Reposición automática --}}
@@ -400,7 +327,6 @@
                             id="reposicion_automatica"
                             name="reposicion_automatica"
                             value="1"
-                            @checked(old('reposicion_automatica', $producto->reposicion_automatica))
                         >
 
                         <label
@@ -415,11 +341,7 @@
                         Requiere seleccionar un proveedor.
                     </div>
 
-                    @error('reposicion_automatica')
-                    <div class="text-danger small mt-2">
-                        {{ $message }}
-                    </div>
-                    @enderror
+                    <div class="text-danger small mt-2" id="error-reposicion_automatica"></div>
                 </div>
 
                 {{-- Publicado en la aplicación --}}
@@ -433,7 +355,6 @@
                             id="publicado_app"
                             name="publicado_app"
                             value="1"
-                            @checked(old('publicado_app', $producto->publicado_app))
                         >
 
                         <label
@@ -456,6 +377,7 @@
 
                 <button
                     type="submit"
+                    id="botonGuardar"
                     class="btn btn-success px-4 fw-semibold shadow-sm">
                     Guardar
                 </button>
@@ -476,3 +398,13 @@
 </div>
 
 @endsection
+
+@push('scripts')
+<script type="module">
+    import { iniciar } from '{{ Vite::asset('resources/js/gestion/productos/formulario.js') }}';
+
+    iniciar({
+        urlListado: '{{ route('gestion.items.index') }}',
+    });
+</script>
+@endpush

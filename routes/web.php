@@ -325,6 +325,30 @@ Route::prefix('gestion')
         // ========================================================
         // PRODUCTOS
         // ========================================================
+        //
+        // <b>Solo quedan las tres rutas que entregan paginas Blade.</b> Las
+        // seis que ejecutaban operaciones de negocio —store, update, baja,
+        // reactivar, publicar y despublicar— se retiraron al migrar la
+        // pantalla a la API: el requisito 3 de la Etapa 3 pide que las rutas
+        // web anteriores dejen de estar disponibles como via alternativa de
+        // acceso, y mientras existieran lo estaban, aunque ninguna pantalla
+        // las usara.
+        //
+        // Lo que antes hacia cada una, ahora:
+        //
+        //   POST  item                     -> POST  /api/v1/gestion/productos
+        //   PUT   item/{p}                 -> PUT   /api/v1/gestion/productos/{p}
+        //   PATCH item/{p}/baja            -> PATCH .../{p}/estado  {activo:false}
+        //   PATCH item/{p}/reactivar       -> PATCH .../{p}/estado  {activo:true}
+        //   PATCH item/{p}/publicar        -> PATCH .../{p}/publicacion {publicado_app:true}
+        //   PATCH item/{p}/despublicar     -> PATCH .../{p}/publicacion {publicado_app:false}
+        //
+        // Los permisos no cambiaron: los exige la misma ProductoPolicy, ahora
+        // desde el 'can:' de cada ruta de la API.
+        //
+        // Las categorias conservan las suyas a proposito: se retiran cuando se
+        // retiren las del resto de los modulos, para no dejar a medias un
+        // modulo que ya esta migrado y en uso.
 
         Route::prefix('item')
             ->name('items.')
@@ -336,26 +360,8 @@ Route::prefix('gestion')
                 Route::get('/create', [ProductoController::class, 'create'])
                     ->name('create');
 
-                Route::post('/', [ProductoController::class, 'store'])
-                    ->name('store');
-
                 Route::get('/{producto}/edit', [ProductoController::class, 'edit'])
                     ->name('edit');
-
-                Route::put('/{producto}', [ProductoController::class, 'update'])
-                    ->name('update');
-
-                Route::patch('/{producto}/baja', [ProductoController::class, 'darDeBaja'])
-                    ->name('darDeBaja');
-
-                Route::patch('/{producto}/reactivar', [ProductoController::class, 'reactivar'])
-                    ->name('reactivar');
-
-                Route::patch('/{producto}/publicar', [ProductoController::class, 'publicar'])
-                    ->name('publicar');
-
-                Route::patch('/{producto}/despublicar', [ProductoController::class, 'despublicar'])
-                    ->name('despublicar');
 
                 // La superposicion con stock.ajustar y stock.show se resolvio en
                 // favor del bloque STOCK: ahi viven el ajuste con motivo y el
@@ -363,7 +369,6 @@ Route::prefix('gestion')
                 // items.movimientos— apuntaban a metodos comentados, asi que
                 // respondian 500 al invocarse.
             });
-
 
         // ========================================================
         // VENTAS

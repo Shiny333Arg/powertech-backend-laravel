@@ -43,7 +43,12 @@ async function pedir(metodo, ruta, {
         'ngrok-skip-browser-warning': 'true',
     };
 
-    if (cuerpo !== null) {
+    // Con FormData no se declara Content-Type: lo pone el navegador, que es
+    // el unico que conoce el boundary del multipart. Declararlo a mano deja el
+    // cuerpo sin boundary y PHP no lo parsea.
+    const esFormulario = typeof FormData !== 'undefined' && cuerpo instanceof FormData;
+
+    if (cuerpo !== null && !esFormulario) {
         cabeceras['Content-Type'] = 'application/json';
     }
 
@@ -60,13 +65,28 @@ async function pedir(metodo, ruta, {
         {
             method: metodo,
             headers: cabeceras,
-            body: cuerpo !== null ? JSON.stringify(cuerpo) : undefined,
+            body: cuerpo === null
+                ? undefined
+                : (esFormulario ? cuerpo : JSON.stringify(cuerpo)),
             credentials: conCsrf ? 'same-origin' : 'omit',
         }
     );
 
     const texto = await respuesta.text();
-    const datos = texto !== '' ? JSON.parse(texto) : null;
+
+    // Las subidas de imagen pueden chocar contra limites del servidor
+    // (upload_max_filesize, client_max_body_size) que contestan HTML o un
+    // cuerpo vacio. Sin este try, eso llegaria como SyntaxError y el error
+    // real quedaria tapado.
+    let datos = null;
+
+    if (texto !== '') {
+        try {
+            datos = JSON.parse(texto);
+        } catch {
+            datos = null;
+        }
+    }
 
     if (!respuesta.ok) {
         throw new ErrorDeApi(respuesta.status, datos);
@@ -105,6 +125,18 @@ export function obtener(ruta, parametros = {}) {
 
 export function crear(ruta, cuerpo) {
     return pedir('POST', ruta, { cuerpo });
+}
+
+/**
+ * POST multipart/form-data: el unico camino cuando viaja un archivo.
+ *
+ * Tambien se usa para editar con imagen, con _method=PUT adentro del
+ * FormData: PHP no parsea el cuerpo multipart de un PUT. Es la misma
+ * convencion que ya usaba el formulario Blade con @method('PUT') y la que
+ * documentan las rutas de productos.
+ */
+export function enviarFormulario(ruta, formulario) {
+    return pedir('POST', ruta, { cuerpo: formulario });
 }
 
 export function reemplazar(ruta, cuerpo) {
