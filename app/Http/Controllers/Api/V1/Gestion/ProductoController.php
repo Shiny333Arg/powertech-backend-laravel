@@ -71,7 +71,7 @@ class ProductoController extends Controller
             // consultas mas.
             ->with([
                 'categoria:id,nombre',
-                'proveedor:id,razon_social',
+                'proveedor:id,razon_social,activo',
                 'alicuotaIva:id,nombre,porcentaje',
             ])
             ->when($busqueda, function ($query, $busqueda) {
@@ -107,7 +107,7 @@ class ProductoController extends Controller
     public function show(Producto $producto): ProductoResource
     {
         return new ProductoResource(
-            $producto->load(['categoria:id,nombre', 'proveedor:id,razon_social', 'alicuotaIva:id,nombre,porcentaje'])
+            $producto->load(['categoria:id,nombre', 'proveedor:id,razon_social,activo', 'alicuotaIva:id,nombre,porcentaje'])
         );
     }
 
@@ -213,7 +213,7 @@ class ProductoController extends Controller
     {
         return $producto->refresh()->load([
             'categoria:id,nombre',
-            'proveedor:id,razon_social',
+            'proveedor:id,razon_social,activo',
             'alicuotaIva:id,nombre,porcentaje',
         ]);
     }

@@ -4,7 +4,16 @@
 
 @section('content')
 
-@include('gestion.partials.alertas')
+{{--
+    Avisos de la pantalla.
+
+    Antes se imprimía acá el partial de alertas, que mostraba el `session(...)`
+    que dejaba el redirect del controlador web. El listado ya no recibe ningún
+    redirect —no opera: no aprueba, no envía, no cancela y no recibe—, así que
+    el único aviso posible es el error de la llamada a la API, y lo pinta
+    resources/js/gestion/avisos.js con el mismo marcado de Bootstrap.
+--}}
+<div id="avisosCompras" aria-live="polite"></div>
 
 <!-- Título principal -->
 <section class="mb-4 text-center">
@@ -16,13 +25,13 @@
 
 <!-- Botones -->
 <section class="mb-4 d-flex
-    @can('create', App\Models\OrdenCompra::class)
+    @if ($permisos['crear'])
         justify-content-between
     @else
         justify-content-end
-    @endcan">
+    @endif">
 
-    @can('create', App\Models\OrdenCompra::class)
+    @if ($permisos['crear'])
 
     <a href="{{ route('gestion.compras.create') }}"
         class="btn btn-success text-white d-flex align-items-center justify-content-center gap-2">
@@ -42,7 +51,7 @@
         Nuevo pedido
     </a>
 
-    @endcan
+    @endif
 
     <button
         class="btn btn-outline-primary d-flex align-items-center justify-content-center gap-2 flex-fill flex-md-grow-0"
@@ -65,11 +74,20 @@
     </button>
 </section>
 
-<!-- Filtros -->
+{{--
+    Filtros.
+
+    Sigue siendo un <form method="GET"> con su action: así la pantalla funciona
+    igual si el módulo no cargó, y el listado filtrado se puede guardar y
+    compartir como antes. Lo que cambió es quién atiende el submit: el JS lo
+    intercepta, escribe los filtros en la URL con history.pushState y le pide
+    la página al endpoint.
+--}}
 <section class="mb-4">
     <form
         method="GET"
         action="{{ route('gestion.compras.index') }}"
+        id="formFiltros"
         class="row g-3 align-items-end shadow-sm p-3 rounded bg-light"
         autocomplete="off">
 
@@ -83,7 +101,6 @@
                 type="search"
                 id="q"
                 name="q"
-                value="{{ $filtros['q'] ?? '' }}"
                 class="form-control"
                 placeholder="Ej: OC-0001 o proveedor"
                 maxlength="150">
@@ -95,13 +112,17 @@
                 Estado
             </label>
 
+            {{--
+                Los dos desplegables siguen viniendo del servidor: son los enums
+                EstadoOrdenCompra y OrigenOrdenCompra —el catálogo de opciones
+                del filtro—, no datos de ningún pedido. El valor seleccionado lo
+                pone el JS desde la URL.
+            --}}
             <select id="estado" name="estado" class="form-select">
                 <option value="">Todos</option>
 
                 @foreach ($estados as $estado)
-                <option
-                    value="{{ $estado->value }}"
-                    @selected(($filtros['estado'] ?? '' )===$estado->value)>
+                <option value="{{ $estado->value }}">
                     {{ $estado->etiqueta() }}
                 </option>
                 @endforeach
@@ -118,9 +139,7 @@
                 <option value="">Todos</option>
 
                 @foreach ($origenes as $origen)
-                <option
-                    value="{{ $origen->value }}"
-                    @selected(($filtros['origen'] ?? '' )===$origen->value)>
+                <option value="{{ $origen->value }}">
                     {{ $origen->etiqueta() }}
                 </option>
                 @endforeach
@@ -153,46 +172,17 @@
 <!-- Tabla de pedidos -->
 <section>
 
-    @if ($ordenes->isEmpty())
-
-    <div class="table-responsive">
-        <table class="table table-bordered table-hover align-middle text-center">
-
-            <thead class="table-dark">
-                <tr>
-                    <th>Número</th>
-                    <th>Proveedor</th>
-                    <th>Estado</th>
-                    <th>Origen</th>
-                    <th>Renglones</th>
-                    <th>Estimado</th>
-                    <th>Emitido</th>
-                    <th>Opciones</th>
-                </tr>
-            </thead>
-
-            <tbody>
-                <tr>
-                    <td colspan="8" class="text-center py-4 text-muted">
-                        No se encontraron pedidos.
-                    </td>
-                </tr>
-            </tbody>
-
-        </table>
-    </div>
-
-    @else
-
     {{--
         El listado muestra pedidos, no repartos: un pedido a tres proveedores
         emite tres órdenes, pero acá es una fila sola. Las órdenes de cada
         proveedor se ven y se operan desde el detalle del pedido, que es donde
         tiene sentido mirarlas juntas. Si cada una fuera una fila, el
         administrativo no sabría cuál tiene que aprobar.
+
+        Ese criterio ahora vive en el endpoint, que devuelve sólo órdenes raíz.
     --}}
     <div class="table-responsive">
-        <table class="table table-bordered table-hover align-middle text-center">
+        <table class="table table-bordered table-hover align-middle text-center" id="tablaCompras">
 
             <thead class="table-dark">
                 <tr>
@@ -207,107 +197,42 @@
                 </tr>
             </thead>
 
-            <tbody>
-
-                @foreach ($ordenes as $orden)
-
-                @php
-                $destinatarios = $orden->proveedoresInvolucrados();
-                @endphp
-
+            {{--
+                Las filas las dibuja el JavaScript con lo que devuelve
+                GET /api/v1/gestion/compras. La página ya no trae datos de
+                negocio: entrega la estructura y nada más.
+            --}}
+            <tbody id="contenidoTablaCompras">
                 <tr>
-
-                    <td class="fw-semibold text-nowrap">
-                        {{ $orden->numero }}
+                    <td colspan="8" class="text-center py-4 text-muted">
+                        Cargando pedidos…
                     </td>
-
-                    <td class="text-start">
-                        @if ($destinatarios->isEmpty())
-                        <span class="text-muted">— sin proveedor —</span>
-
-                        @elseif ($destinatarios->count() === 1)
-                        {{ $destinatarios->first()->razon_social }}
-
-                        @else
-                        {{-- Un pedido repartido: se nombra al primero y se dice
-                             cuántos más, para que la columna no crezca. El
-                             detalle completo está en el pedido. --}}
-                        <span class="badge text-bg-dark mb-1">
-                            {{ $destinatarios->count() }} proveedores
-                        </span>
-
-                        <div class="small text-muted">
-                            {{ $destinatarios->take(2)->pluck('razon_social')->implode(', ') }}@if ($destinatarios->count() > 2) y {{ $destinatarios->count() - 2 }} más @endif
-                        </div>
-                        @endif
-                    </td>
-
-                    <td>
-                        <span class="badge text-bg-{{ $orden->estado->color() }}">
-                            {{ $orden->estado->etiqueta() }}
-                        </span>
-                    </td>
-
-                    <td>
-                        <span class="badge text-bg-secondary">
-                            {{ $orden->origen->etiqueta() }}
-                        </span>
-                    </td>
-
-                    <td class="text-nowrap">
-                        {{ $orden->lineas_count }}
-                    </td>
-
-                    <td class="text-nowrap">
-                        $ {{ number_format((float) $orden->total_estimado, 2, ',', '.') }}
-                    </td>
-
-                    <td class="text-nowrap text-muted">
-                        {{ $orden->created_at->format('d/m/Y') }}
-                    </td>
-
-                    <td class="text-nowrap">
-
-                        <!-- Ver -->
-                        <a
-                            href="{{ route('gestion.compras.show', $orden) }}"
-                            class="btn btn-sm btn-primary me-1"
-                            title="Ver pedido">
-
-                            <svg xmlns="http://www.w3.org/2000/svg"
-                                width="16"
-                                height="16"
-                                fill="currentColor"
-                                class="bi bi-eye"
-                                viewBox="0 0 16 16">
-
-                                <path d="M16 8s-3-5.5-8-5.5S0 8 0 8s3 5.5 8 5.5S16 8 16 8M1.173 8a13 13 0 0 1 1.66-2.043C4.12 4.668 5.88 3.5 8 3.5s3.879 1.168 5.168 2.457A13 13 0 0 1 14.828 8q-.086.13-.195.288c-.335.48-.83 1.12-1.465 1.755C11.879 11.332 10.119 12.5 8 12.5s-3.879-1.168-5.168-2.457A13 13 0 0 1 1.172 8z" />
-
-                                <path d="M8 5.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5M4.5 8a3.5 3.5 0 1 1 7 0 3.5 3.5 0 0 1-7 0" />
-                            </svg>
-
-                        </a>
-
-                    </td>
-
                 </tr>
-
-                @endforeach
-
             </tbody>
 
         </table>
     </div>
 
-    <!-- Paginación Laravel -->
-    @if ($ordenes->hasPages())
-    <div class="d-flex justify-content-center mt-3">
-        {{ $ordenes->onEachSide(2)->links() }}
-    </div>
-    @endif
-
-    @endif
-
 </section>
 
+{{-- Mismo paginado de Bootstrap 5, armado con el `meta` de la respuesta. --}}
+<div id="paginadoCompras" class="mt-3 d-flex justify-content-center"></div>
+
 @endsection
+
+@push('scripts')
+<script type="module">
+    import { iniciar } from '{{ Vite::asset('resources/js/gestion/compras/index.js') }}';
+
+    iniciar({
+        // El color del badge de cada estado, tal como lo define
+        // EstadoOrdenCompra::color(). Baja del servidor para que el listado
+        // migrado y el detalle —que sigue siendo Blade— no tengan dos paletas.
+        colores: @json($colores),
+
+        // La ruta del detalle con un hueco en lugar del id, para no escribir
+        // URLs del panel dentro del JavaScript.
+        urlDetalle: '{{ route('gestion.compras.show', ['orden' => '__ID__']) }}',
+    });
+</script>
+@endpush

@@ -430,8 +430,10 @@ Route::prefix('v1/gestion')
         // Un permiso por operacion, y cada uno es una decision distinta:
         //
         //   GET  /compras                       listar      compra.ver
+        //   GET  /compras/sugerencias           que pedir   compra.crear
         //   GET  /compras/{orden}               detalle     compra.ver
         //   POST /compras                       borrador    compra.crear
+        //   PUT  /compras/{orden}               editar      compra.editar
         //   POST /compras/{orden}/aprobacion    aprobar     compra.aprobar
         //   POST /compras/{orden}/envio         enviar      compra.enviar
         //   POST /compras/{orden}/cancelacion   cancelar    compra.cancelar
@@ -482,6 +484,23 @@ Route::prefix('v1/gestion')
                     ->middleware('can:create,'.OrdenCompra::class)
                     ->name('store');
 
+                // Lo que falta pedir y nadie pidio todavia, para que el alta lo
+                // cargue de una. Es una CONSULTA y no abre ningun borrador, de
+                // ahi el GET.
+                //
+                // <b>Va antes de /{orden} por legibilidad, no por necesidad:</b>
+                // el whereNumber('orden') de las rutas de abajo ya impide que el
+                // wildcard capture la palabra. Es el mismo orden que tenia el
+                // bloque de compras en routes/web.php.
+                //
+                // <b>Se protege con 'compra.crear' y no con 'compra.ver'</b>:
+                // esta lista existe para armar un pedido, y quien solo consulta
+                // compras no tiene nada que hacer con ella. Es el mismo permiso
+                // que exigia la ruta web que reemplaza.
+                Route::get('/sugerencias', [OrdenCompraController::class, 'sugerencias'])
+                    ->middleware('can:create,'.OrdenCompra::class)
+                    ->name('sugerencias');
+
                 // Sirve cualquier orden, incluida una hija del reparto: el
                 // listado muestra solo las raiz, pero una hija es una orden
                 // real y su detalle es donde se la mira.
@@ -489,6 +508,24 @@ Route::prefix('v1/gestion')
                     ->whereNumber('orden')
                     ->middleware('can:view,orden')
                     ->name('show');
+
+                // Edicion del detalle del borrador: renglones y observaciones.
+                //
+                // <b>PUT y no PATCH</b>, igual que en el resto del archivo: el
+                // cuerpo reemplaza el detalle completo, que es lo que
+                // OrdenCompraRequest ya valida para el alta. Los dos verbos
+                // comparten el FormRequest porque lo que se acepta es lo mismo.
+                //
+                // <b>El 'can:update' no es solo el permiso.</b>
+                // OrdenCompraPolicy::update() mira tambien el estado: tener
+                // 'compra.editar' no alcanza sobre una orden aprobada o enviada,
+                // porque el documento ya paso por la decision de un
+                // administrativo o ya esta en manos del proveedor. Por eso esos
+                // dos casos responden 403 y no 422.
+                Route::put('/{orden}', [OrdenCompraController::class, 'update'])
+                    ->whereNumber('orden')
+                    ->middleware('can:update,orden')
+                    ->name('update');
 
                 // ----------------------------------------------------
                 // Transiciones del documento — E.2.a

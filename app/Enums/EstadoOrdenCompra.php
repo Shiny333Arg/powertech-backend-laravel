@@ -124,6 +124,28 @@ enum EstadoOrdenCompra: string
         };
     }
 
+    /**
+     * El color de cada estado, para bajarlo a las pantallas migradas.
+     *
+     * <b>Existe para que no haya dos paletas.</b> El badge del listado y el de
+     * la recepción los dibuja JavaScript, y el del detalle sigue siendo Blade
+     * leyendo color(): escribir los seis colores de nuevo en un .js es la forma
+     * segura de que un día dejen de coincidir. Los controladores del panel lo
+     * pasan a la vista y la vista lo serializa con @json.
+     *
+     * @return array<string, string> value => color de Bootstrap
+     */
+    public static function colores(): array
+    {
+        $colores = [];
+
+        foreach (self::cases() as $estado) {
+            $colores[$estado->value] = $estado->color();
+        }
+
+        return $colores;
+    }
+
     /** Clase de Bootstrap para el badge de estado. Lo usan index y show. */
     public function color(): string
     {

@@ -38,9 +38,16 @@ class OrdenCompraLineaResource extends JsonResource
                 'marca'  => $this->producto->marca,
             ] : null,
 
+            // 'activo' viaja porque el formulario de edicion lo muestra: un
+            // borrador cuyo renglon quedo apuntando a un proveedor dado de baja
+            // no se puede guardar —OrdenCompraRequest lo rechaza— y la pantalla
+            // lo marca para que se vea antes de intentarlo. El snapshot de la
+            // linea trae el proveedor completo (ver SirveElPedido::recargar()),
+            // asi que no hace falta ningun select nuevo.
             'proveedor' => $this->proveedor ? [
                 'id'           => $this->proveedor->id,
                 'razon_social' => $this->proveedor->razon_social,
+                'activo'       => (bool) $this->proveedor->activo,
             ] : null,
 
             // ----------------------------------------------------------

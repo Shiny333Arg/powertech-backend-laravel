@@ -41,7 +41,7 @@ class CambiarEstadoProductoController extends Controller
             : $producto->darDeBaja();
 
         return new ProductoResource(
-            $producto->refresh()->load(['categoria:id,nombre', 'proveedor:id,razon_social', 'alicuotaIva:id,nombre,porcentaje'])
+            $producto->refresh()->load(['categoria:id,nombre', 'proveedor:id,razon_social,activo', 'alicuotaIva:id,nombre,porcentaje'])
         );
     }
 }

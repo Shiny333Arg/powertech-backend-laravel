@@ -78,9 +78,18 @@ class ProductoResource extends JsonResource
                 'nombre' => $this->categoria->nombre,
             ] : null,
 
+            // <b>'activo' del proveedor, y no es un dato de mas.</b> El
+            // formulario de pedidos a proveedores marca —y bloquea— los
+            // renglones que no se le pueden pedir a nadie: producto sin
+            // proveedor, o con uno dado de baja. Es la misma condicion que
+            // valida OrdenCompraRequest contra la base, y mostrarla antes de
+            // guardar es lo que evita que el administrativo arme el pedido
+            // entero y se lo rechacen al final. Los cinco `load()` que
+            // alimentan este Resource traen la columna.
             'proveedor' => $this->proveedor ? [
                 'id'           => $this->proveedor->id,
                 'razon_social' => $this->proveedor->razon_social,
+                'activo'       => (bool) $this->proveedor->activo,
             ] : null,
 
             'alicuota_iva' => $this->alicuotaIva ? [

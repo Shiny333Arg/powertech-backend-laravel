@@ -90,7 +90,7 @@ class StockController extends Controller
 
         return MovimientoStockResource::collection($movimientos)->additional([
             'producto' => new ProductoResource(
-                $producto->load(['categoria:id,nombre', 'proveedor:id,razon_social', 'alicuotaIva:id,nombre,porcentaje'])
+                $producto->load(['categoria:id,nombre', 'proveedor:id,razon_social,activo', 'alicuotaIva:id,nombre,porcentaje'])
             ),
             'filtros' => $this->filtrosAplicados($filtros, incluyeProducto: false),
         ]);

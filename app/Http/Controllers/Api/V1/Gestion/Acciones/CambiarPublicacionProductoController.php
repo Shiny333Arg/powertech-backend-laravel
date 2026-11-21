@@ -47,7 +47,7 @@ class CambiarPublicacionProductoController extends Controller
         $producto->update(['publicado_app' => $datos['publicado_app']]);
 
         return new ProductoResource(
-            $producto->refresh()->load(['categoria:id,nombre', 'proveedor:id,razon_social', 'alicuotaIva:id,nombre,porcentaje'])
+            $producto->refresh()->load(['categoria:id,nombre', 'proveedor:id,razon_social,activo', 'alicuotaIva:id,nombre,porcentaje'])
         );
     }
 }

@@ -1,16 +1,20 @@
 @extends('layouts.gestion')
 
-@section('title', "Editar {$orden->numero}")
+@section('title', 'Editar pedido')
 
 @section('content')
 
-    @include('gestion.partials.alertas')
-
+    {{--
+        El número del pedido, los destinatarios y el aviso de los pedidos
+        automáticos los escribe el módulo con lo que devuelve
+        GET /api/v1/gestion/compras/{orden}: son datos del documento y la
+        página ya no los trae.
+    --}}
     <div class="mb-4">
         <a href="{{ route('gestion.compras.show', $orden) }}" class="small text-secondary text-decoration-none">
-            &larr; {{ $orden->numero }}
+            &larr; <span id="numeroVolver">Volver al pedido</span>
         </a>
-        <h1 class="h3 mt-1 mb-1">Editar el detalle de {{ $orden->numero }}</h1>
+        <h1 class="h3 mt-1 mb-1">Editar el detalle de <span id="numeroPedido">este pedido</span></h1>
         <p class="text-secondary mb-0 small">
             Solo se edita mientras está en borrador. Una vez aprobada, el detalle queda fijo: si hay que
             cambiar algo, se cancela y se emite otro pedido.
@@ -27,46 +31,33 @@
         No es una excepción a la vieja regla de «el destinatario no se cambia»:
         lo que se edita sigue siendo el detalle. El destinatario es la
         consecuencia.
+
+        Se dibuja desde el JavaScript, con los proveedores que trae el detalle,
+        y se vuelve a dibujar cuando los renglones cambian: antes era un dato
+        del servidor que quedaba viejo en cuanto se agregaba un producto.
     --}}
-    @php
-        $destinatarios = $orden->proveedoresInvolucrados();
-    @endphp
+    <div id="destinoDelPedido"></div>
 
-    <div class="alert alert-light border">
-        @if ($destinatarios->count() === 1)
-            <span class="text-secondary small d-block">Por ahora va a un solo proveedor</span>
-            <strong>{{ $destinatarios->first()->razon_social }}</strong>
-        @elseif ($destinatarios->count() > 1)
-            <span class="text-secondary small d-block">Al aprobarlo se van a emitir {{ $destinatarios->count() }} órdenes, una para</span>
-            <strong>{{ $destinatarios->pluck('razon_social')->implode(' · ') }}</strong>
-        @else
-            <strong>Este pedido no tiene renglones.</strong>
-        @endif
-
-        <span class="text-secondary small d-block mt-1">
-            El destinatario sale de los productos: cada proveedor recibe por correo solamente los
-            renglones que le corresponden.
-        </span>
-    </div>
-
-    @if ($orden->origen === \App\Enums\OrigenOrdenCompra::Automatica)
-        <div class="alert alert-info small">
-            Este pedido lo generó la reposición automática. Editarlo es normal —para ajustar cantidades
-            antes de aprobarlo—, pero tené en cuenta que las cantidades sugeridas cubren el faltante
-            hasta el punto de reposición más el lote de compra de cada producto.
-
-            @if ($destinatarios->count() === 1)
-                <br>
-                Mientras siga siendo de un solo proveedor, la reposición lo puede seguir ampliando sola.
-                Si le agregás productos de otro, deja de ser el borrador abierto de ese proveedor y el
-                automático va a abrir uno nuevo en lugar de tocar este.
-            @endif
-        </div>
-    @endif
+    {{-- El aviso de los pedidos que generó la reposición automática. --}}
+    <div id="avisoOrigenAutomatico"></div>
 
     @include('gestion.compras.partials.formulario', [
-        'accion' => route('gestion.compras.update', $orden),
-        'metodo' => 'PUT',
+        'volverA' => route('gestion.compras.show', $orden),
+        'textoGuardar' => 'Guardar cambios',
     ])
 
 @endsection
+
+@push('scripts')
+<script type="module">
+    import { iniciar } from '{{ Vite::asset('resources/js/gestion/compras/formulario.js') }}';
+
+    iniciar({
+        // Con id: el módulo pide el pedido a la API, llena el detalle y guarda
+        // con PUT /api/v1/gestion/compras/{orden}.
+        id: {{ $orden->id }},
+
+        urlDetalle: '{{ route('gestion.compras.show', ['orden' => '__ID__']) }}',
+    });
+</script>
+@endpush

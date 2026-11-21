@@ -4,8 +4,6 @@
 
 @section('content')
 
-@include('gestion.partials.alertas')
-
 {{-- Título principal --}}
 <section class="mb-4">
     <h1 class="h3 fw-bold mb-2">Nuevo pedido</h1>
@@ -17,8 +15,25 @@
 </section>
 
 @include('gestion.compras.partials.formulario', [
-'accion' => route('gestion.compras.store'),
-'metodo' => 'POST',
+'volverA' => route('gestion.compras.index'),
+'textoGuardar' => 'Guardar borrador',
 ])
 
 @endsection
+
+@push('scripts')
+<script type="module">
+    import { iniciar } from '{{ Vite::asset('resources/js/gestion/compras/formulario.js') }}';
+
+    iniciar({
+        // Sin id: es el alta. El módulo arranca con el detalle vacío y guarda
+        // con POST /api/v1/gestion/compras.
+        id: null,
+
+        // A dónde se va después de guardar: al detalle del pedido que acaba de
+        // nacer, con el id que devuelve el 201. Es el mismo destino al que
+        // redirigía el controlador web.
+        urlDetalle: '{{ route('gestion.compras.show', ['orden' => '__ID__']) }}',
+    });
+</script>
+@endpush

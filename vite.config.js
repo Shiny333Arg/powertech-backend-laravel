@@ -41,7 +41,19 @@ export default defineConfig({
                 // las direcciones y el estado de la cuenta en la tienda.
                 'resources/js/gestion/clientes/index.js',
                 'resources/js/gestion/clientes/formulario.js',
-                'resources/js/gestion/clientes/ficha.js'
+                'resources/js/gestion/clientes/ficha.js',
+
+                // Las pantallas de compras, primera entrega de la migracion del
+                // modulo. Son TRES: el listado, el formulario que comparten el
+                // alta y la edicion del borrador, y la recepcion de mercaderia.
+                //
+                // <b>El detalle del pedido NO esta aca</b>, y no es un olvido:
+                // sigue siendo Blade con sus datos adentro, porque es donde
+                // viven aprobar, enviar, cancelar y cerrar con faltante, que son
+                // la segunda entrega.
+                'resources/js/gestion/compras/index.js',
+                'resources/js/gestion/compras/formulario.js',
+                'resources/js/gestion/compras/recepcion.js'
             ],
             refresh: true,
         }),

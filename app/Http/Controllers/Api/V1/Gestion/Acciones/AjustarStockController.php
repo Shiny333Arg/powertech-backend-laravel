@@ -74,7 +74,7 @@ class AjustarStockController extends Controller
                 // a pedirlo. refresh() porque el UPDATE del servicio es
                 // relativo y el modelo en memoria sigue con el valor viejo.
                 'producto' => new ProductoResource(
-                    $producto->refresh()->load(['categoria:id,nombre', 'proveedor:id,razon_social', 'alicuotaIva:id,nombre,porcentaje'])
+                    $producto->refresh()->load(['categoria:id,nombre', 'proveedor:id,razon_social,activo', 'alicuotaIva:id,nombre,porcentaje'])
                 ),
 
                 // Es lo que el panel muestra como «N venta(s) pendientes de

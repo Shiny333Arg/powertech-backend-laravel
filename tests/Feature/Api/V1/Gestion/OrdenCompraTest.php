@@ -846,11 +846,11 @@ it('refleja el permiso quitado al rol con el mismo token', function () {
 // El limite del alcance: que sigue sin existir
 // ============================================================
 
-it('no expone verbos en la URL ni la edicion del detalle', function () {
-    // <b>Actualizada en E.2.b.</b> El circuito ya está completo: aprobar,
-    // enviar, cancelar, recibir y cerrar tienen endpoint, y los prueban
-    // OrdenCompraTransicionesTest y OrdenCompraRecepcionTest. Lo que esta
-    // prueba sigue fijando son los dos límites que no se mueven.
+it('no expone verbos en la URL ni el borrado del documento', function () {
+    // <b>Actualizada al migrar el panel.</b> El PUT del detalle entró con la
+    // pantalla de edición y lo prueba OrdenCompraEdicionTest, así que esta
+    // prueba dejó de fijar «no hay PUT». Los dos límites que sí siguen en pie
+    // son los de abajo.
     Sanctum::actingAs(User::factory()->empleado('administrador')->create(), ['gestion']);
 
     $orden = ordenDeCompraDePrueba();
@@ -864,15 +864,11 @@ it('no expone verbos en la URL ni la edicion del detalle', function () {
             ->assertNotFound();
     }
 
-    // <b>Dos: el detalle no se edita.</b> La edición existe en el panel y tiene
-    // su permiso ('compra.editar'), pero no hay PUT en la API. Acá sí es 405 y
-    // no 404, porque la URL existe —la sirve el GET del detalle— y lo que no
+    // <b>Dos: sin DELETE, nunca.</b> La orden de compra no se elimina: está
+    // referenciada por movimientos de stock y es historia que no puede quedar
+    // sin sujeto. Lo que en otro CRUD sería la D es 'cancelar'. Es 405 y no 404
+    // porque la URL existe —la sirven el GET y el PUT del detalle— y lo que no
     // existe es el método.
-    $this->putJson("/api/v1/gestion/compras/{$orden->id}", [
-        'lineas' => [renglonDePedido(productoPedible())],
-    ])->assertStatus(405);
-
-    // Y sin DELETE, nunca: la orden de compra no se elimina.
     $this->deleteJson("/api/v1/gestion/compras/{$orden->id}")->assertStatus(405);
 
     $this->assertDatabaseHas('ordenes_compra', ['id' => $orden->id, 'estado' => 'borrador']);

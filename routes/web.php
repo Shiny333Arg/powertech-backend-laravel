@@ -627,21 +627,45 @@ Route::prefix('gestion')
         // ========================================================
         // PEDIDOS A PROVEEDORES (ÓRDENES DE COMPRA)
         // ========================================================
+        //
+        // <b>Primera entrega de la migración del módulo: el alta, la edición y
+        // la recepción de mercadería pasaron a la API.</b> Las cuatro rutas que
+        // ejecutaban esas operaciones se retiraron, por el mismo motivo que en
+        // productos, proveedores y clientes: el requisito 3 de la Etapa 3 pide
+        // que las rutas web anteriores dejen de estar disponibles como vía
+        // alternativa de acceso, y mientras existieran lo estaban.
+        //
+        // Lo que antes hacía cada una, ahora:
+        //
+        //   POST purchase-order              -> POST /api/v1/gestion/compras
+        //   PUT  purchase-order/{o}          -> PUT  /api/v1/gestion/compras/{o}
+        //   GET  purchase-order/suggestions  -> GET  /api/v1/gestion/compras/sugerencias
+        //   POST purchase-order/{o}/recibir  -> POST /api/v1/gestion/compras/{o}/recepciones
+        //
+        // Los permisos no cambiaron: los exige la misma OrdenCompraPolicy,
+        // ahora desde el 'can:' de cada ruta de la API, y con ella las dos
+        // reglas que no son obvias —quien crea no aprueba, y el estado manda
+        // sobre el permiso—. La validación sigue siendo la del mismo
+        // OrdenCompraRequest y del mismo RecepcionRequest.
+        //
+        // <b>Las cuatro transiciones del documento siguen publicadas acá, a
+        // propósito.</b> Aprobar, enviar, cancelar y cerrar con faltante viven
+        // en los formularios del detalle —show.blade.php—, que no se migró en
+        // esta entrega. Son la segunda, y sus endpoints ya existen desde E.2.a
+        // y E.2.b. Retirarlas ahora dejaría el detalle sin poder operar.
+        //
+        // <b>Las cinco GET que entregan páginas se conservan todas</b>,
+        // incluida /{orden}/recibir: la pantalla de recepción se migró, pero la
+        // página la sigue sirviendo Blade, y su GET es además donde la policy
+        // decide si ese pedido admite una entrega.
+        //
         // Sin destroy, por el mismo criterio que ventas: la orden no se
         // elimina ni se da de baja. Lo que en otro CRUD seria la D es
         // 'cancelar', que conserva el numero y el historial y —esto es lo que
         // importa para el circuito— vuelve a habilitar la reposicion
         // automatica de sus productos.
         //
-        // Criterio de verbos, el mismo del resto del archivo:
-        //   PUT   modifica el recurso  -> el detalle del borrador
-        //   POST  dispara una accion   -> aprobar, enviar, cancelar
-        // Aprobar y enviar son acciones y no ediciones: la primera deja
-        // registro de quien autorizo, la segunda le manda un correo al
-        // proveedor. Ninguna de las dos es "guardar un campo".
-        //
-        // /create y /suggestions van antes de /{orden} para que no los
-        // capture el wildcard.
+        // /create va antes de /{orden} para que no lo capture el wildcard.
 
         Route::prefix('purchase-order')
             ->name('compras.')
@@ -653,32 +677,16 @@ Route::prefix('gestion')
                 Route::get('/create', [OrdenCompraController::class, 'create'])
                     ->name('create');
 
-                // Los productos bajo su punto de reposicion que ningun
-                // proveedor tiene todavia, para que el alta los cargue de una.
-                // Devuelve JSON: el cliente es un fetch del formulario.
-                //
-                // Deja afuera lo que ya esta en una orden aprobada, enviada o
-                // recibida a medias. Lo que solo figura en un BORRADOR entra
-                // igual: un borrador no es un compromiso y este pedido lo
-                // reemplaza. Ese borrador se da de baja solo cuando el pedido
-                // nuevo se apruebe, en OrdenCompraService.
-                Route::get('/suggestions', [OrdenCompraController::class, 'sugerencias'])
-                    ->name('sugerencias');
-
-                Route::post('/', [OrdenCompraController::class, 'store'])
-                    ->name('store');
-
                 Route::get('/{orden}', [OrdenCompraController::class, 'show'])
                     ->name('show');
 
                 // Solo un borrador se edita: una orden aprobada ya paso por
                 // la decision de un administrativo y una enviada ya esta en
-                // manos del proveedor.
+                // manos del proveedor. El 403 lo sigue dando el controlador
+                // antes de entregar la pagina, asi que el enlace directo
+                // tampoco entra.
                 Route::get('/{orden}/edit', [OrdenCompraController::class, 'edit'])
                     ->name('edit');
-
-                Route::put('/{orden}', [OrdenCompraController::class, 'update'])
-                    ->name('update');
 
                 // Requerimiento explicito: ninguna orden sale sin que un
                 // administrativo la apruebe.
@@ -692,13 +700,12 @@ Route::prefix('gestion')
                 Route::post('/{orden}/cancelar', [OrdenCompraController::class, 'cancelar'])
                     ->name('cancelar');
 
-                // La entrada de mercadería. GET arma el formulario, POST registra la entrega.
-                // No es un PUT sobre la orden: lo que se crea es un movimiento de stock.
+                // La entrada de mercadería: la pagina del formulario. Lo que se
+                // registra NO es un PUT sobre la orden —lo que se crea es un
+                // movimiento de stock—, y desde esta entrega lo registra
+                // POST /api/v1/gestion/compras/{orden}/recepciones.
                 Route::get('/{orden}/recibir', [RecepcionController::class, 'create'])
                     ->name('recibir');
-
-                Route::post('/{orden}/recibir', [RecepcionController::class, 'store'])
-                    ->name('recibir.store');
 
                 // Da por terminado un pedido que quedó a medio recibir. Sin esto, una orden
                 // en recibida_parcial bloquea la reposición de sus productos para siempre.
