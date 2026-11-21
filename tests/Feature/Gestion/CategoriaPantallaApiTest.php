@@ -5,6 +5,8 @@ use App\Models\Permiso;
 use App\Models\User;
 use Database\Seeders\Maestros\PermisoSeeder;
 use Database\Seeders\Maestros\RolSeeder;
+use Illuminate\Support\Facades\Route;
+use Laravel\Sanctum\Sanctum;
 
 /*
 |--------------------------------------------------------------------------
@@ -87,39 +89,107 @@ it('entrega el alta como un formulario vacio', function () {
 });
 
 // ============================================================
-// Los formularios ya no apuntan a las rutas web de negocio
+// Las rutas web de negocio ya no existen
 // ============================================================
 //
-// Las rutas siguen publicadas —se retiran en el paso siguiente del plan, junto
-// con las de los demas modulos—, pero ninguna pantalla las usa: si alguien
-// vuelve a poner un <form action="..."> tradicional, estas dos fallan.
+// No alcanzaba con que ninguna pantalla las usara: mientras estuvieran
+// publicadas seguian siendo una via alternativa para ejecutar operaciones de
+// negocio desde un controlador web, que es lo que el requisito 3 pide cerrar.
+// Se retiraron las cinco y quedaron solo las tres que entregan paginas.
 
-it('no deja ningun formulario apuntando a las rutas web de categorias', function () {
+it('retiro las rutas web que ejecutaban operaciones de negocio', function () {
+    foreach (['store', 'update', 'baja', 'reactivar', 'destroy'] as $retirada) {
+        expect(Route::has("gestion.categorias.{$retirada}"))
+            ->toBeFalse("La ruta web gestion.categorias.{$retirada} sigue publicada");
+    }
+});
+
+it('conserva las rutas web que entregan las paginas Blade', function () {
+    foreach (['index', 'create', 'edit'] as $pagina) {
+        expect(Route::has("gestion.categorias.{$pagina}"))->toBeTrue();
+    }
+});
+
+it('responde 404 a las direcciones de negocio que ya no existen', function () {
     $categoria = categoriaCargada();
 
     $empleado = User::factory()->empleado('administrativo')->create();
 
-    // El `action="..."` es lo que se mira y no la URL suelta: POST store y GET
-    // index comparten direccion —cambia el verbo—, y el formulario de filtros
-    // sigue siendo un GET legitimo contra el listado.
+    // El administrativo tiene los cinco permisos del catalogo: si algo
+    // contestara 2xx o 302, seria porque la ruta sigue viva, no porque le
+    // falte autorizacion.
+    //
+    // El alta contesta 405 y no 404 porque /gestion/category sigue existiendo
+    // para el GET del listado: lo que ya no existe es el verbo. Para la
+    // operacion da lo mismo —no se ejecuta—, pero la prueba dice cual es cual
+    // en vez de aceptar cualquiera de los dos.
+    comoEmpleado($empleado)->post('/gestion/category', [])->assertMethodNotAllowed();
+
+    foreach ([
+        ['put', "/gestion/category/{$categoria->id}"],
+        ['delete', "/gestion/category/{$categoria->id}"],
+        ['patch', "/gestion/category/{$categoria->id}/baja"],
+        ['patch', "/gestion/category/{$categoria->id}/reactivar"],
+    ] as [$verbo, $direccion]) {
+        comoEmpleado($empleado)->{$verbo}($direccion)->assertNotFound();
+    }
+
+    // Ni se dio de baja ni se borro.
+    expect($categoria->fresh()?->activo)->toBeTrue();
+});
+
+it('no deja ningun formulario apuntando al panel', function () {
+    $categoria = categoriaCargada();
+
+    $empleado = User::factory()->empleado('administrativo')->create();
+
+    // Se mira el `action="..."` y no la URL suelta: el formulario de filtros
+    // del listado sigue siendo un GET legitimo contra la propia pagina.
     comoEmpleado($empleado)
         ->get(route('gestion.categorias.index'))
         ->assertOk()
-        ->assertDontSee('action="'.route('gestion.categorias.destroy', $categoria).'"', false)
-        ->assertDontSee('action="'.route('gestion.categorias.baja', $categoria).'"', false)
         ->assertDontSee('name="_method"', false);
 
     comoEmpleado($empleado)
         ->get(route('gestion.categorias.create'))
         ->assertOk()
-        ->assertDontSee('action="'.route('gestion.categorias.store').'"', false)
+        ->assertDontSee('action="'.url('/gestion/category').'"', false)
         ->assertDontSee('name="_method"', false);
 
     comoEmpleado($empleado)
         ->get(route('gestion.categorias.edit', $categoria))
         ->assertOk()
-        ->assertDontSee('action="'.route('gestion.categorias.update', $categoria).'"', false)
+        ->assertDontSee('action="'.url("/gestion/category/{$categoria->id}").'"', false)
         ->assertDontSee('name="_method"', false);
+});
+
+// ============================================================
+// El contrato que usa la pantalla al guardar
+// ============================================================
+//
+// Lo que probaba CategoriaFormularioWebTest, que se borro junto con las rutas:
+// el alta deriva el slug del nombre y deja 'orden' en el default de la tabla,
+// porque el formulario no lo manda. Ahora se verifica contra el endpoint que
+// la pantalla usa de verdad.
+
+it('el alta que manda la pantalla deriva el slug y deja el orden por omision', function () {
+    Sanctum::actingAs(User::factory()->empleado('administrativo')->create(), ['gestion']);
+
+    $this->postJson(route('api.v1.gestion.categorias.store'), [
+        'nombre' => 'Placas de video',
+        'activo' => true,
+    ])
+        ->assertCreated()
+        ->assertJsonPath('data.nombre', 'Placas de video')
+        ->assertJsonPath('data.slug', 'placas-de-video')
+        ->assertJsonPath('data.activo', true);
+
+    $this->assertDatabaseHas('categorias', [
+        'nombre' => 'Placas de video',
+        'slug' => 'placas-de-video',
+        'activo' => true,
+        'orden' => 0,
+    ]);
 });
 
 // ============================================================

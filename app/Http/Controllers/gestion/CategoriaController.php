@@ -2,38 +2,39 @@
 
 namespace App\Http\Controllers\gestion;
 
-use App\Exceptions\EntidadNoEliminableException;
-use App\Http\Requests\CategoriaRequest;
 use App\Models\Categoria;
 use App\Models\User;
-use Illuminate\Database\QueryException;
-use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\View\View;
 
 /**
- * Las pantallas de categorias del panel.
+ * Las pantallas de categorias del panel. <b>Ya no es un CRUD.</b>
  *
- * <b>Desde la migracion a la API, este controlador ya no ejecuta operaciones
- * de negocio desde la interfaz.</b> index(), create() y edit() entregan la
- * pagina Blade —la cascara, sin datos— y el JavaScript de la pantalla trae y
- * modifica los datos contra /api/v1/gestion/categorias, que es lo que pide el
- * requisito 3 de la Etapa 3.
+ * Entrega las tres paginas Blade —listado, alta y edicion— y nada mas. Los
+ * datos los trae y los modifica el JavaScript de la pantalla contra
+ * /api/v1/gestion/categorias, que es lo que pide el requisito 3 de la Etapa 3.
  *
- * store(), update(), darDeBaja(), reactivar() y destroy() siguen existiendo
- * porque sus rutas todavia estan publicadas: ya ninguna pantalla las usa, y se
- * retiran junto con las rutas web de negocio de los demas modulos, en el paso
- * siguiente del plan. Hasta entonces comparten FormRequest, policy y modelo
- * con la API, asi que no hay dos reglas distintas conviviendo.
+ * store(), update(), darDeBaja(), reactivar() y destroy() se eliminaron junto
+ * con sus rutas. Existian para servirlas, y mientras existieran eran una via
+ * alternativa para ejecutar operaciones de negocio desde un controlador web.
+ * Lo que hacia cada una esta mapeado a su endpoint en el comentario del bloque
+ * CATEGORIAS de routes/web.php.
+ *
+ * Las reglas no se movieron de lugar: el alta y la edicion siguen pasando por
+ * el mismo CategoriaRequest y la misma CategoriaPolicy, y el borrado lo sigue
+ * frenando la foreign key —la categoria es la unica entidad del catalogo que
+ * admite borrado fisico, y solo si ningun producto la referencia—; lo que
+ * cambio es quien los invoca.
  */
 class CategoriaController extends Controller
 {
     public function __construct()
     {
-        // Descomentar cuando exista el login. Mapea cada accion del recurso a
-        // CategoriaPolicy; para las rutas propias (baja y reactivacion) la
-        // autorizacion se pide a mano en cada metodo.
+        // Mapea cada accion del recurso a CategoriaPolicy. De las siete que
+        // cubre quedan en pie tres —index, create y edit—, que son las que
+        // tienen ruta: viewAny para el listado, create para el alta y update
+        // para la edicion.
         $this->authorizeResource(Categoria::class, 'categoria');
     }
 
@@ -74,15 +75,6 @@ class CategoriaController extends Controller
         return view('gestion.category.create');
     }
 
-    public function store(CategoriaRequest $request): RedirectResponse
-    {
-        $categoria = Categoria::create($request->validated());
-
-        return redirect()
-            ->route('gestion.categorias.index')
-            ->with('exito', "Se creó la categoría «{$categoria->nombre}».");
-    }
-
     /**
      * El formulario de edicion.
      *
@@ -100,78 +92,6 @@ class CategoriaController extends Controller
             // no cambia 'activo' y la llamada al endpoint de estado daria 403.
             'puedeCambiarEstado' => Gate::allows('cambiarEstado', $categoria),
         ]);
-    }
-
-    public function update(CategoriaRequest $request, Categoria $categoria): RedirectResponse
-    {
-        $categoria->update($request->validated());
-
-        return redirect()
-            ->route('gestion.categorias.index')
-            ->with('exito', "Se guardaron los cambios en «{$categoria->nombre}».");
-    }
-
-    /**
-     * Baja logica: la categoria sale de operacion y deja de ofrecerse al cargar
-     * un producto, pero la fila sigue existiendo y los productos que la nombran
-     * la siguen mostrando. Es reversible.
-     */
-    public function darDeBaja(Categoria $categoria): RedirectResponse
-    {
-        // authorizeResource() solo cubre los siete metodos de recurso: las
-        // acciones de estado tienen que autorizar a mano, o quedan abiertas a
-        // cualquier cuenta del ambito gestion.
-        Gate::authorize('cambiarEstado', $categoria);
-
-        $categoria->darDeBaja();
-
-        return back()->with('exito', "«{$categoria->nombre}» ya no está en operación.");
-    }
-
-    public function reactivar(Categoria $categoria): RedirectResponse
-    {
-        Gate::authorize('cambiarEstado', $categoria);
-
-        $categoria->reactivar();
-
-        return back()->with('exito', "«{$categoria->nombre}» vuelve a estar en operación.");
-    }
-
-    /**
-     * Borrado fisico. La categoria es la unica entidad del catalogo que lo
-     * admite, y solo si ningun producto la referencia.
-     *
-     * No se antepone un count() de productos: reimplementar en PHP una
-     * comprobacion que el motor ya hace abre una ventana contra un alta
-     * concurrente —alguien crea un producto entre el count y el DELETE—.
-     * Se intenta el DELETE y se traduce el rechazo de la FK a un mensaje
-     * entendible. La restriccion es la regla; esto es solo su traduccion.
-     *
-     * Ojo con el alcance: como los productos nunca se eliminan, el RESTRICT
-     * tambien ve a los dados de baja. Una categoria que alguna vez tuvo un
-     * producto ya no se puede eliminar, y eso es correcto.
-     */
-    public function destroy(Categoria $categoria): RedirectResponse
-    {
-        $nombre = $categoria->nombre;
-
-        try {
-            $categoria->delete();
-        } catch (QueryException $e) {
-            // La lista de codigos vive en la excepcion de dominio, porque la
-            // API hace la misma pregunta para responder 409. Misma regla, un
-            // solo lugar; lo que cambia es la traduccion: alla una excepcion,
-            // aca el mensaje en pantalla de siempre.
-            if (! EntidadNoEliminableException::esRechazoDeClaveForanea($e)) {
-                throw $e; // cualquier otro error de base no se disimula
-            }
-
-            return back()->with('error', "«{$nombre}» tiene productos asociados, así que no se puede eliminar. Dala de baja para sacarla de operación sin perder el historial.");
-        }
-
-        return redirect()
-            ->route('gestion.categorias.index')
-            ->with('exito', "Se eliminó la categoría «{$nombre}».");
     }
 
     /**

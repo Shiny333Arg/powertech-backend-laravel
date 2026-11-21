@@ -291,6 +291,29 @@ Route::prefix('gestion')
         // ========================================================
         // CATEGORÍAS
         // ========================================================
+        //
+        // <b>Solo quedan las tres rutas que entregan paginas Blade.</b> Las
+        // cinco que ejecutaban operaciones de negocio —store, update, baja,
+        // reactivar y destroy— se retiraron: la pantalla dejo de usarlas al
+        // migrarse a la API, y mientras siguieran publicadas eran una via
+        // alternativa de acceso, que es lo que el requisito 3 de la Etapa 3
+        // pide cerrar.
+        //
+        // Lo que antes hacia cada una, ahora:
+        //
+        //   POST   category                -> POST   /api/v1/gestion/categorias
+        //   PUT    category/{c}            -> PUT    /api/v1/gestion/categorias/{c}
+        //   PATCH  category/{c}/baja       -> PATCH  .../{c}/estado  {activo:false}
+        //   PATCH  category/{c}/reactivar  -> PATCH  .../{c}/estado  {activo:true}
+        //   DELETE category/{c}            -> DELETE /api/v1/gestion/categorias/{c}
+        //
+        // Los permisos no cambiaron: los exige la misma CategoriaPolicy, ahora
+        // desde el 'can:' de cada ruta de la API. El 409 de "tiene productos
+        // asociados" lo sigue decidiendo la foreign key, no la pantalla.
+        //
+        // Con esto, los tres modulos migrados —categorias, productos y
+        // proveedores— ya no tienen ninguna ruta web de negocio. Los que
+        // faltan migrar conservan las suyas.
 
         Route::prefix('category')
             ->name('categorias.')
@@ -302,23 +325,8 @@ Route::prefix('gestion')
                 Route::get('/create', [CategoriaController::class, 'create'])
                     ->name('create');
 
-                Route::post('/', [CategoriaController::class, 'store'])
-                    ->name('store');
-
                 Route::get('/{categoria}/edit', [CategoriaController::class, 'edit'])
                     ->name('edit');
-
-                Route::put('/{categoria}', [CategoriaController::class, 'update'])
-                    ->name('update');
-
-                Route::patch('/{categoria}/baja', [CategoriaController::class, 'darDeBaja'])
-                    ->name('baja');
-
-                Route::patch('/{categoria}/reactivar', [CategoriaController::class, 'reactivar'])
-                    ->name('reactivar');
-
-                Route::delete('/{categoria}', [CategoriaController::class, 'destroy'])
-                    ->name('destroy');
             });
 
 

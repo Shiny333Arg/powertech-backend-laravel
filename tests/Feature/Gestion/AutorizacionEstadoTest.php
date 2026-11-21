@@ -112,43 +112,23 @@ function empleadoDePrueba(): Empleado
 // intactas.
 
 // ==================================================================
-// 2. Categorias
+// 2. Categorias: se mudaron a la API
 // ==================================================================
-
-test('el cajero no puede dar de baja una categoria', function () {
-    actuandoComo('cajero');
-
-    $categoria = categoriaDePrueba();
-
-    $this->patch("/gestion/category/{$categoria->id}/baja")->assertForbidden();
-
-    expect($categoria->fresh()->activo)->toBeTrue();
-});
-
-test('el administrativo puede dar de baja y reactivar una categoria', function () {
-    actuandoComo('administrativo');
-
-    $categoria = categoriaDePrueba();
-
-    $this->patch("/gestion/category/{$categoria->id}/baja")->assertRedirect();
-
-    expect($categoria->fresh()->activo)->toBeFalse();
-
-    $this->patch("/gestion/category/{$categoria->id}/reactivar")->assertRedirect();
-
-    expect($categoria->fresh()->activo)->toBeTrue();
-});
-
-test('el cajero no puede reactivar una categoria', function () {
-    actuandoComo('cajero');
-
-    $categoria = categoriaDePrueba();
-    $categoria->update(['activo' => false]);
-
-    $this->patch("/gestion/category/{$categoria->id}/reactivar")->assertForbidden();
-
-    expect($categoria->fresh()->activo)->toBeFalse();
-});
+//
+// Las tres pruebas de categorias que vivian aca desaparecieron con las rutas
+// que ejercitaban: 'gestion.categorias.baja' y '.reactivar' se retiraron al
+// completar la migracion del modulo, porque eran una via alternativa para
+// ejecutar operaciones de negocio desde un controlador web.
+//
+// La misma autorizacion sigue cubierta, ahora contra el endpoint que la
+// pantalla usa de verdad, en tests/Feature/Api/V1/Gestion/CategoriaTest.php:
+// 'no deja cambiar el estado sin el permiso de baja', 'da de baja y reactiva
+// una categoria' y 'deja mirar al vendedor pero no crear'. No se perdio ningun
+// caso.
+//
+// Con esto, los tres modulos migrados —categorias, productos y proveedores—
+// ya no aparecen en este archivo. Los que siguen abajo conservan sus rutas
+// web y sus pruebas.
 
 // ==================================================================
 // 3. Promociones
@@ -277,39 +257,45 @@ test('el administrativo puede pedir el reenvio de la invitacion de un empleado',
 test('el administrador puede cambiar el estado de cualquier recurso', function () {
     actuandoComo('administrador');
 
-    // Productos y proveedores ya no estan: sus acciones de estado son de la
-    // API, y las cubren ProductoTest y ProveedorTest.
-    $categoria = categoriaDePrueba();
+    // Categorias, productos y proveedores ya no estan: sus acciones de estado
+    // son de la API, y las cubren CategoriaTest, ProductoTest y ProveedorTest.
+    // Quedan los modulos que todavia no se migraron.
+    $promocion = promocionSobre(productoDePrueba());
+    $empleado = empleadoDePrueba();
 
-    $this->patch("/gestion/category/{$categoria->id}/baja")->assertRedirect();
+    $this->patch("/gestion/promotion/{$promocion->id}/baja")->assertRedirect();
+    $this->patch("/gestion/empleado/{$empleado->id}/baja")->assertRedirect();
 
-    expect($categoria->fresh()->activo)->toBeFalse();
+    expect($promocion->fresh()->activo)->toBeFalse()
+        ->and($empleado->fresh()->fecha_baja)->not->toBeNull();
 });
 
 // ==================================================================
 // 7. Las capas anteriores siguen en su lugar
 // ==================================================================
 
-// Las dos de abajo usaban la baja de un producto como vehiculo. Ahora usan la
-// de una categoria, que sigue siendo una ruta web de negocio: lo que prueban
-// no es el recurso sino las capas que estan ANTES de la autorizacion fina.
+// Las dos de abajo usan la baja de una promocion como vehiculo. Pasaron por
+// un producto y despues por una categoria, y cambiaron cada vez que ese modulo
+// se migro: lo que prueban no es el recurso sino las capas que estan ANTES de
+// la autorizacion fina, asi que sirve cualquier ruta web de negocio que siga
+// publicada.
 
 test('un invitado no llega a las acciones de estado', function () {
-    $categoria = categoriaDePrueba();
+    $promocion = promocionSobre(productoDePrueba());
 
     // Desde F2 el panel tiene su propia puerta de ingreso y redirectGuestsTo
     // decide el destino segun la URL pedida: un empleado que pega una URL de
     // /gestion/... cae en el formulario del panel y no en el del storefront,
     // que no emite token y lo rebotaria.
-    $this->patch("/gestion/category/{$categoria->id}/baja")->assertRedirect(route('gestion.login'));
+    $this->patch("/gestion/promotion/{$promocion->id}/baja")->assertRedirect(route('gestion.login'));
 });
 
 test('un cliente no entra al ambito de gestion', function () {
     $this->actingAs(clienteDeTienda());
 
-    $categoria = categoriaDePrueba();
+    $promocion = promocionSobre(productoDePrueba());
 
-    $this->patch("/gestion/category/{$categoria->id}/baja")->assertRedirect();
+    $this->patch("/gestion/promotion/{$promocion->id}/baja")->assertRedirect();
 
-    expect($categoria->fresh()->activo)->toBeTrue();
+    expect($promocion->fresh()->activo)->toBeTrue();
 });
